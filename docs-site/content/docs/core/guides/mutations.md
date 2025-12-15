@@ -3,7 +3,7 @@ title: Component Mutations Guide
 ---
 # Component Mutations Guide
 
-This guide covers how clients can modify server-side ECS components through the mutation system in eventwork_sync and eventwork_client.
+This guide covers how clients can modify server-side ECS components through the mutation system in pl3xus_sync and pl3xus_client.
 
 ---
 
@@ -27,14 +27,14 @@ Register components for synchronization in your Bevy server:
 
 ```rust
 use bevy::prelude::*;
-use eventwork_sync::{AppEventworkSyncExt, EventworkSyncPlugin};
-use eventwork_websockets::WebSocketProvider;
+use pl3xus_sync::{AppPl3xusSyncExt, Pl3xusSyncPlugin};
+use pl3xus_websockets::WebSocketProvider;
 
 fn main() {
     let mut app = App::new();
     
     // Add the sync plugin
-    app.add_plugins(EventworkSyncPlugin::<WebSocketProvider>::default());
+    app.add_plugins(Pl3xusSyncPlugin::<WebSocketProvider>::default());
     
     // Register components for sync (mutations enabled by default)
     app.sync_component::<Position>(None);
@@ -53,7 +53,7 @@ By default, all mutations from any client are allowed. For production systems, y
 Disable all client mutations - only server-side code can modify components:
 
 ```rust
-use eventwork_sync::MutationAuthorizerResource;
+use pl3xus_sync::MutationAuthorizerResource;
 
 app.insert_resource(MutationAuthorizerResource::server_only());
 ```
@@ -63,7 +63,7 @@ app.insert_resource(MutationAuthorizerResource::server_only());
 Use a closure for simple authorization logic:
 
 ```rust
-use eventwork_sync::{MutationAuthorizerResource, MutationStatus};
+use pl3xus_sync::{MutationAuthorizerResource, MutationStatus};
 use bevy::prelude::*;
 
 app.insert_resource(MutationAuthorizerResource::from_fn(
@@ -83,7 +83,7 @@ app.insert_resource(MutationAuthorizerResource::from_fn(
 For complex authorization logic, implement the trait directly:
 
 ```rust
-use eventwork_sync::{
+use pl3xus_sync::{
     MutationAuthorizer, MutationAuthContext, MutationAuthorizerResource, 
     MutationStatus, QueuedMutation
 };
@@ -117,13 +117,13 @@ app.insert_resource(MutationAuthorizerResource {
 For entity hierarchies where control of a parent grants control over children:
 
 ```rust
-use eventwork_sync::{has_control_hierarchical, MutationAuthorizerResource, MutationStatus};
+use pl3xus_sync::{has_control_hierarchical, MutationAuthorizerResource, MutationStatus};
 use bevy::prelude::*;
 
 // Your control marker component
 #[derive(Component)]
 struct EntityOwner {
-    connection_id: eventwork_common::ConnectionId,
+    connection_id: pl3xus_common::ConnectionId,
 }
 
 app.insert_resource(MutationAuthorizerResource::from_fn(
@@ -153,7 +153,7 @@ app.insert_resource(MutationAuthorizerResource::from_fn(
 The easiest way to enable mutations is with the `SyncFieldInput` component:
 
 ```rust
-use eventwork_client::SyncFieldInput;
+use pl3xus_client::SyncFieldInput;
 use leptos::prelude::*;
 
 #[component]
@@ -187,7 +187,7 @@ fn PositionEditor(entity_id: u64) -> impl IntoView {
 For more control, use the `SyncContext` directly:
 
 ```rust
-use eventwork_client::{use_sync_context, SyncComponent};
+use pl3xus_client::{use_sync_context, SyncComponent};
 use leptos::prelude::*;
 
 #[component]
@@ -302,11 +302,11 @@ cd examples/control-demo/client && trunk serve
 - [Sending Messages](./sending-messages.md) - Direct message sending
 - [DevTools](./devtools.md) - Inspect mutations in DevTools
 - [Shared Types](./shared-types.md) - Setting up shared component types
-- [API Reference](https://docs.rs/eventwork_sync) - Full API documentation
+- [API Reference](https://docs.rs/pl3xus_sync) - Full API documentation
 
 ---
 
 **Last Updated**: 2025-12-07
-**eventwork_sync Version**: 0.1
+**pl3xus_sync Version**: 0.1
 
 

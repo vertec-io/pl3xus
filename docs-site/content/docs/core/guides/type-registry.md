@@ -22,7 +22,7 @@ The `ClientTypeRegistry` is the client-side counterpart to the server's `SyncReg
 ### Basic Registry
 
 ```rust
-use eventwork_client::ClientTypeRegistry;
+use pl3xus_client::ClientTypeRegistry;
 use shared_types::{Position, Velocity, EntityName};
 
 let registry = ClientTypeRegistry::builder()
@@ -51,7 +51,7 @@ Pass the registry to `SyncProvider`:
 
 ```rust
 use leptos::prelude::*;
-use eventwork_client::{SyncProvider, ClientTypeRegistry};
+use pl3xus_client::{SyncProvider, ClientTypeRegistry};
 use shared_types::{Position, Velocity};
 
 #[component]
@@ -106,7 +106,7 @@ pub struct Position {
 Types must implement `SyncComponent` for name resolution:
 
 ```rust
-use eventwork_client::SyncComponent;
+use pl3xus_client::SyncComponent;
 
 impl SyncComponent for Position {
     fn component_name() -> &'static str {
@@ -121,9 +121,9 @@ For shared crates, use the blanket implementation:
 
 ```rust
 // In shared_types/src/lib.rs
-use eventwork_common::SyncComponent;
+use pl3xus_common::SyncComponent;
 
-// Blanket impl provided by eventwork_common
+// Blanket impl provided by pl3xus_common
 // Just derive the required traits:
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Position {
@@ -395,7 +395,7 @@ match registry.deserialize::<Position>("Position", &data) {
 ---
 
 **Last Updated**: 2025-12-07
-**eventwork_client Version**: 0.1
+**pl3xus_client Version**: 0.1
 ```
 
 

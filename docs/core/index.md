@@ -1,10 +1,10 @@
-# Core Eventwork Guide
+# Core Pl3xus Guide
 
-This guide covers the core `eventwork` crate for event-driven networking in Bevy applications.
+This guide covers the core `pl3xus` crate for event-driven networking in Bevy applications.
 
 ## Overview
 
-`eventwork` provides transport-agnostic networking for Bevy:
+`pl3xus` provides transport-agnostic networking for Bevy:
 
 - **Transport Agnostic** - Use TCP, WebSocket, or custom transports
 - **Type-Safe Messages** - Strongly typed with compile-time guarantees
@@ -18,8 +18,8 @@ This guide covers the core `eventwork` crate for event-driven networking in Bevy
 ```toml
 [dependencies]
 bevy = "0.17"
-eventwork = "1.1"
-eventwork_websockets = "1.1"  # Or eventwork with "tcp" feature
+pl3xus = "1.1"
+pl3xus_websockets = "1.1"  # Or pl3xus with "tcp" feature
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -47,15 +47,15 @@ struct StatusUpdate {
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use bevy::prelude::*;
 use bevy::tasks::{TaskPool, TaskPoolBuilder};
-use eventwork::{EventworkPlugin, EventworkRuntime, Network, NetworkEvent, AppNetworkMessage};
-use eventwork_websockets::{WebSocketProvider, NetworkSettings};
+use pl3xus::{Pl3xusPlugin, Pl3xusRuntime, Network, NetworkEvent, AppNetworkMessage};
+use pl3xus_websockets::{WebSocketProvider, NetworkSettings};
 
 fn main() {
     App::new()
         .add_plugins(MinimalPlugins)
-        // Add eventwork with WebSocket transport
-        .add_plugins(EventworkPlugin::<WebSocketProvider, TaskPool>::default())
-        .insert_resource(EventworkRuntime(TaskPoolBuilder::new().num_threads(2).build()))
+        // Add pl3xus with WebSocket transport
+        .add_plugins(Pl3xusPlugin::<WebSocketProvider, TaskPool>::default())
+        .insert_resource(Pl3xusRuntime(TaskPoolBuilder::new().num_threads(2).build()))
         .insert_resource(NetworkSettings::default())
         // Register message types
         .register_network_message::<ChatMessage, WebSocketProvider>()
@@ -69,7 +69,7 @@ fn main() {
 fn start_server(
     net: Res<Network<WebSocketProvider>>,
     settings: Res<NetworkSettings>,
-    task_pool: Res<EventworkRuntime<TaskPool>>,
+    task_pool: Res<Pl3xusRuntime<TaskPool>>,
 ) {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
     
@@ -83,7 +83,7 @@ fn start_server(
 ### 4. Handle Connections
 
 ```rust
-use eventwork::MessageReader;
+use pl3xus::MessageReader;
 
 fn handle_connections(mut events: MessageReader<NetworkEvent>) {
     for event in events.read() {
@@ -105,7 +105,7 @@ fn handle_connections(mut events: MessageReader<NetworkEvent>) {
 ### 5. Handle Messages
 
 ```rust
-use eventwork::NetworkData;
+use pl3xus::NetworkData;
 
 fn handle_messages(
     mut messages: MessageReader<NetworkData<ChatMessage>>,
@@ -130,7 +130,7 @@ fn handle_messages(
 fn start_client(
     net: Res<Network<WebSocketProvider>>,
     settings: Res<NetworkSettings>,
-    task_pool: Res<EventworkRuntime<TaskPool>>,
+    task_pool: Res<Pl3xusRuntime<TaskPool>>,
 ) {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
     
@@ -180,7 +180,7 @@ fn send_examples(net: Res<Network<WebSocketProvider>>) {
 
 ### MessageReader / MessageWriter
 
-Unlike Bevy's `EventReader`/`EventWriter`, eventwork uses `MessageReader` and `MessageWriter` for network messages:
+Unlike Bevy's `EventReader`/`EventWriter`, pl3xus uses `MessageReader` and `MessageWriter` for network messages:
 
 ```rust
 // Reading incoming messages

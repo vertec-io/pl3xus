@@ -1,4 +1,4 @@
-//! Shared component types for the eventwork devtools demo.
+//! Shared component types for the pl3xus devtools demo.
 //!
 //! This crate contains component type definitions that are shared between
 //! the Bevy server and the Leptos WASM client. These types are:

@@ -9,7 +9,7 @@ const contentDir = path.resolve(__dirname, '../content/docs');
 // Define the order of sections for Core
 const CORE_ORDER = [
     'index',
-    'what-is-eventwork',
+    'what-is-pl3xus',
     'comparisons',
     'getting-started',
     'installation',
@@ -35,7 +35,7 @@ const TITLE_MAP = {
     'sync': 'Sync',
     'client': 'Client',
     'getting-started': 'Getting Started',
-    'what-is-eventwork': 'What is Eventwork',
+    'what-is-pl3xus': 'What is Pl3xus',
     'comparisons': 'Comparisons',
     'guides': 'Guides',
     'architecture': 'Architecture',

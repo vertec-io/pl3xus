@@ -3,7 +3,7 @@ title: Examples
 ---
 # Examples
 
-Working example walkthroughs for the bevy_eventwork ecosystem.
+Working example walkthroughs for the pl3xus ecosystem.
 
 ## Contents
 
@@ -15,35 +15,35 @@ Working example walkthroughs for the bevy_eventwork ecosystem.
 
 ## Running Examples
 
-### Core Eventwork Examples
+### Core Pl3xus Examples
 
-Located in `crates/eventwork/examples/`:
+Located in `crates/pl3xus/examples/`:
 
 ```bash
 # TCP chat server
-cargo run --example server -p eventwork
+cargo run --example server -p pl3xus
 
 # TCP chat client (Bevy UI)
-cargo run --example client -p eventwork
+cargo run --example client -p pl3xus
 
 # Automatic message registration demo
-cargo run --example automatic_messages -p eventwork -- server
-cargo run --example automatic_messages -p eventwork -- client
+cargo run --example automatic_messages -p pl3xus -- server
+cargo run --example automatic_messages -p pl3xus -- client
 ```
 
 ### WebSocket Examples
 
-Located in `crates/eventwork_websockets/examples/`:
+Located in `crates/pl3xus_websockets/examples/`:
 
 ```bash
 # WebSocket server
-cargo run --example server -p eventwork_websockets
+cargo run --example server -p pl3xus_websockets
 
 # WebSocket client
-cargo run --example client -p eventwork_websockets
+cargo run --example client -p pl3xus_websockets
 
 # Hybrid server (HTTP + WebSocket)
-cargo run --example hybrid_server -p eventwork_websockets
+cargo run --example hybrid_server -p pl3xus_websockets
 ```
 
 ### Control Demo

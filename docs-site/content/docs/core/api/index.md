@@ -3,29 +3,29 @@ title: API Reference
 ---
 # API Reference
 
-Detailed API documentation for the bevy_eventwork ecosystem.
+Detailed API documentation for the pl3xus ecosystem.
 
 ## Online Documentation
 
 For the most up-to-date API documentation, see the docs.rs pages:
 
-- **[eventwork](https://docs.rs/eventwork)** - Core networking library
-- **[eventwork_common](https://docs.rs/eventwork_common)** - Shared types
-- **[eventwork_sync](https://docs.rs/eventwork_sync)** - Server-side sync
-- **[eventwork_client](https://docs.rs/eventwork_client)** - Leptos client
-- **[eventwork_websockets](https://docs.rs/eventwork_websockets)** - WebSocket transport
-- **[eventwork_macros](https://docs.rs/eventwork_macros)** - Procedural macros
+- **[pl3xus](https://docs.rs/pl3xus)** - Core networking library
+- **[pl3xus_common](https://docs.rs/pl3xus_common)** - Shared types
+- **[pl3xus_sync](https://docs.rs/pl3xus_sync)** - Server-side sync
+- **[pl3xus_client](https://docs.rs/pl3xus_client)** - Leptos client
+- **[pl3xus_websockets](https://docs.rs/pl3xus_websockets)** - WebSocket transport
+- **[pl3xus_macros](https://docs.rs/pl3xus_macros)** - Procedural macros
 
 ## Contents
 
 | Reference | Description |
 |-----------|-------------|
-| [Hooks Reference](./hooks-reference.md) | All eventwork_client hooks |
+| [Hooks Reference](./hooks-reference.md) | All pl3xus_client hooks |
 | [Control Plugin](./control-plugin.md) | ExclusiveControlPlugin API |
 
 ## Quick Reference
 
-### eventwork_client Hooks
+### pl3xus_client Hooks
 
 | Hook | Purpose |
 |------|---------|
@@ -35,14 +35,14 @@ For the most up-to-date API documentation, see the docs.rs pages:
 | `use_connection_status()` | Monitor connection state |
 | `use_sync_context()` | Access raw sync context |
 
-### eventwork_sync Extension Trait
+### pl3xus_sync Extension Trait
 
 | Method | Purpose |
 |--------|---------|
 | `app.sync_component::<T>(settings)` | Register component for sync |
 | `app.register_network_message::<T, P>()` | Register message type |
 
-### eventwork Network Resource
+### pl3xus Network Resource
 
 | Method | Purpose |
 |--------|---------|
@@ -59,7 +59,7 @@ Generate documentation locally:
 cargo doc --workspace --open
 
 # Specific crate
-cargo doc -p eventwork_client --open
+cargo doc -p pl3xus_client --open
 ```
 
 ## Related Documentation

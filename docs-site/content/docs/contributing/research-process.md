@@ -3,7 +3,7 @@ title: Research Process
 ---
 # Research Process
 
-This document describes how to conduct and document research for bevy_eventwork development.
+This document describes how to conduct and document research for pl3xus development.
 
 ---
 

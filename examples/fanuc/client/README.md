@@ -5,7 +5,7 @@ A Leptos WASM client for controlling a real FANUC robot using the FANUC_RMI_API 
 ## Overview
 
 This example demonstrates:
-- ✅ **eventwork_client hooks** - Using `use_sync_component<T>()` for reactive data
+- ✅ **pl3xus_client hooks** - Using `use_sync_component<T>()` for reactive data
 - ✅ **Shared crate pattern** - Using `fanuc_real_shared` types without Bevy dependency
 - ✅ **DevTools integration** - Built-in component inspector
 - ✅ **Real-time updates** - Live robot position, status, and joint angles
@@ -21,13 +21,13 @@ This example demonstrates:
 
 2. **FANUC Real Server** - Running on `ws://127.0.0.1:8082`
    ```bash
-   cargo run -p eventwork_sync --example fanuc_real_server --features runtime
+   cargo run -p pl3xus_sync --example fanuc_real_server --features runtime
    ```
 
 ## Running the Example
 
 ```bash
-cd crates/eventwork_client/examples/fanuc_real_client
+cd crates/pl3xus_client/examples/fanuc_real_client
 trunk serve --port 8084
 ```
 
@@ -90,7 +90,7 @@ shared_types = { path = "../../../fanuc_real_shared" }
 │              (Bevy + FANUC_RMI_API)                        │
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐ │
-│  │  EventworkSyncPlugin                                  │ │
+│  │  Pl3xusSyncPlugin                                  │ │
 │  │  - Syncs RobotPosition, RobotStatus, JointAngles     │ │
 │  │  - Handles mutations from client                      │ │
 │  └──────────────────────────────────────────────────────┘ │
@@ -110,7 +110,7 @@ shared_types = { path = "../../../fanuc_real_shared" }
 
 ```rust
 use fanuc_real_shared::{RobotPosition, RobotStatus, JointAngles};
-use eventwork_client::impl_sync_component;
+use pl3xus_client::impl_sync_component;
 
 // Implement SyncComponent for shared types
 impl_sync_component!(RobotPosition);

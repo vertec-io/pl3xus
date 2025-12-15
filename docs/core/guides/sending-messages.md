@@ -1,6 +1,6 @@
-# Sending Messages in Eventwork
+# Sending Messages in Pl3xus
 
-Eventwork provides **two approaches** for sending messages, each optimized for different use cases.
+Pl3xus provides **two approaches** for sending messages, each optimized for different use cases.
 
 ## Option A: Direct Sending (Immediate) ⚡
 
@@ -9,8 +9,8 @@ Use the `Network` resource for immediate message sending. This is the simplest a
 ### Example
 
 ```rust
-use eventwork::Network;
-use eventwork::tcp::TcpProvider;
+use pl3xus::Network;
+use pl3xus::tcp::TcpProvider;
 
 fn send_messages(
     net: Res<Network<TcpProvider>>,
@@ -53,9 +53,9 @@ Use `OutboundMessage` events with `MessageWriter` for precise control over when 
 ### Example
 
 ```rust
-use eventwork::{OutboundMessage, AppNetworkMessage};
-use eventwork_common::EventworkMessage;
-use eventwork::tcp::TcpProvider;
+use pl3xus::{OutboundMessage, AppNetworkMessage};
+use pl3xus_common::Pl3xusMessage;
+use pl3xus::tcp::TcpProvider;
 use bevy::prelude::*;
 
 // Step 1: Register the outbound message with your desired system set
@@ -266,5 +266,5 @@ fn send_message(mut outbound: MessageWriter<OutboundMessage<MyMessage>>) {
 - Both approaches are valid and can be used together
 - Choose based on your application's needs
 
-For more examples, see the [examples directory](https://github.com/jamescarterbell/bevy_eventwork/tree/master/crates/eventwork/examples).
+For more examples, see the [examples directory](https://github.com/jamescarterbell/pl3xus/tree/master/crates/pl3xus/examples).
 

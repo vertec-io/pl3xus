@@ -1,16 +1,16 @@
-# Getting Started with eventwork_sync
+# Getting Started with pl3xus_sync
 
-`eventwork_sync` is a server-side Bevy plugin that automatically synchronizes ECS components to connected clients using bincode serialization.
+`pl3xus_sync` is a server-side Bevy plugin that automatically synchronizes ECS components to connected clients using bincode serialization.
 
 **Time**: 30-45 minutes  
 **Difficulty**: Intermediate  
-**Prerequisites**: Basic Bevy knowledge, eventwork setup
+**Prerequisites**: Basic Bevy knowledge, pl3xus setup
 
 ---
 
 ## Overview
 
-`eventwork_sync` provides:
+`pl3xus_sync` provides:
 
 - **Automatic component synchronization** to subscribed clients
 - **Fast binary serialization** using bincode
@@ -27,9 +27,9 @@ Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 bevy = "0.17"
-eventwork = "1.1"
-eventwork_sync = { version = "0.1", features = ["runtime"] }
-eventwork_websockets = "1.1"
+pl3xus = "1.1"
+pl3xus_sync = { version = "0.1", features = ["runtime"] }
+pl3xus_websockets = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -94,9 +94,9 @@ This pattern enables:
 ```toml
 [dependencies]
 bevy = "0.17"
-eventwork = "1.1"
-eventwork_sync = { version = "0.1", features = ["runtime"] }
-eventwork_websockets = "1.1"
+pl3xus = "1.1"
+pl3xus_sync = { version = "0.1", features = ["runtime"] }
+pl3xus_websockets = "1.1"
 shared_types = { path = "../shared_types", features = ["server"] }
 ```
 
@@ -106,21 +106,21 @@ shared_types = { path = "../shared_types", features = ["server"] }
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use bevy::prelude::*;
 use bevy::tasks::{TaskPool, TaskPoolBuilder};
-use eventwork::{EventworkPlugin, EventworkRuntime, Network};
-use eventwork_sync::{EventworkSyncPlugin, AppEventworkSyncExt};
-use eventwork_websockets::{WebSocketProvider, NetworkSettings};
+use pl3xus::{Pl3xusPlugin, Pl3xusRuntime, Network};
+use pl3xus_sync::{Pl3xusSyncPlugin, AppPl3xusSyncExt};
+use pl3xus_websockets::{WebSocketProvider, NetworkSettings};
 use shared_types::{Position, StatusFlags};
 
 fn main() {
     App::new()
         .add_plugins(MinimalPlugins)
         .add_plugins(bevy::log::LogPlugin::default())
-        // Add eventwork networking
-        .add_plugins(EventworkPlugin::<WebSocketProvider, TaskPool>::default())
-        .insert_resource(EventworkRuntime(TaskPoolBuilder::new().num_threads(2).build()))
+        // Add pl3xus networking
+        .add_plugins(Pl3xusPlugin::<WebSocketProvider, TaskPool>::default())
+        .insert_resource(Pl3xusRuntime(TaskPoolBuilder::new().num_threads(2).build()))
         .insert_resource(NetworkSettings::default())
         // Add sync plugin
-        .add_plugins(EventworkSyncPlugin::<WebSocketProvider>::default())
+        .add_plugins(Pl3xusSyncPlugin::<WebSocketProvider>::default())
         // Register components for synchronization
         .sync_component::<Position>(None)
         .sync_component::<StatusFlags>(None)
@@ -137,7 +137,7 @@ fn main() {
 fn setup_networking(
     net: Res<Network<WebSocketProvider>>,
     settings: Res<NetworkSettings>,
-    task_pool: Res<EventworkRuntime<TaskPool>>,
+    task_pool: Res<Pl3xusRuntime<TaskPool>>,
 ) {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8082);
 
@@ -186,7 +186,7 @@ Your server is now synchronizing `Position` and `StatusFlags` components to any 
 Configure global sync behavior:
 
 ```rust
-use eventwork_sync::SyncSettings;
+use pl3xus_sync::SyncSettings;
 
 app.insert_resource(SyncSettings {
     max_update_rate_hz: Some(30.0),      // Limit to 30 updates/second
@@ -197,7 +197,7 @@ app.insert_resource(SyncSettings {
 ### Per-Component Configuration
 
 ```rust
-use eventwork_sync::ComponentSyncConfig;
+use pl3xus_sync::ComponentSyncConfig;
 
 app.sync_component::<Position>(Some(ComponentSyncConfig {
     // Component-specific settings

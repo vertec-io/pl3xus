@@ -3,13 +3,13 @@ title: Leptos Hooks Guide
 ---
 # Leptos Hooks Guide
 
-This guide covers all the reactive hooks provided by eventwork_client for building synchronized Leptos applications.
+This guide covers all the reactive hooks provided by pl3xus_client for building synchronized Leptos applications.
 
 ---
 
 ## Overview
 
-eventwork_client provides a suite of hooks that integrate with Leptos's reactive system. These hooks:
+pl3xus_client provides a suite of hooks that integrate with Leptos's reactive system. These hooks:
 
 - **Automatically subscribe** to server data when components mount
 - **Reactively update** when the server sends changes
@@ -41,7 +41,7 @@ All hooks must be called within a `SyncProvider` context.
 Subscribe to all entities that have a specific component type.
 
 ```rust
-use eventwork_client::use_sync_component;
+use pl3xus_client::use_sync_component;
 use std::collections::HashMap;
 
 #[component]
@@ -76,7 +76,7 @@ fn PositionList() -> impl IntoView {
 Subscribe with a filter predicate to get a subset of entities.
 
 ```rust
-use eventwork_client::use_sync_component_where;
+use pl3xus_client::use_sync_component_where;
 
 #[component]
 fn ActiveRobots() -> impl IntoView {
@@ -110,7 +110,7 @@ fn ActiveRobots() -> impl IntoView {
 Subscribe to a single entity's component by ID.
 
 ```rust
-use eventwork_client::use_sync_entity;
+use pl3xus_client::use_sync_entity;
 
 #[component]
 fn RobotDetail(entity_id: u64) -> impl IntoView {
@@ -149,7 +149,7 @@ fn RobotDetail(entity_id: u64) -> impl IntoView {
 Access WebSocket connection state and controls.
 
 ```rust
-use eventwork_client::use_sync_connection;
+use pl3xus_client::use_sync_connection;
 use leptos_use::core::ConnectionReadyState;
 
 #[component]
@@ -191,7 +191,7 @@ fn ConnectionStatus() -> impl IntoView {
 Access the full SyncContext for advanced operations like mutations.
 
 ```rust
-use eventwork_client::use_sync_context;
+use pl3xus_client::use_sync_context;
 
 #[component]
 fn PositionUpdater(entity_id: u64) -> impl IntoView {
@@ -221,8 +221,8 @@ fn PositionUpdater(entity_id: u64) -> impl IntoView {
 Track the status of mutation requests.
 
 ```rust
-use eventwork_client::{use_sync_context, use_sync_mutations, MutationState};
-use eventwork_sync::MutationStatus;
+use pl3xus_client::{use_sync_context, use_sync_mutations, MutationState};
+use pl3xus_sync::MutationStatus;
 
 #[component]
 fn MutateWithFeedback(entity_id: u64) -> impl IntoView {
@@ -266,7 +266,7 @@ fn MutateWithFeedback(entity_id: u64) -> impl IntoView {
 Build controlled input fields that integrate with server state.
 
 ```rust
-use eventwork_client::use_sync_field_editor;
+use pl3xus_client::use_sync_field_editor;
 
 #[component]
 fn PositionXEditor(entity_id: u64) -> impl IntoView {
@@ -313,7 +313,7 @@ fn PositionXEditor(entity_id: u64) -> impl IntoView {
 Subscribe to broadcast messages (not component sync).
 
 ```rust
-use eventwork_client::use_sync_message;
+use pl3xus_client::use_sync_message;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 struct ServerNotification {
@@ -347,7 +347,7 @@ fn NotificationBanner() -> impl IntoView {
 Handle incremental/append-only data like logs or event streams.
 
 ```rust
-use eventwork_client::use_sync_untracked;
+use pl3xus_client::use_sync_untracked;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 struct LogBuffer {
@@ -450,7 +450,7 @@ let my_robot = use_sync_entity::<Robot>(entity_id);
 For simple field editing, the `SyncFieldInput` component is often easier than `use_sync_field_editor`:
 
 ```rust
-use eventwork_client::SyncFieldInput;
+use pl3xus_client::SyncFieldInput;
 
 view! {
     <SyncFieldInput<Position, f32>
@@ -469,11 +469,11 @@ view! {
 - [Mutations](./mutations.md) - Server-side mutation authorization
 - [Subscriptions](./subscriptions.md) - How subscriptions work
 - [Type Registry](./type-registry.md) - Client type registration
-- [API Reference](https://docs.rs/eventwork_client) - Full API documentation
+- [API Reference](https://docs.rs/pl3xus_client) - Full API documentation
 
 ---
 
 **Last Updated**: 2025-12-07
-**eventwork_client Version**: 0.1
+**pl3xus_client Version**: 0.1
 
 

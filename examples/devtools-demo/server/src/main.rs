@@ -4,15 +4,15 @@ use std::time::Duration;
 use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
 use bevy::tasks::{TaskPool, TaskPoolBuilder};
-use eventwork::{EventworkRuntime, Network, NetworkEvent};
-use eventwork_sync::{AppEventworkSyncExt, EventworkSyncPlugin};
-use eventwork_websockets::{NetworkSettings, WebSocketProvider};
+use pl3xus::{Pl3xusRuntime, Network, NetworkEvent};
+use pl3xus_sync::{AppPl3xusSyncExt, Pl3xusSyncPlugin};
+use pl3xus_websockets::{NetworkSettings, WebSocketProvider};
 use demo_types::{DemoCounter, DemoFlag, ParentEntity, ChildEntities};
 
 /// Simple ECS server used by the devtools demo client.
 ///
 /// Run with:
-///   cargo run -p eventwork_sync --example devtools-demo-server
+///   cargo run -p pl3xus_sync --example devtools-demo-server
 ///
 /// Then point the devtools demo client at ws://127.0.0.1:8081.
 fn main() {
@@ -26,13 +26,13 @@ fn main() {
     );
     app.add_plugins(bevy::log::LogPlugin::default());
 
-    // Eventwork networking over WebSockets.
-    app.add_plugins(eventwork::EventworkPlugin::<WebSocketProvider, TaskPool>::default());
-    app.insert_resource(EventworkRuntime(TaskPoolBuilder::new().num_threads(2).build()));
+    // Pl3xus networking over WebSockets.
+    app.add_plugins(pl3xus::Pl3xusPlugin::<WebSocketProvider, TaskPool>::default());
+    app.insert_resource(Pl3xusRuntime(TaskPoolBuilder::new().num_threads(2).build()));
     app.insert_resource(NetworkSettings::default());
 
     // Install the sync middleware so components can be observed/mutated.
-    app.add_plugins(EventworkSyncPlugin::<WebSocketProvider>::default());
+    app.add_plugins(Pl3xusSyncPlugin::<WebSocketProvider>::default());
 
     // Register demo components for synchronization.
     app.sync_component::<DemoCounter>(None);
@@ -106,7 +106,7 @@ fn setup_world(mut commands: Commands) {
 fn setup_networking(
     mut net: ResMut<Network<WebSocketProvider>>,
     settings: Res<NetworkSettings>,
-    task_pool: Res<EventworkRuntime<TaskPool>>,
+    task_pool: Res<Pl3xusRuntime<TaskPool>>,
 ) {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081);
 

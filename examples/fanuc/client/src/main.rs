@@ -1,9 +1,9 @@
-use eventwork_client::{
+use pl3xus_client::{
     ClientTypeRegistry, SyncProvider, use_sync_component,
 };
 
 #[cfg(target_arch = "wasm32")]
-use eventwork_client::devtools::DevTools;
+use pl3xus_client::devtools::DevTools;
 use fanuc_real_types::{RobotPosition, RobotStatus, JointAngles, RobotInfo};
 use leptos::prelude::*;
 
@@ -36,7 +36,7 @@ fn App() -> impl IntoView {
             <div class="min-h-screen w-screen bg-slate-950 text-slate-50 flex flex-col">
                 <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur px-6 py-4">
                     <h1 class="text-lg font-semibold tracking-tight">"FANUC Real Robot Control"</h1>
-                    <p class="text-xs text-slate-400">"Real FANUC simulator control using eventwork_sync"</p>
+                    <p class="text-xs text-slate-400">"Real FANUC simulator control using pl3xus_sync"</p>
                 </header>
                 <div class="flex-1 flex overflow-hidden">
                     <main class="flex-1 p-6 overflow-auto">

@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/eventwork",
-    "crates/eventwork_websockets",
-    "crates/eventwork_common",
-    "crates/eventwork_memory",
-    "crates/eventwork_macros",
-    "crates/eventwork_sync",
-    "crates/eventwork_client",
+    "crates/pl3xus",
+    "crates/pl3xus_websockets",
+    "crates/pl3xus_common",
+    "crates/pl3xus_memory",
+    "crates/pl3xus_macros",
+    "crates/pl3xus_sync",
+    "crates/pl3xus_client",
     "examples/shared/basic_types",
     "examples/shared/demo_types",
     "examples/shared/fanuc_types",
@@ -26,21 +26,21 @@ rust-version = "1.88.0"
 edition = "2024"
 
 exclude = [
-    "crates/eventwork_websockets/examples",
-    "crates/eventwork_websockets/src/wasm_client_example",
-    "crates/eventwork/examples",
-    "crates/eventwork_websockets/leptos_client_example",
+    "crates/pl3xus_websockets/examples",
+    "crates/pl3xus_websockets/src/wasm_client_example",
+    "crates/pl3xus/examples",
+    "crates/pl3xus_websockets/leptos_client_example",
 ]
 
 
 
 [workspace.dependencies]
-# Core eventwork crates
-eventwork = { path = "crates/eventwork" }
-eventwork_client = { path = "crates/eventwork_client" }
-eventwork_sync = { path = "crates/eventwork_sync", default-features = false }
-eventwork_websockets = { path = "crates/eventwork_websockets" }
-eventwork_common = { path = "crates/eventwork_common" }
+# Core pl3xus crates
+pl3xus = { path = "crates/pl3xus" }
+pl3xus_client = { path = "crates/pl3xus_client" }
+pl3xus_sync = { path = "crates/pl3xus_sync", default-features = false }
+pl3xus_websockets = { path = "crates/pl3xus_websockets" }
+pl3xus_common = { path = "crates/pl3xus_common" }
 
 # Example shared types
 basic_types = { path = "examples/shared/basic_types" }

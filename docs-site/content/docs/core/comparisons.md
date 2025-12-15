@@ -3,13 +3,13 @@ title: Comparisons
 ---
 # Comparisons
 
-How does Eventwork compare to other networking solutions for Bevy and Rust applications?
+How does Pl3xus compare to other networking solutions for Bevy and Rust applications?
 
 ---
 
 ## At a Glance
 
-| Feature | Eventwork | bevy_renet | Matchbox | WebSocket (tungstenite) |
+| Feature | Pl3xus | bevy_renet | Matchbox | WebSocket (tungstenite) |
 |---------|-----------|------------|----------|-------------------------|
 | Transport Agnostic | ✅ | ❌ (UDP) | ❌ (WebRTC) | ❌ (WS only) |
 | ECS Component Sync | ✅ | ❌ | ❌ | ❌ |
@@ -31,7 +31,7 @@ How does Eventwork compare to other networking solutions for Bevy and Rust appli
 - Need client-side prediction and lag compensation
 - UDP-based transport is acceptable
 
-### When to Choose Eventwork
+### When to Choose Pl3xus
 
 - Need browser client support (WebSocket)
 - Building dashboards or control interfaces
@@ -50,7 +50,7 @@ How does Eventwork compare to other networking solutions for Bevy and Rust appli
 - Need NAT traversal
 - Want built-in matchmaking
 
-### When to Choose Eventwork
+### When to Choose Pl3xus
 
 - Have an authoritative server architecture
 - Need component-level synchronization
@@ -69,7 +69,7 @@ Libraries like [tungstenite](https://github.com/snapview/tungstenite-rs) or [tok
 - Building custom messaging protocols
 - Simple request/response patterns
 
-### When to Choose Eventwork
+### When to Choose Pl3xus
 
 - Want type-safe message definitions
 - Need automatic serialization (bincode)
@@ -80,7 +80,7 @@ Libraries like [tungstenite](https://github.com/snapview/tungstenite-rs) or [tok
 
 ## Feature Comparison Table
 
-| Capability | Eventwork | bevy_renet | Matchbox |
+| Capability | Pl3xus | bevy_renet | Matchbox |
 |------------|-----------|------------|----------|
 | **Transport** |
 | TCP | ✅ | ❌ | ❌ |
@@ -107,7 +107,7 @@ Libraries like [tungstenite](https://github.com/snapview/tungstenite-rs) or [tok
 
 ## Summary
 
-**Choose Eventwork when:**
+**Choose Pl3xus when:**
 - Building real-time dashboards and control interfaces
 - Need automatic ECS component synchronization
 - Want Leptos/WASM web client support

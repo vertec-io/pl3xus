@@ -1,12 +1,12 @@
 # WebSocket Patterns Guide
 
-This guide covers common WebSocket architectures and production patterns when using eventwork_websockets.
+This guide covers common WebSocket architectures and production patterns when using pl3xus_websockets.
 
 ---
 
 ## Overview
 
-`eventwork_websockets` provides WebSocket transport for the eventwork networking library. It supports:
+`pl3xus_websockets` provides WebSocket transport for the pl3xus networking library. It supports:
 
 - **Native servers** using async-tungstenite
 - **Native clients** using async-tungstenite
@@ -22,18 +22,18 @@ This guide covers common WebSocket architectures and production patterns when us
 ```rust
 use bevy::prelude::*;
 use bevy::tasks::{TaskPool, TaskPoolBuilder};
-use eventwork::{EventworkPlugin, EventworkRuntime, Network, NetworkEvent};
-use eventwork_websockets::{NetworkSettings, WebSocketProvider};
+use pl3xus::{Pl3xusPlugin, Pl3xusRuntime, Network, NetworkEvent};
+use pl3xus_websockets::{NetworkSettings, WebSocketProvider};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 fn main() {
     App::new()
         .add_plugins(MinimalPlugins)
         .add_plugins(bevy::log::LogPlugin::default())
-        // Add eventwork with WebSocket provider
-        .add_plugins(EventworkPlugin::<WebSocketProvider, TaskPool>::default())
+        // Add pl3xus with WebSocket provider
+        .add_plugins(Pl3xusPlugin::<WebSocketProvider, TaskPool>::default())
         // Configure the async runtime
-        .insert_resource(EventworkRuntime(
+        .insert_resource(Pl3xusRuntime(
             TaskPoolBuilder::new().num_threads(2).build()
         ))
         // Configure WebSocket settings
@@ -47,7 +47,7 @@ fn main() {
 fn setup_networking(
     mut net: ResMut<Network<WebSocketProvider>>,
     settings: Res<NetworkSettings>,
-    task_pool: Res<EventworkRuntime<TaskPool>>,
+    task_pool: Res<Pl3xusRuntime<TaskPool>>,
 ) {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
     
@@ -78,7 +78,7 @@ fn handle_connections(mut events: EventReader<NetworkEvent>) {
 ### Native Server/Client Settings
 
 ```rust
-use eventwork_websockets::NetworkSettings;
+use pl3xus_websockets::NetworkSettings;
 use async_tungstenite::tungstenite::protocol::WebSocketConfig;
 
 let settings = NetworkSettings {
@@ -124,14 +124,14 @@ let settings = NetworkSettings {
 ### Native Bevy Client
 
 ```rust
-use eventwork::{Network, EventworkRuntime};
-use eventwork_websockets::{NetworkSettings, WebSocketProvider};
+use pl3xus::{Network, Pl3xusRuntime};
+use pl3xus_websockets::{NetworkSettings, WebSocketProvider};
 use url::Url;
 
 fn connect_to_server(
     mut net: ResMut<Network<WebSocketProvider>>,
     settings: Res<NetworkSettings>,
-    task_pool: Res<EventworkRuntime<TaskPool>>,
+    task_pool: Res<Pl3xusRuntime<TaskPool>>,
 ) {
     let url = Url::parse("ws://127.0.0.1:8080").unwrap();
     
@@ -142,10 +142,10 @@ fn connect_to_server(
 }
 ```
 
-### Leptos Web Client (with eventwork_client)
+### Leptos Web Client (with pl3xus_client)
 
 ```rust
-use eventwork_client::{SyncProvider, ClientTypeRegistry};
+use pl3xus_client::{SyncProvider, ClientTypeRegistry};
 use std::sync::Arc;
 
 #[component]
@@ -167,17 +167,17 @@ fn App() -> impl IntoView {
 
 ### Leptos Web Client (manual WebSocket)
 
-For custom WebSocket handling without eventwork_client:
+For custom WebSocket handling without pl3xus_client:
 
 ```rust
 use leptos::prelude::*;
 use leptos_use::use_websocket_with_options;
-use eventwork_websockets::EventworkBincodeSingleMsgCodec;
+use pl3xus_websockets::Pl3xusBincodeSingleMsgCodec;
 
 #[component]
 fn ChatClient() -> impl IntoView {
     let UseWebSocketReturn { message, send, ready_state, .. } = 
-        use_websocket_with_options::<MyMessage, ServerMessage, EventworkBincodeSingleMsgCodec, _, _>(
+        use_websocket_with_options::<MyMessage, ServerMessage, Pl3xusBincodeSingleMsgCodec, _, _>(
             "ws://127.0.0.1:8080",
             UseWebSocketOptions::default()
                 .on_open(|_| log::info!("Connected!"))
@@ -203,7 +203,7 @@ fn ChatClient() -> impl IntoView {
 
 ## Message Encoding
 
-eventwork uses **bincode** for binary message encoding, providing:
+pl3xus uses **bincode** for binary message encoding, providing:
 
 - Compact wire format (smaller than JSON)
 - Fast serialization/deserialization
@@ -212,7 +212,7 @@ eventwork uses **bincode** for binary message encoding, providing:
 ### Message Registration
 
 ```rust
-use eventwork::AppNetworkMessageExt;
+use pl3xus::AppNetworkMessageExt;
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -228,7 +228,7 @@ app.register_network_message::<ChatMessage, WebSocketProvider>();
 ### Receiving Messages
 
 ```rust
-use eventwork::NetworkData;
+use pl3xus::NetworkData;
 
 fn handle_chat(mut messages: EventReader<NetworkData<ChatMessage>>) {
     for msg in messages.read() {
@@ -244,7 +244,7 @@ fn handle_chat(mut messages: EventReader<NetworkData<ChatMessage>>) {
 ### Tracking Connected Clients
 
 ```rust
-use eventwork::{ConnectionId, NetworkEvent};
+use pl3xus::{ConnectionId, NetworkEvent};
 use bevy::utils::HashSet;
 
 #[derive(Resource, Default)]
@@ -382,7 +382,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 fn main() {
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer())
-        .with(tracing_subscriber::EnvFilter::new("eventwork=debug,eventwork_websockets=debug"))
+        .with(tracing_subscriber::EnvFilter::new("pl3xus=debug,pl3xus_websockets=debug"))
         .init();
 
     // ... app setup
@@ -395,7 +395,7 @@ fn main() {
 |---------|---------|
 | "Beginning connection" | Client starting WebSocket handshake |
 | "Message read" | Received a message from wire |
-| "Message deserialized and sent to eventwork" | Message decoded and queued |
+| "Message deserialized and sent to pl3xus" | Message decoded and queued |
 | "Channel depth warning" | Message queue filling up |
 
 ---
@@ -439,13 +439,13 @@ fn main() {
 
 - [Sending Messages](./sending-messages.md) - Message patterns
 - [Shared Types](./shared-types.md) - Type sharing between server/client
-- [eventwork_websockets README](https://github.com/vertec-io/bevy_eventwork/tree/main/crates/eventwork_websockets)
-- [API Reference](https://docs.rs/eventwork_websockets)
+- [pl3xus_websockets README](https://github.com/vertec-io/pl3xus/tree/main/crates/pl3xus_websockets)
+- [API Reference](https://docs.rs/pl3xus_websockets)
 
 ---
 
 **Last Updated**: 2025-12-07
-**eventwork_websockets Version**: 0.17
+**pl3xus_websockets Version**: 0.17
 ```
 
 

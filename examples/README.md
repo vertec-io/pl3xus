@@ -1,6 +1,6 @@
-# Bevy Eventwork Examples
+# Bevy Pl3xus Examples
 
-This directory contains all examples for the `bevy_eventwork` project, organized by use case.
+This directory contains all examples for the `pl3xus` project, organized by use case.
 
 ## Structure
 
@@ -77,14 +77,14 @@ Then connect with any client using the DevTools widget.
 ## Example Descriptions
 
 ### Basic Example
-Demonstrates the core functionality of `eventwork_client`:
+Demonstrates the core functionality of `pl3xus_client`:
 - WebSocket connection to Bevy ECS server
 - Component synchronization (Position, Velocity, EntityName)
 - Real-time updates
 - DevTools integration
 
 ### FANUC Example
-Shows how to use `eventwork_client` for industrial robot control:
+Shows how to use `pl3xus_client` for industrial robot control:
 - Real FANUC RMI API types
 - Robot position and status monitoring
 - Joint angle visualization

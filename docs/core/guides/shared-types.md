@@ -6,7 +6,7 @@ This guide covers how to structure shared types between your Bevy server and Lep
 
 ## Overview
 
-When using eventwork_sync and eventwork_client, you need types that work in both contexts:
+When using pl3xus_sync and pl3xus_client, you need types that work in both contexts:
 
 - **Server**: Bevy `Component` trait, runs natively
 - **Client**: Leptos/WASM, no Bevy dependency
@@ -111,9 +111,9 @@ edition = "2021"
 
 [dependencies]
 bevy = "0.17"
-eventwork = "0.17"
-eventwork_sync = { version = "0.1", features = ["runtime"] }
-eventwork_websockets = "0.17"
+pl3xus = "0.17"
+pl3xus_sync = { version = "0.1", features = ["runtime"] }
+pl3xus_websockets = "0.17"
 
 # Import shared types with server feature
 my_shared_types = { path = "../shared", features = ["server"] }
@@ -123,8 +123,8 @@ my_shared_types = { path = "../shared", features = ["server"] }
 
 ```rust
 use bevy::prelude::*;
-use eventwork_sync::{AppEventworkSyncExt, EventworkSyncPlugin};
-use eventwork_websockets::WebSocketProvider;
+use pl3xus_sync::{AppPl3xusSyncExt, Pl3xusSyncPlugin};
+use pl3xus_websockets::WebSocketProvider;
 
 // Import shared types - they include Component trait
 use my_shared_types::{Position, Velocity, EntityName};
@@ -134,7 +134,7 @@ fn main() {
     
     // ... other plugins ...
     
-    app.add_plugins(EventworkSyncPlugin::<WebSocketProvider>::default());
+    app.add_plugins(Pl3xusSyncPlugin::<WebSocketProvider>::default());
     
     // Register components for synchronization
     app.sync_component::<Position>(None);
@@ -159,7 +159,7 @@ edition = "2021"
 
 [dependencies]
 leptos = "0.8"
-eventwork_client = { version = "0.1", features = ["devtools"] }
+pl3xus_client = { version = "0.1", features = ["devtools"] }
 
 # Import shared types WITHOUT server feature (no Bevy)
 my_shared_types = { path = "../shared" }
@@ -169,7 +169,7 @@ my_shared_types = { path = "../shared" }
 
 ```rust
 use leptos::prelude::*;
-use eventwork_client::{
+use pl3xus_client::{
     SyncProvider, use_sync_component, ClientTypeRegistry,
 };
 use std::sync::Arc;
@@ -314,7 +314,7 @@ Create a shared registration function to ensure consistency:
 // shared/src/lib.rs
 #[cfg(feature = "server")]
 pub fn register_sync_components(app: &mut bevy::prelude::App) {
-    use eventwork_sync::AppEventworkSyncExt;
+    use pl3xus_sync::AppPl3xusSyncExt;
     app.sync_component::<Position>(None);
     app.sync_component::<Velocity>(None);
     app.sync_component::<EntityName>(None);
@@ -407,13 +407,13 @@ my_shared_types = { path = "../shared" }  # No features
 
 - [Mutations](./mutations.md) - Client-side component editing
 - [DevTools](./devtools.md) - Inspecting synchronized data
-- [Getting Started: eventwork_sync](../../sync/index.md) - Server setup
-- [Getting Started: eventwork_client](../../client/index.md) - Client setup
+- [Getting Started: pl3xus_sync](../../sync/index.md) - Server setup
+- [Getting Started: pl3xus_client](../../client/index.md) - Client setup
 
 ---
 
 **Last Updated**: 2025-12-07
-**eventwork_sync Version**: 0.1
+**pl3xus_sync Version**: 0.1
 ```
 
 

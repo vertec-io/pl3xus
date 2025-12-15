@@ -1,6 +1,6 @@
 # Installation
 
-This guide covers installing bevy_eventwork and its dependencies.
+This guide covers installing pl3xus and its dependencies.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ rustup update
 
 ### Bevy
 
-bevy_eventwork 1.1.x requires Bevy 0.17:
+pl3xus 1.1.x requires Bevy 0.17:
 
 ```toml
 [dependencies]
@@ -30,12 +30,12 @@ bevy = "0.17"
 
 ## Core Installation
 
-Add the core eventwork crate:
+Add the core pl3xus crate:
 
 ```toml
 [dependencies]
 bevy = "0.17"
-eventwork = "1.1"
+pl3xus = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -47,7 +47,7 @@ Choose a transport provider based on your needs:
 
 ```toml
 [dependencies]
-eventwork_websockets = "1.1"
+pl3xus_websockets = "1.1"
 ```
 
 Supports:
@@ -56,7 +56,7 @@ Supports:
 
 ### TCP (Built-in)
 
-TCP is included in the core `eventwork` crate. No additional dependency needed.
+TCP is included in the core `pl3xus` crate. No additional dependency needed.
 
 Supports:
 - ✅ Native (Linux, Windows, macOS)
@@ -66,7 +66,7 @@ Supports:
 
 ```toml
 [dependencies]
-eventwork_memory = "1.1"
+pl3xus_memory = "1.1"
 ```
 
 For in-memory testing without network overhead.
@@ -79,14 +79,14 @@ For ECS component synchronization:
 
 ```toml
 [dependencies]
-eventwork_sync = "1.1"
+pl3xus_sync = "1.1"
 ```
 
 ### Client-Side (Leptos)
 
 ```toml
 [dependencies]
-eventwork_client = "1.1"
+pl3xus_client = "1.1"
 leptos = "0.8"
 ```
 
@@ -102,9 +102,9 @@ edition = "2024"
 
 [dependencies]
 bevy = "0.17"
-eventwork = "1.1"
-eventwork_websockets = "1.1"
-eventwork_sync = "1.1"
+pl3xus = "1.1"
+pl3xus_websockets = "1.1"
+pl3xus_sync = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -118,7 +118,7 @@ edition = "2024"
 
 [dependencies]
 leptos = "0.8"
-eventwork_client = "1.1"
+pl3xus_client = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 wasm-bindgen = "0.2"
 ```
@@ -129,15 +129,15 @@ Create a simple test to verify everything is working:
 
 ```rust
 use bevy::prelude::*;
-use eventwork::{EventworkPlugin, EventworkRuntime};
-use eventwork_websockets::WebSocketProvider;
+use pl3xus::{Pl3xusPlugin, Pl3xusRuntime};
+use pl3xus_websockets::WebSocketProvider;
 use bevy::tasks::TaskPoolBuilder;
 
 fn main() {
     App::new()
         .add_plugins(MinimalPlugins)
-        .add_plugins(EventworkPlugin::<WebSocketProvider, bevy::tasks::TaskPool>::default())
-        .insert_resource(EventworkRuntime(
+        .add_plugins(Pl3xusPlugin::<WebSocketProvider, bevy::tasks::TaskPool>::default())
+        .insert_resource(Pl3xusRuntime(
             TaskPoolBuilder::new().num_threads(2).build()
         ))
         .run();
@@ -148,7 +148,7 @@ If this compiles and runs without errors, you're ready to go!
 
 ## Next Steps
 
-- [Core Eventwork Guide](./index.md) - Learn the basics
+- [Core Pl3xus Guide](./index.md) - Learn the basics
 - [Server Sync Guide](../../sync/index.md) - Set up component synchronization
 - [Client Guide](../../client/index.md) - Build reactive web UIs
 

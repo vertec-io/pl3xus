@@ -4,7 +4,7 @@ This example demonstrates the `ExclusiveControlPlugin` for managing exclusive co
 
 ## Overview
 
-The `ExclusiveControlPlugin` is an optional utility plugin in `eventwork_sync` that provides common patterns for exclusive control transfer. It enables:
+The `ExclusiveControlPlugin` is an optional utility plugin in `pl3xus_sync` that provides common patterns for exclusive control transfer. It enables:
 
 - **Exclusive control**: Only one client can control an entity at a time
 - **Control requests**: Clients can request to take or release control
@@ -27,7 +27,7 @@ The server will start on `ws://127.0.0.1:8083/sync` and spawn 3 robots that clie
 Currently, this example only includes the server. To test the control functionality, you can:
 
 1. Use the DevTools demo client to connect and visualize the robots
-2. Create a custom client using `eventwork_client` to send control requests
+2. Create a custom client using `pl3xus_client` to send control requests
 3. Use a WebSocket client to manually send control messages
 
 ## How It Works
@@ -166,7 +166,7 @@ control.last_activity = time.elapsed_secs();
 
 To fully test this example, you would need to:
 
-1. Create a Leptos client that uses `eventwork_client` to:
+1. Create a Leptos client that uses `pl3xus_client` to:
    - Display the list of robots
    - Show which client has control of each robot
    - Provide UI to request/release control

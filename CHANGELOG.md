@@ -59,11 +59,11 @@ See [docs/MIGRATION_0.17.md](docs/MIGRATION_0.17.md) for detailed migration inst
 
 #### 🎉 Automatic Message Registration (Major Feature)
 
-- **New `EventworkMessage` trait** - Automatically implemented for all `Serialize + Deserialize + Send + Sync + 'static` types
+- **New `Pl3xusMessage` trait** - Automatically implemented for all `Serialize + Deserialize + Send + Sync + 'static` types
 - **New `register_network_message<T>()`** - Register any serializable type as a network message without implementing `NetworkMessage`
 - **Automatic type name generation** - Uses `std::any::type_name()` with caching for performance
-- **New `send<T>()`** - Simplified send method that works with any `EventworkMessage` type
-- **Updated `broadcast<T>()`** - Now works with any `EventworkMessage` type
+- **New `send<T>()`** - Simplified send method that works with any `Pl3xusMessage` type
+- **Updated `broadcast<T>()`** - Now works with any `Pl3xusMessage` type
 - **External crate support** - Use types from any crate as network messages without wrapper types
 - **Helper methods** - Added `is_message_registered()` and `registered_message_names()` for testing/debugging
 
@@ -92,7 +92,7 @@ See [docs/MIGRATION_0.17.md](docs/MIGRATION_0.17.md) for detailed migration inst
 
 ### Fixed
 
-- **Binary codec decode** - Fixed decode implementation in `eventwork_common` that was not properly handling length prefix
+- **Binary codec decode** - Fixed decode implementation in `pl3xus_common` that was not properly handling length prefix
 
 ### Migration Guide
 
@@ -149,9 +149,9 @@ None! This release is fully backward compatible.
 
 ### Version Updates
 
-- `eventwork`: 0.9.11 → 0.10.0
-- `eventwork_common`: 0.2.8 → 0.3.0
-- `eventwork_websockets`: 0.2.1 → 0.3.0
+- `pl3xus`: 0.9.11 → 0.10.0
+- `pl3xus_common`: 0.2.8 → 0.3.0
+- `pl3xus_websockets`: 0.2.1 → 0.3.0
 
 ---
 

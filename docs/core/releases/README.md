@@ -1,6 +1,6 @@
 # Release Notes
 
-Release notes and changelogs for the bevy_eventwork ecosystem.
+Release notes and changelogs for the pl3xus ecosystem.
 
 ## Releases
 
@@ -14,7 +14,7 @@ Release notes and changelogs for the bevy_eventwork ecosystem.
 
 - Bevy 0.17 support
 - Rust 2024 edition
-- eventwork_sync and eventwork_client crates
+- pl3xus_sync and pl3xus_client crates
 - ExclusiveControlPlugin for control transfer patterns
 - DevTools for debugging
 
@@ -45,19 +45,19 @@ For detailed upgrade instructions, see the [Migration](../migration/) section:
 
 ## Versioning Policy
 
-All eventwork crates are versioned together:
+All pl3xus crates are versioned together:
 
 | Crate | Version |
 |-------|---------|
-| eventwork | 1.1.1 |
-| eventwork_common | 1.1.1 |
-| eventwork_websockets | 1.1.1 |
-| eventwork_macros | 1.1.1 |
-| eventwork_memory | 1.1.1 |
-| eventwork_sync | 1.1.1 |
-| eventwork_client | 1.1.1 |
+| pl3xus | 1.1.1 |
+| pl3xus_common | 1.1.1 |
+| pl3xus_websockets | 1.1.1 |
+| pl3xus_macros | 1.1.1 |
+| pl3xus_memory | 1.1.1 |
+| pl3xus_sync | 1.1.1 |
+| pl3xus_client | 1.1.1 |
 
-**Always use matching versions** of all eventwork crates to avoid compatibility issues.
+**Always use matching versions** of all pl3xus crates to avoid compatibility issues.
 
 ## Related Documentation
 

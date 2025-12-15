@@ -1,16 +1,16 @@
-# Getting Started with eventwork_client
+# Getting Started with pl3xus_client
 
-eventwork_client is a reactive Leptos library for building web UIs that synchronize with Bevy ECS servers via eventwork_sync.
+pl3xus_client is a reactive Leptos library for building web UIs that synchronize with Bevy ECS servers via pl3xus_sync.
 
 Time: 30-45 minutes
 Difficulty: Intermediate
-Prerequisites: Basic Leptos knowledge, eventwork_sync server running
+Prerequisites: Basic Leptos knowledge, pl3xus_sync server running
 
 ---
 
 ## Overview
 
-eventwork_client provides:
+pl3xus_client provides:
 - Reactive hooks for subscribing to components with automatic updates
 - Compile-time type checking
 - Focus retention for editable fields during server updates
@@ -26,7 +26,7 @@ Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 leptos = "0.8"
-eventwork_client = "0.1"
+pl3xus_client = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -43,14 +43,14 @@ rustup target add wasm32-unknown-unknown
 
 ### Step 1: Use the Shared Crate
 
-Use the same shared crate as your server (see [eventwork_sync Getting Started](../../sync/index.md) for how to create it).
+Use the same shared crate as your server (see [pl3xus_sync Getting Started](../../sync/index.md) for how to create it).
 
 **Client `Cargo.toml`**:
 
 ```toml
 [dependencies]
 leptos = "0.8"
-eventwork_client = "0.1"
+pl3xus_client = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 # Import shared types WITHOUT the "server" feature
 shared_types = { path = "../shared_types" }
@@ -82,7 +82,7 @@ The implementation:
 - Provides a blanket implementation of `SyncComponent`
 - Extracts component names using `std::any::type_name::<T>()`
 - Caches names for performance (approximately 500ns first call, 50-100ns subsequent)
-- Matches the server-side behavior in eventwork_sync
+- Matches the server-side behavior in pl3xus_sync
 
 ### Step 3: Set Up the Client Registry
 
@@ -90,7 +90,7 @@ Create a registry that maps type names to deserializers:
 
 ```rust
 use leptos::prelude::*;
-use eventwork_client::{SyncProvider, ClientRegistryBuilder};
+use pl3xus_client::{SyncProvider, ClientRegistryBuilder};
 use shared_types::{Position, Velocity};
 
 #[component]
@@ -116,7 +116,7 @@ pub fn App() -> impl IntoView {
 Use the `use_sync_component` hook to subscribe and display data:
 
 ```rust
-use eventwork_client::use_sync_component;
+use pl3xus_client::use_sync_component;
 
 #[component]
 fn AppView() -> impl IntoView {
@@ -179,7 +179,7 @@ Open `http://localhost:8080` in your browser to see the synchronized entities.
 To allow users to edit component values:
 
 ```rust
-use eventwork_client::SyncFieldInput;
+use pl3xus_client::SyncFieldInput;
 
 #[component]
 fn PositionEditor(entity_id: u64) -> impl IntoView {
@@ -221,10 +221,10 @@ Features:
 
 ## DevTools
 
-eventwork_client includes built-in DevTools for inspecting entities and components:
+pl3xus_client includes built-in DevTools for inspecting entities and components:
 
 ```rust
-use eventwork_client::DevTools;
+use pl3xus_client::DevTools;
 
 #[component]
 fn App() -> impl IntoView {
@@ -255,21 +255,21 @@ Press the DevTools button to inspect entities, view component values, and edit f
 
 ## Complete Example
 
-See `crates/eventwork_client/examples/basic_client/` for a complete working example.
+See `crates/pl3xus_client/examples/basic_client/` for a complete working example.
 
 **Run it**:
 ```bash
 # Terminal 1: Start server
-cargo run -p eventwork_client --example basic_server
+cargo run -p pl3xus_client --example basic_server
 
 # Terminal 2: Start client
-cd crates/eventwork_client/examples/basic_client
+cd crates/pl3xus_client/examples/basic_client
 trunk serve --port 8080
 ```
 
 ---
 
 **Last Updated**: 2025-11-22  
-**eventwork_client Version**: 0.1  
+**pl3xus_client Version**: 0.1  
 **Leptos Version**: 0.8
 

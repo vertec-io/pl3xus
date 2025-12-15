@@ -1,0 +1,44 @@
+[package]
+name = "pl3xus_client"
+version = "0.1.1"
+edition = "2021"
+authors = ["Vertec.io"]
+description = "High-level reactive client library for pl3xus_sync with Leptos integration"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vertec-io/pl3xus"
+
+[dependencies]
+# Core dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1"
+bincode = { version = "2.0.1", features = ["serde"] }
+
+# Leptos dependencies (match devtools version for compatibility)
+leptos = { version = "0.8.12", features = ["csr"] }
+leptos-use = "0.16.3"
+codee = "0.3"
+
+# Pl3xus dependencies
+pl3xus_sync = { path = "../pl3xus_sync", default-features = false }
+pl3xus_common = { path = "../pl3xus_common" }
+
+# Optional dependencies for stores
+reactive_stores = { version = "0.2", optional = true }
+
+# Optional dependencies for devtools
+reactive_graph = { version = "0.2", optional = true }
+
+# Utility dependencies
+thiserror = "2.0"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[features]
+default = []
+stores = ["dep:reactive_stores"]
+devtools = ["dep:reactive_graph"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+

@@ -9,10 +9,10 @@
 use bevy::prelude::*;
 use bevy::tasks::{TaskPool, TaskPoolBuilder};
 use control_demo_types::{MoveCommand, Robot, RobotStatus};
-use eventwork::{AppNetworkMessage, EventworkPlugin, EventworkRuntime};
-use eventwork_sync::control::{AppExclusiveControlExt, EntityControl, ExclusiveControlConfig, ExclusiveControlPlugin};
-use eventwork_sync::{AppEventworkSyncExt, EventworkSyncPlugin};
-use eventwork_websockets::{NetworkSettings, WebSocketProvider};
+use pl3xus::{AppNetworkMessage, Pl3xusPlugin, Pl3xusRuntime};
+use pl3xus_sync::control::{AppExclusiveControlExt, EntityControl, ExclusiveControlConfig, ExclusiveControlPlugin};
+use pl3xus_sync::{AppPl3xusSyncExt, Pl3xusSyncPlugin};
+use pl3xus_websockets::{NetworkSettings, WebSocketProvider};
 
 fn main() {
     let mut app = App::new();
@@ -20,15 +20,15 @@ fn main() {
     // Add Bevy plugins
     app.add_plugins(bevy::log::LogPlugin::default());
 
-    // Add eventwork networking over WebSockets
-    app.add_plugins(EventworkPlugin::<WebSocketProvider, TaskPool>::default());
-    app.insert_resource(EventworkRuntime(
+    // Add pl3xus networking over WebSockets
+    app.add_plugins(Pl3xusPlugin::<WebSocketProvider, TaskPool>::default());
+    app.insert_resource(Pl3xusRuntime(
         TaskPoolBuilder::new().num_threads(2).build(),
     ));
     app.insert_resource(NetworkSettings::default());
 
-    // Add eventwork_sync plugin for component synchronization
-    app.add_plugins(EventworkSyncPlugin::<WebSocketProvider>::default());
+    // Add pl3xus_sync plugin for component synchronization
+    app.add_plugins(Pl3xusSyncPlugin::<WebSocketProvider>::default());
 
     // Add the ExclusiveControlPlugin
     app.add_plugins(ExclusiveControlPlugin::new(ExclusiveControlConfig {
@@ -100,7 +100,7 @@ fn spawn_robots(mut commands: Commands) {
 
 /// Handle move commands from clients
 fn handle_move_commands(
-    mut message_reader: bevy::ecs::message::MessageReader<eventwork::NetworkData<MoveCommand>>,
+    mut message_reader: bevy::ecs::message::MessageReader<pl3xus::NetworkData<MoveCommand>>,
     mut robots: Query<(Entity, &mut Robot, &mut RobotStatus, &mut EntityControl)>,
     time: Res<Time>,
 ) {

@@ -6,7 +6,7 @@ This guide covers WebSocket connection lifecycle, state handling, and reconnecti
 
 ## Overview
 
-Connection management in eventwork involves:
+Connection management in pl3xus involves:
 
 1. **Connection state** - Tracking open/closed/connecting states
 2. **Automatic reconnection** - Re-establishing connections after drops
@@ -37,7 +37,7 @@ match ready_state {
 Use the `use_sync_connection` hook:
 
 ```rust
-use eventwork_client::use_sync_connection;
+use pl3xus_client::use_sync_connection;
 use leptos::prelude::*;
 
 #[component]
@@ -257,7 +257,7 @@ fn AutoReconnect() -> impl IntoView {
 On the server, handle connection events with `NetworkEvent`:
 
 ```rust
-use eventwork::{NetworkEvent, MessageReader};
+use pl3xus::{NetworkEvent, MessageReader};
 
 fn handle_connections(mut events: MessageReader<NetworkEvent>) {
     for event in events.read() {
@@ -279,7 +279,7 @@ fn handle_connections(mut events: MessageReader<NetworkEvent>) {
 
 ### Automatic Cleanup
 
-When a client disconnects, eventwork_sync automatically:
+When a client disconnects, pl3xus_sync automatically:
 - Removes all subscriptions for that connection
 - Cancels pending mutations from that connection
 - Releases any exclusive control held by that connection
@@ -452,7 +452,7 @@ Effect::new(move || {
 ---
 
 **Last Updated**: 2025-12-07
-**eventwork_client Version**: 0.1
+**pl3xus_client Version**: 0.1
 ```
 
 

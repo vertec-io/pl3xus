@@ -1,6 +1,6 @@
-# Contributing to bevy_eventwork
+# Contributing to pl3xus
 
-This section is for developers contributing to bevy_eventwork itself.
+This section is for developers contributing to pl3xus itself.
 
 ---
 
@@ -30,10 +30,10 @@ This section is for developers contributing to bevy_eventwork itself.
 cargo check --workspace
 
 # Build server examples
-cargo build --example basic-server -p eventwork
+cargo build --example basic-server -p pl3xus
 
 # Build WASM client
-cd crates/eventwork_client && trunk build --release
+cd crates/pl3xus_client && trunk build --release
 ```
 
 ### Running Examples
@@ -105,10 +105,10 @@ When research is complete:
 cargo test --workspace
 
 # Run specific crate tests
-cargo test -p eventwork_sync
+cargo test -p pl3xus_sync
 
 # Check WASM compilation
-cargo check -p eventwork_client --target wasm32-unknown-unknown
+cargo check -p pl3xus_client --target wasm32-unknown-unknown
 ```
 
 ---
@@ -116,14 +116,14 @@ cargo check -p eventwork_client --target wasm32-unknown-unknown
 ## Crate Structure
 
 ```
-bevy_eventwork/
+pl3xus/
 ├── crates/
-│   ├── eventwork/           # Core Bevy networking plugin
-│   ├── eventwork_common/    # Shared types and traits
-│   ├── eventwork_sync/      # ECS synchronization (server)
-│   ├── eventwork_client/    # Leptos client library
-│   ├── eventwork_websockets/# WebSocket provider
-│   └── eventwork_memory/    # Memory provider (testing)
+│   ├── pl3xus/           # Core Bevy networking plugin
+│   ├── pl3xus_common/    # Shared types and traits
+│   ├── pl3xus_sync/      # ECS synchronization (server)
+│   ├── pl3xus_client/    # Leptos client library
+│   ├── pl3xus_websockets/# WebSocket provider
+│   └── pl3xus_memory/    # Memory provider (testing)
 ├── examples/
 │   ├── basic/               # Minimal working example
 │   └── control-demo/        # Full-featured demo

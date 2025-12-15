@@ -2,7 +2,7 @@
 name = "basic_client"
 version = "0.1.0"
 edition = "2021"
-description = "Basic Leptos client example for eventwork_client"
+description = "Basic Leptos client example for pl3xus_client"
 license = "MIT"
 
 [dependencies]
@@ -23,7 +23,7 @@ bincode = { workspace = true }
 wasm-bindgen = { workspace = true }
 web-sys = { workspace = true, features = ["console"] }
 
-# Eventwork dependencies
-eventwork_client = { workspace = true, features = ["stores", "devtools"] }
-eventwork_sync = { workspace = true, default-features = false }
+# Pl3xus dependencies
+pl3xus_client = { workspace = true, features = ["stores", "devtools"] }
+pl3xus_sync = { workspace = true, default-features = false }
 basic_types = { workspace = true, features = ["stores"] }

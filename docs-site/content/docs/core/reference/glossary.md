@@ -3,7 +3,7 @@ title: Glossary
 ---
 # Glossary
 
-Terminology used throughout the bevy_eventwork documentation.
+Terminology used throughout the pl3xus documentation.
 
 ## Core Concepts
 
@@ -84,7 +84,7 @@ The process of one client releasing control and another acquiring it.
 
 ## Message Concepts
 
-### EventworkMessage
+### Pl3xusMessage
 Trait for types that can be sent over the network. Automatically implemented for `Serialize + Deserialize + Send + Sync + 'static`.
 
 ### NetworkMessage

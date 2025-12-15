@@ -1,6 +1,6 @@
-# What is Eventwork
+# What is Pl3xus
 
-Eventwork is an **event-driven networking framework** for Bevy applications. It enables real-time synchronization between Bevy ECS servers and web clients.
+Pl3xus is an **event-driven networking framework** for Bevy applications. It enables real-time synchronization between Bevy ECS servers and web clients.
 
 ---
 
@@ -8,11 +8,11 @@ Eventwork is an **event-driven networking framework** for Bevy applications. It 
 
 ### Transport Agnostic
 
-Eventwork doesn't tie you to a specific transport protocol. Use TCP for LAN applications, WebSockets for browser clients, or implement your own custom provider. The message-passing layer remains the same.
+Pl3xus doesn't tie you to a specific transport protocol. Use TCP for LAN applications, WebSockets for browser clients, or implement your own custom provider. The message-passing layer remains the same.
 
 ### ECS-Native Design
 
-Unlike traditional networking libraries that bolt onto existing architectures, Eventwork is built around Bevy's Entity Component System. Components are the primary unit of synchronization—changes are detected automatically and replicated to subscribers.
+Unlike traditional networking libraries that bolt onto existing architectures, Pl3xus is built around Bevy's Entity Component System. Components are the primary unit of synchronization—changes are detected automatically and replicated to subscribers.
 
 ### Type Safety First
 
@@ -24,7 +24,7 @@ Register a component with `app.sync_component::<T>(None)` and it's automatically
 
 ---
 
-## When to Use Eventwork
+## When to Use Pl3xus
 
 ### ✅ Real-Time Dashboards
 
@@ -44,19 +44,19 @@ Synchronize simulation state across multiple connected clients. The conflation s
 
 ---
 
-## When NOT to Use Eventwork
+## When NOT to Use Pl3xus
 
 ### ❌ Simple REST APIs
 
-If you just need request/response endpoints, use Axum or Actix-web. Eventwork is designed for persistent, bidirectional connections.
+If you just need request/response endpoints, use Axum or Actix-web. Pl3xus is designed for persistent, bidirectional connections.
 
 ### ❌ Traditional Game Networking
 
-For games requiring client-side prediction, lag compensation, and matchmaking, consider dedicated game networking libraries. Eventwork focuses on authoritative server patterns.
+For games requiring client-side prediction, lag compensation, and matchmaking, consider dedicated game networking libraries. Pl3xus focuses on authoritative server patterns.
 
 ### ❌ Simple CRUD Applications
 
-If your data model is static and updates are infrequent, a traditional database-backed API is simpler. Eventwork shines when state is dynamic and updates are continuous.
+If your data model is static and updates are infrequent, a traditional database-backed API is simpler. Pl3xus shines when state is dynamic and updates are continuous.
 
 ---
 
@@ -66,7 +66,7 @@ If your data model is static and updates are infrequent, a traditional database-
 ┌─────────────────────────────────────────────────────────────┐
 │                     Bevy Server                             │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │   Systems   │  │ Components  │  │   EventworkSync     │  │
+│  │   Systems   │  │ Components  │  │   Pl3xusSync     │  │
 │  │  (Update)   │→ │  (Change)   │→ │  (Detect & Send)    │  │
 │  └─────────────┘  └─────────────┘  └──────────┬──────────┘  │
 └───────────────────────────────────────────────┼─────────────┘

@@ -1,6 +1,6 @@
 # Technical Reference
 
-Technical deep dives for bevy_eventwork contributors.
+Technical deep dives for pl3xus contributors.
 
 ---
 
@@ -8,7 +8,7 @@ Technical deep dives for bevy_eventwork contributors.
 
 ### Industrial Applications First
 
-bevy_eventwork is designed for:
+pl3xus is designed for:
 
 1. **Robotics Control Systems** - Real-time robot state synchronization
 2. **Industrial Automation** - Factory floor monitoring and control
@@ -128,7 +128,7 @@ Components are marked changed when:
 - Component is inserted
 - Component is replaced
 
-### eventwork_sync Detection
+### pl3xus_sync Detection
 
 ```rust
 for (entity, component) in query.iter() {
@@ -208,12 +208,12 @@ impl MutationAuthorizer for HierarchyAuthorizer {
 
 ## WebSocket Codec
 
-### EventworkBincodeCodec
+### Pl3xusBincodeCodec
 
 Custom codec for leptos-use WebSocket:
 
 ```rust
-impl<T> Decoder<T> for EventworkBincodeCodec
+impl<T> Decoder<T> for Pl3xusBincodeCodec
 where
     T: DeserializeOwned,
 {

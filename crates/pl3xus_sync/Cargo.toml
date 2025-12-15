@@ -1,0 +1,33 @@
+[package]
+name = "pl3xus_sync"
+version = "0.1.1"
+edition = "2024"
+authors = ["Augment Agent <noreply@example.com>"]
+description = "Reflection-driven synchronization middleware for Bevy ECS servers over pl3xus."
+license = "MIT"
+
+[features]
+default = ["runtime"]
+# `runtime` pulls in the full pl3xus dependency graph (async-net, etc.) for
+# Bevy server applications. Frontend crates (like `pl3xus_client`) can
+# disable default features to avoid non-wasm-compatible dependencies while
+# still reusing the wire-level message types and client_registry.
+runtime = ["dep:pl3xus", "dep:bevy", "dep:pl3xus_common", "dep:thiserror"]
+
+[dependencies]
+bevy = { workspace = true, optional = true }
+bincode = { workspace = true }
+pl3xus = { path = "../pl3xus", optional = true }
+pl3xus_common = { path = "../pl3xus_common", optional = true }
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = { version = "1.0", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["console"] }
+
+[dev-dependencies]
+# For integration-style tests using a miniature Bevy app
+bincode = { workspace = true }
+pl3xus_websockets = { path = "../pl3xus_websockets" }

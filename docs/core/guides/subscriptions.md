@@ -1,6 +1,6 @@
 # Subscriptions Guide
 
-This guide explains how component subscriptions work between eventwork_client and eventwork_sync.
+This guide explains how component subscriptions work between pl3xus_client and pl3xus_sync.
 
 ---
 
@@ -27,7 +27,7 @@ This model provides:
 Use hooks to subscribe to component data:
 
 ```rust
-use eventwork_client::use_sync_component;
+use pl3xus_client::use_sync_component;
 
 #[component]
 fn PositionList() -> impl IntoView {
@@ -373,13 +373,13 @@ Subscriptions auto-cleanup when components unmount. When using client-side routi
 
 On the server:
 ```rust
-// Set RUST_LOG=eventwork_sync=debug
+// Set RUST_LOG=pl3xus_sync=debug
 ```
 
 You'll see:
 ```
-[eventwork_sync] New subscription: conn=0, sub_id=0, component_type=Position, entity=None
-[eventwork_sync] Sending snapshot: 10 items for Position
+[pl3xus_sync] New subscription: conn=0, sub_id=0, component_type=Position, entity=None
+[pl3xus_sync] Sending snapshot: 10 items for Position
 ```
 
 ### Check Connection State
@@ -399,11 +399,11 @@ Effect::new(move || {
 - [Hooks](./hooks.md) - All subscription hooks
 - [Server Setup](./server-setup.md) - Configuring sync on the server
 - [WebSocket Patterns](./websocket-patterns.md) - Connection handling
-- [API Reference](https://docs.rs/eventwork_sync) - Full API documentation
+- [API Reference](https://docs.rs/pl3xus_sync) - Full API documentation
 
 ---
 
 **Last Updated**: 2025-12-07
-**eventwork_sync Version**: 0.1
+**pl3xus_sync Version**: 0.1
 
 

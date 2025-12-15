@@ -3,18 +3,18 @@ title: Architecture Reference
 ---
 # Architecture Reference
 
-This document provides architectural reference for bevy_eventwork contributors.
+This document provides architectural reference for pl3xus contributors.
 
 ---
 
 ## System Overview
 
-`eventwork_sync` is a synchronization middleware that enabling real-time bidirectional synchronization between a Bevy ECS server and arbitrary clients.
+`pl3xus_sync` is a synchronization middleware that enabling real-time bidirectional synchronization between a Bevy ECS server and arbitrary clients.
 
 ### Components
 
-- **Server-side** (`eventwork_sync`): Bevy plugin that tracks component changes and broadcasts updates
-- **Client-side** (`eventwork_client`): Leptos-based reactive client library with automatic subscription management
+- **Server-side** (`pl3xus_sync`): Bevy plugin that tracks component changes and broadcasts updates
+- **Client-side** (`pl3xus_client`): Leptos-based reactive client library with automatic subscription management
 
 ---
 
@@ -24,7 +24,7 @@ This document provides architectural reference for bevy_eventwork contributors.
 graph TD
     subgraph Server [Bevy ECS Server]
         direction TB
-        subgraph Plugin [EventworkSyncPlugin]
+        subgraph Plugin [Pl3xusSyncPlugin]
             Registry[Component Registry<br/>- Position<br/>- Velocity<br/>- EntityName]
             ChangeDetect[Change Detection<br/>- Added<br/>- Changed<br/>- Removed]
             SubManager[Subscription Manager<br/>- Client 1: Position<br/>- Client 2: Velocity]

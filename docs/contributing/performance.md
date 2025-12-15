@@ -1,6 +1,6 @@
 # Performance Reference
 
-Performance characteristics and optimization strategies for bevy_eventwork contributors.
+Performance characteristics and optimization strategies for pl3xus contributors.
 
 ---
 
@@ -16,7 +16,7 @@ The system already batches efficiently:
 - At 60 FPS: 60 messages/second per client
 
 ```rust
-// From eventwork_sync/src/subscription.rs
+// From pl3xus_sync/src/subscription.rs
 for (connection_id, items) in per_connection {
     if items.is_empty() {
         continue;

@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 bevy = { workspace = true }
-eventwork = { path = "../../../crates/eventwork" }
-eventwork_sync = { path = "../../../crates/eventwork_sync", features = ["runtime"] }
-eventwork_websockets = { path = "../../../crates/eventwork_websockets" }
+pl3xus = { path = "../../../crates/pl3xus" }
+pl3xus_sync = { path = "../../../crates/pl3xus_sync", features = ["runtime"] }
+pl3xus_websockets = { path = "../../../crates/pl3xus_websockets" }
 control_demo_types = { path = "../../shared/control_demo_types", features = ["server"] }
 tokio = { version = "1.48", features = ["full"] }
 

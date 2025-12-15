@@ -1,8 +1,8 @@
-# Bevy Eventwork 0.10.0 Release Notes
+# Bevy Pl3xus 0.10.0 Release Notes
 
 ## 🎉 Major Feature: Automatic Message Registration
 
-We're excited to announce Bevy Eventwork 0.10.0, featuring **automatic message registration** - a major ergonomic improvement that eliminates boilerplate and makes networking in Bevy easier than ever!
+We're excited to announce Bevy Pl3xus 0.10.0, featuring **automatic message registration** - a major ergonomic improvement that eliminates boilerplate and makes networking in Bevy easier than ever!
 
 ## What's New
 
@@ -12,7 +12,7 @@ You no longer need to implement the `NetworkMessage` trait for every type. Just 
 
 **Before (0.9):**
 ```rust
-use eventwork::NetworkMessage;
+use pl3xus::NetworkMessage;
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -81,7 +81,7 @@ Use the new automatic API - it's simpler and more flexible:
 
 ```rust
 use bevy::prelude::*;
-use eventwork::{AppNetworkMessage, EventworkPlugin, EventworkRuntime};
+use pl3xus::{AppNetworkMessage, Pl3xusPlugin, Pl3xusRuntime};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -92,8 +92,8 @@ struct MyMessage {
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(EventworkPlugin::<TcpProvider, TaskPool>::default())
-        .insert_resource(EventworkRuntime(...))
+        .add_plugins(Pl3xusPlugin::<TcpProvider, TaskPool>::default())
+        .insert_resource(Pl3xusRuntime(...))
         .register_network_message::<MyMessage, TcpProvider>()
         .run();
 }
@@ -132,10 +132,10 @@ Check out the new `automatic_messages` example:
 
 ```bash
 # Run the server
-cargo run --package eventwork --example automatic_messages -- server
+cargo run --package pl3xus --example automatic_messages -- server
 
 # Run the client (in another terminal)
-cargo run --package eventwork --example automatic_messages -- client
+cargo run --package pl3xus --example automatic_messages -- client
 ```
 
 This example demonstrates:
@@ -148,7 +148,7 @@ This example demonstrates:
 
 ```rust
 use bevy::prelude::*;
-use eventwork::{AppNetworkMessage, Network, NetworkData};
+use pl3xus::{AppNetworkMessage, Network, NetworkData};
 use serde::{Serialize, Deserialize};
 
 // Define your messages - just derive Serialize and Deserialize
@@ -210,9 +210,9 @@ This release is **100% backward compatible**. All existing code continues to wor
 
 ## Version Updates
 
-- `eventwork`: 0.9.11 → **0.10.0**
-- `eventwork_common`: 0.2.8 → **0.3.0**
-- `eventwork_websockets`: 0.2.1 → **0.3.0**
+- `pl3xus`: 0.9.11 → **0.10.0**
+- `pl3xus_common`: 0.2.8 → **0.3.0**
+- `pl3xus_websockets`: 0.2.1 → **0.3.0**
 
 ## Documentation
 
@@ -235,7 +235,7 @@ Update your `Cargo.toml`:
 
 ```toml
 [dependencies]
-eventwork = "0.10"
+pl3xus = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -255,7 +255,7 @@ We'd love to hear your feedback on the new API! Please open an issue on GitHub i
 
 ## Credits
 
-This release was made possible by the Bevy Eventwork community. Special thanks to all contributors and users who provided feedback and suggestions.
+This release was made possible by the Bevy Pl3xus community. Special thanks to all contributors and users who provided feedback and suggestions.
 
 ---
 

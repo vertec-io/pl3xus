@@ -6,9 +6,9 @@ use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
 use bevy::tasks::{TaskPool, TaskPoolBuilder};
 use bevy_tokio_tasks::{TokioTasksPlugin, TokioTasksRuntime};
-use eventwork::{EventworkRuntime, Network};
-use eventwork_sync::{AppEventworkSyncExt, EventworkSyncPlugin};
-use eventwork_websockets::{NetworkSettings, WebSocketProvider};
+use pl3xus::{Pl3xusRuntime, Network};
+use pl3xus_sync::{AppPl3xusSyncExt, Pl3xusSyncPlugin};
+use pl3xus_websockets::{NetworkSettings, WebSocketProvider};
 use fanuc_real_types::{RobotPosition, RobotStatus, JointAngles, RobotInfo, MotionCommand, JogCommand, JogAxis, JogDirection};
 use fanuc_rmi::{
     drivers::{FanucDriver, FanucDriverConfig},
@@ -25,7 +25,7 @@ use tokio::sync::broadcast;
 ///   1. Start the FANUC simulator:
 ///      cd ~/dev/Fanuc_RMI_API && cargo run -p sim -- --realtime
 ///   2. Run this server:
-///      cargo run -p eventwork_sync --example fanuc_real_server --features runtime
+///      cargo run -p pl3xus_sync --example fanuc_real_server --features runtime
 ///   3. Connect a client to ws://127.0.0.1:8082
 fn main() {
     let mut app = App::new();
@@ -40,13 +40,13 @@ fn main() {
         TokioTasksPlugin::default(),
     ));
 
-    // Eventwork networking over WebSockets
-    app.add_plugins(eventwork::EventworkPlugin::<WebSocketProvider, TaskPool>::default());
-    app.insert_resource(EventworkRuntime(TaskPoolBuilder::new().num_threads(2).build()));
+    // Pl3xus networking over WebSockets
+    app.add_plugins(pl3xus::Pl3xusPlugin::<WebSocketProvider, TaskPool>::default());
+    app.insert_resource(Pl3xusRuntime(TaskPoolBuilder::new().num_threads(2).build()));
     app.insert_resource(NetworkSettings::default());
 
     // Install the sync middleware
-    app.add_plugins(EventworkSyncPlugin::<WebSocketProvider>::default());
+    app.add_plugins(Pl3xusSyncPlugin::<WebSocketProvider>::default());
 
     // Register robot components for synchronization
     app.sync_component::<RobotPosition>(None);
@@ -90,7 +90,7 @@ fn setup_robot(mut commands: Commands) {
 fn setup_networking(
     mut net: ResMut<Network<WebSocketProvider>>,
     settings: Res<NetworkSettings>,
-    task_pool: Res<EventworkRuntime<TaskPool>>,
+    task_pool: Res<Pl3xusRuntime<TaskPool>>,
 ) {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8082);
 

@@ -1,4 +1,4 @@
-//! Shared types for eventwork_client basic example
+//! Shared types for pl3xus_client basic example
 //!
 //! This crate defines component types that are shared between the Bevy server
 //! and the Leptos web client.

@@ -1,6 +1,6 @@
 # Guides
 
-In-depth tutorials and patterns for using bevy_eventwork effectively.
+In-depth tutorials and patterns for using pl3xus effectively.
 
 ---
 
@@ -10,7 +10,7 @@ In-depth tutorials and patterns for using bevy_eventwork effectively.
 
 | Guide | Description |
 |-------|-------------|
-| [Server Setup](./server-setup.md) | Setting up a Bevy server with eventwork_sync |
+| [Server Setup](./server-setup.md) | Setting up a Bevy server with pl3xus_sync |
 | [Type Registry](./type-registry.md) | ClientTypeRegistry for client-side deserialization |
 | [Subscriptions](./subscriptions.md) | How component subscriptions work |
 | [Hooks](./hooks.md) | All Leptos hooks for reactive sync |
@@ -33,9 +33,9 @@ In-depth tutorials and patterns for using bevy_eventwork effectively.
 ### 1. Server Setup
 
 ```rust
-use eventwork_sync::{EventworkSyncPlugin, AppEventworkSyncExt};
+use pl3xus_sync::{Pl3xusSyncPlugin, AppPl3xusSyncExt};
 
-app.add_plugins(EventworkSyncPlugin::<WebSocketProvider>::default())
+app.add_plugins(Pl3xusSyncPlugin::<WebSocketProvider>::default())
    .sync_component::<Position>(None)
    .sync_component::<Velocity>(None);
 ```
@@ -45,7 +45,7 @@ See [Server Setup](./server-setup.md) for the complete guide.
 ### 2. Client Setup
 
 ```rust
-use eventwork_client::{SyncProvider, ClientTypeRegistry};
+use pl3xus_client::{SyncProvider, ClientTypeRegistry};
 
 let registry = ClientTypeRegistry::builder()
     .register::<Position>()
@@ -64,7 +64,7 @@ See [Type Registry](./type-registry.md) for details.
 ### 3. Subscribe to Data
 
 ```rust
-use eventwork_client::use_sync_component;
+use pl3xus_client::use_sync_component;
 
 #[component]
 fn PositionList() -> impl IntoView {

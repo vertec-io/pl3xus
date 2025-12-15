@@ -3,7 +3,7 @@ title: Troubleshooting
 ---
 # Troubleshooting
 
-Common issues and solutions for bevy_eventwork.
+Common issues and solutions for pl3xus.
 
 ## Connection Issues
 
@@ -41,7 +41,7 @@ Common issues and solutions for bevy_eventwork.
 
 1. **Check for panics** - Look for panic messages in server logs
 2. **Verify message types match** - Both sides must register same types
-3. **Check for version mismatch** - Use matching eventwork versions
+3. **Check for version mismatch** - Use matching pl3xus versions
 
 ## Message Issues
 
@@ -153,7 +153,7 @@ app.register_network_message::<MyMessage, TcpProvider>();
 1. **Use WebSocket transport**
    ```rust
    // TCP doesn't work in WASM
-   use eventwork_websockets::WebSocketProvider;
+   use pl3xus_websockets::WebSocketProvider;
    ```
 
 2. **Add WASM target**
@@ -187,12 +187,12 @@ channel = "nightly"
 
 **Solutions**:
 
-1. **Add `eventwork_memory` plugin** - Monitors and cleans up
+1. **Add `pl3xus_memory` plugin** - Monitors and cleans up
 2. **Check for event accumulation** - Read all events each frame
 3. **Disconnect stale clients** - Implement heartbeat/timeout
 
 ## Getting Help
 
 - **Discord**: [Bevy Discord](https://discord.gg/bevy) - look for `@SirCarter`
-- **Issues**: [GitHub Issues](https://github.com/jamescarterbell/bevy_eventwork/issues)
+- **Issues**: [GitHub Issues](https://github.com/jamescarterbell/pl3xus/issues)
 

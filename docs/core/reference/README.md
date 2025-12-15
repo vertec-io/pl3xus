@@ -41,7 +41,7 @@ Reference materials, glossary, troubleshooting, and FAQ.
 
 **Problem**: Build fails for WASM target
 
-1. Use `eventwork_websockets` (TCP doesn't work in WASM)
+1. Use `pl3xus_websockets` (TCP doesn't work in WASM)
 2. Add the WASM target: `rustup target add wasm32-unknown-unknown`
 3. Check for dependencies that don't support WASM
 
@@ -58,7 +58,7 @@ Reference materials, glossary, troubleshooting, and FAQ.
 
 ## Version Compatibility
 
-| bevy_eventwork | Bevy | Rust | Notes |
+| pl3xus | Bevy | Rust | Notes |
 | :------------: | :--: | :--: | :---: |
 | 1.1.x | 0.17 | 1.88 (nightly) | Current |
 | 0.9.x | 0.16 | 1.85 | Maintenance |
@@ -66,8 +66,8 @@ Reference materials, glossary, troubleshooting, and FAQ.
 ## Getting Help
 
 - **Discord**: [Bevy Discord](https://discord.gg/bevy) - look for `@SirCarter`
-- **Issues**: [GitHub Issues](https://github.com/jamescarterbell/bevy_eventwork/issues)
-- **Documentation**: [docs.rs](https://docs.rs/eventwork)
+- **Issues**: [GitHub Issues](https://github.com/jamescarterbell/pl3xus/issues)
+- **Documentation**: [docs.rs](https://docs.rs/pl3xus)
 
 ## Related Documentation
 

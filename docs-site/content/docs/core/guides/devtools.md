@@ -3,7 +3,7 @@ title: DevTools Guide
 ---
 # DevTools Guide
 
-This guide covers how to use the built-in DevTools for debugging and inspecting ECS entities synchronized via eventwork_sync.
+This guide covers how to use the built-in DevTools for debugging and inspecting ECS entities synchronized via pl3xus_sync.
 
 ---
 
@@ -27,7 +27,7 @@ Add the `devtools` feature to your client's `Cargo.toml`:
 
 ```toml
 [dependencies]
-eventwork_client = { version = "0.1", features = ["devtools"] }
+pl3xus_client = { version = "0.1", features = ["devtools"] }
 ```
 
 ### 2. Configure the Registry
@@ -35,7 +35,7 @@ eventwork_client = { version = "0.1", features = ["devtools"] }
 DevTools requires JSON conversion support in your type registry. Add `.with_devtools_support()`:
 
 ```rust
-use eventwork_client::ClientTypeRegistry;
+use pl3xus_client::ClientTypeRegistry;
 use std::sync::Arc;
 
 let registry = Arc::new(
@@ -53,7 +53,7 @@ let registry = Arc::new(
 ### 3. Add the DevTools Component
 
 ```rust
-use eventwork_client::devtools::{DevTools, DevToolsMode};
+use pl3xus_client::devtools::{DevTools, DevToolsMode};
 
 #[component]
 fn App() -> impl IntoView {
@@ -171,7 +171,7 @@ When using Tree View, entities display in a hierarchical structure with expand/c
 On the server, sync the hierarchy components:
 
 ```rust
-use eventwork_sync::AppEventworkSyncExt;
+use pl3xus_sync::AppPl3xusSyncExt;
 
 app.sync_component::<ParentEntity>(None);
 app.sync_component::<ChildEntities>(None);
@@ -343,12 +343,12 @@ The client includes DevTools that you can expand to inspect synchronized entitie
 
 - [Mutations](./mutations.md) - Control what clients can edit
 - [Shared Types](./shared-types.md) - Setting up shared component types
-- [Getting Started: eventwork_client](../../client/index.md) - Full client setup
-- [API Reference](https://docs.rs/eventwork_client) - Full API documentation
+- [Getting Started: pl3xus_client](../../client/index.md) - Full client setup
+- [API Reference](https://docs.rs/pl3xus_client) - Full API documentation
 
 ---
 
 **Last Updated**: 2025-12-07
-**eventwork_client Version**: 0.1
+**pl3xus_client Version**: 0.1
 
 

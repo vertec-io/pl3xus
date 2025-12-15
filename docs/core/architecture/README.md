@@ -1,6 +1,6 @@
 # Architecture
 
-This section covers the architecture and design of the bevy_eventwork ecosystem.
+This section covers the architecture and design of the pl3xus ecosystem.
 
 ## Contents
 
@@ -15,20 +15,20 @@ This section covers the architecture and design of the bevy_eventwork ecosystem.
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Bevy Server Application                      │
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │                    eventwork_sync                            ││
+│  │                    pl3xus_sync                            ││
 │  │  - Component change detection                                ││
 │  │  - Subscription management                                   ││
 │  │  - Mutation authorization                                    ││
 │  │  - Conflation & batching                                     ││
 │  └─────────────────────────────────────────────────────────────┘│
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │                      eventwork                               ││
+│  │                      pl3xus                               ││
 │  │  - Message serialization (bincode)                           ││
 │  │  - Connection management                                     ││
 │  │  - Event-driven message handling                             ││
 │  └─────────────────────────────────────────────────────────────┘│
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │                 eventwork_websockets                         ││
+│  │                 pl3xus_websockets                         ││
 │  │  - WebSocket transport                                       ││
 │  │  - Native + WASM support                                     ││
 │  └─────────────────────────────────────────────────────────────┘│
@@ -39,7 +39,7 @@ This section covers the architecture and design of the bevy_eventwork ecosystem.
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Web Client (Leptos)                          │
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │                   eventwork_client                           ││
+│  │                   pl3xus_client                           ││
 │  │  - Reactive subscriptions                                    ││
 │  │  - Type registry                                             ││
 │  │  - DevTools                                                  ││
@@ -51,10 +51,10 @@ This section covers the architecture and design of the bevy_eventwork ecosystem.
 
 ### 1. Transport Agnostic
 
-The core `eventwork` crate is transport-agnostic. You can use:
+The core `pl3xus` crate is transport-agnostic. You can use:
 - TCP (built-in)
-- WebSockets (`eventwork_websockets`)
-- In-memory (`eventwork_memory`)
+- WebSockets (`pl3xus_websockets`)
+- In-memory (`pl3xus_memory`)
 - Custom transports (implement `NetworkProvider`)
 
 ### 2. Opt-In Synchronization

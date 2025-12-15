@@ -3,7 +3,7 @@ title: MIGRATION_0.17
 ---
 # Migration Guide: Bevy 0.17 Upgrade
 
-This guide will help you migrate your bevy_eventwork project from Bevy 0.16 to Bevy 0.17.
+This guide will help you migrate your pl3xus project from Bevy 0.16 to Bevy 0.17.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@ Bevy 0.17 introduced a significant change to its event system by splitting the `
 - **`Event`** - For immediate, observer-based events (new behavior)
 - **`Message`** - For buffered events (old `Event` behavior)
 
-Since bevy_eventwork uses buffered events for network communication, all event-related code must be migrated to use the `Message` API.
+Since pl3xus uses buffered events for network communication, all event-related code must be migrated to use the `Message` API.
 
 ## Breaking Changes
 
@@ -33,7 +33,7 @@ Since bevy_eventwork uses buffered events for network communication, all event-r
 | `EventWriter::send()` | `MessageWriter::write()` |
 | `App::add_event::<T>()` | `App::add_message::<T>()` |
 
-### 2. Affected bevy_eventwork Types
+### 2. Affected pl3xus Types
 
 The following types now derive `Message` instead of `Event`:
 - `NetworkEvent` - Connection/disconnection events
@@ -59,12 +59,12 @@ Update your `Cargo.toml`:
 ```toml
 [dependencies]
 bevy = "0.17"
-eventwork = "1.1"  # Core networking library
-eventwork_websockets = "1.1"  # If using WebSockets
+pl3xus = "1.1"  # Core networking library
+pl3xus_websockets = "1.1"  # If using WebSockets
 serde = { version = "1.0", features = ["derive"] }
 ```
 
-**Note**: All eventwork crates are versioned together (1.1.0). Always use matching versions to avoid compatibility issues.
+**Note**: All pl3xus crates are versioned together (1.1.0). Always use matching versions to avoid compatibility issues.
 
 ### Step 2: Update Rust Toolchain
 
@@ -193,12 +193,12 @@ struct MyMessage {
 ## Additional Resources
 
 - [Bevy 0.17 Migration Guide](https://bevyengine.org/learn/migration-guides/0-16-to-0-17/)
-- [bevy_eventwork Examples](https://github.com/jamescarterbell/bevy_eventwork/tree/master/crates/eventwork/examples)
+- [pl3xus Examples](https://github.com/jamescarterbell/pl3xus/tree/master/crates/pl3xus/examples)
 - [CHANGELOG.md](../../CHANGELOG.md)
 
 ## Need Help?
 
 If you encounter issues not covered in this guide:
-1. Check the [examples](https://github.com/jamescarterbell/bevy_eventwork/tree/master/crates/eventwork/examples) for working code
-2. Open an issue on [GitHub](https://github.com/jamescarterbell/bevy_eventwork/issues)
+1. Check the [examples](https://github.com/jamescarterbell/pl3xus/tree/master/crates/pl3xus/examples) for working code
+2. Open an issue on [GitHub](https://github.com/jamescarterbell/pl3xus/issues)
 3. Ask on the [Bevy Discord](https://discord.gg/bevy) - look for `@SirCarter`

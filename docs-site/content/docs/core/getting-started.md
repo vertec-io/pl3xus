@@ -1,9 +1,9 @@
 ---
-title: Getting Started with bevy_eventwork
+title: Getting Started with pl3xus
 ---
-# Getting Started with bevy_eventwork
+# Getting Started with pl3xus
 
-Welcome! This guide will help you get started with the bevy_eventwork ecosystem.
+Welcome! This guide will help you get started with the pl3xus ecosystem.
 
 ---
 
@@ -11,11 +11,11 @@ Welcome! This guide will help you get started with the bevy_eventwork ecosystem.
 
 We recommend following this learning path:
 
-### 1. Core Networking (eventwork)
+### 1. Core Networking (pl3xus)
 **Time**: 15-30 minutes  
-**Guide**: [eventwork Getting Started](./index.md)
+**Guide**: [pl3xus Getting Started](./index.md)
 
-Learn the basics of networking with Bevy using eventwork. This is the foundation for everything else.
+Learn the basics of networking with Bevy using pl3xus. This is the foundation for everything else.
 
 **You'll learn**:
 - Setting up a TCP server and client
@@ -23,21 +23,21 @@ Learn the basics of networking with Bevy using eventwork. This is the foundation
 - Automatic message registration
 - Type-safe networking
 
-### 2. Server-Side Synchronization (eventwork_sync)
+### 2. Server-Side Synchronization (pl3xus_sync)
 **Time**: 30-45 minutes  
-**Guide**: [eventwork_sync Getting Started](../../sync/index.md)
+**Guide**: [pl3xus_sync Getting Started](../../sync/index.md)
 
 Learn how to automatically synchronize ECS components from your Bevy server to clients.
 
 **You'll learn**:
-- Adding the EventworkSyncPlugin
+- Adding the Pl3xusSyncPlugin
 - Registering components for sync
 - Configuring sync settings
 - Handling mutations
 
-### 3. Client-Side Reactive UI (eventwork_client)
+### 3. Client-Side Reactive UI (pl3xus_client)
 **Time**: 30-45 minutes  
-**Guide**: [eventwork_client Getting Started](../../client/index.md)
+**Guide**: [pl3xus_client Getting Started](../../client/index.md)
 
 Learn how to build reactive web UIs that display and edit synchronized data.
 
@@ -67,25 +67,25 @@ Put it all together by building a complete client-server application.
 
 ### "I just want to send messages between Bevy systems"
 
-→ Start with [eventwork Getting Started](./index.md)
+→ Start with [pl3xus Getting Started](./index.md)
 
-You only need the core `eventwork` crate. Skip the sync and client guides.
+You only need the core `pl3xus` crate. Skip the sync and client guides.
 
 ### "I want to build a web-based control panel for my Bevy app"
 
 → Follow the full learning path:
-1. [eventwork Getting Started](./index.md)
-2. [eventwork_sync Getting Started](../../sync/index.md)
-3. [eventwork_client Getting Started](../../client/index.md)
+1. [pl3xus Getting Started](./index.md)
+2. [pl3xus_sync Getting Started](../../sync/index.md)
+3. [pl3xus_client Getting Started](../../client/index.md)
 4. [Control Demo Example](./examples/control-demo.md)
 
 ### "I want to build a distributed application"
 
-→ Start with [eventwork Getting Started](./index.md), then:
+→ Start with [pl3xus Getting Started](./index.md), then:
 - Read the [Sending Messages Guide](./guides/sending-messages.md)
 - Check out the [Examples](./examples/README.md)
 
-You may not need eventwork_sync/eventwork_client for some applications - consider using eventwork directly for more control.
+You may not need pl3xus_sync/pl3xus_client for some applications - consider using pl3xus directly for more control.
 
 ---
 
@@ -97,7 +97,7 @@ You may not need eventwork_sync/eventwork_client for some applications - conside
 - **Bevy**: 0.17 or later
 - **Basic Bevy knowledge**: Understanding of ECS, systems, and plugins
 
-### For eventwork_client Guides
+### For pl3xus_client Guides
 
 - **Leptos**: 0.8
 - **Trunk**: For building WASM applications
@@ -121,9 +121,9 @@ rustup target add wasm32-unknown-unknown
 
 Before diving in, familiarize yourself with these key concepts:
 
-### Automatic Message Registration (eventwork)
+### Automatic Message Registration (pl3xus)
 
-eventwork automatically registers message types - no boilerplate needed:
+pl3xus automatically registers message types - no boilerplate needed:
 
 ```rust
 #[derive(Serialize, Deserialize)]
@@ -134,9 +134,9 @@ struct MyMessage {
 // That's it! No manual registration required.
 ```
 
-### Component Synchronization (eventwork_sync)
+### Component Synchronization (pl3xus_sync)
 
-`eventwork_sync` automatically serializes and synchronizes components across the network:
+`pl3xus_sync` automatically serializes and synchronizes components across the network:
 
 ```rust
 #[derive(Component, Serialize, Deserialize)]
@@ -149,9 +149,9 @@ struct Position {
 app.register_sync_component::<Position>();
 ```
 
-### Reactive Subscriptions (eventwork_client)
+### Reactive Subscriptions (pl3xus_client)
 
-eventwork_client provides reactive hooks that automatically manage subscriptions:
+pl3xus_client provides reactive hooks that automatically manage subscriptions:
 
 ```rust
 // Subscribe to all Position components
@@ -170,9 +170,9 @@ view! {
 Choose your starting point:
 
 - **[Installation](./installation.md)** - Add dependencies
-- **[eventwork Getting Started](./index.md)** - Core networking
-- **[eventwork_sync Getting Started](../../sync/index.md)** - Server-side sync
-- **[eventwork_client Getting Started](../../client/index.md)** - Client-side UI
+- **[pl3xus Getting Started](./index.md)** - Core networking
+- **[pl3xus_sync Getting Started](../../sync/index.md)** - Server-side sync
+- **[pl3xus_client Getting Started](../../client/index.md)** - Client-side UI
 
 ---
 
@@ -180,7 +180,7 @@ Choose your starting point:
 
 - **[Architecture Overview](./architecture/README.md)** - Understand how it all works
 - **[User Guides](./guides/README.md)** - Task-specific how-to guides
-- **[API Reference](https://docs.rs/eventwork)** - Detailed API documentation
+- **[API Reference](https://docs.rs/pl3xus)** - Detailed API documentation
 - **[Examples](./examples/README.md)** - Real-world example applications
 
 ---

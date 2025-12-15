@@ -1,4 +1,4 @@
-//! Basic Leptos client example for eventwork_client
+//! Basic Leptos client example for pl3xus_client
 //!
 //! This example demonstrates:
 //! - Using SyncProvider to connect to a Bevy server
@@ -7,19 +7,19 @@
 //! - Integrating the DevTools widget
 //!
 //! Run the server first:
-//!   cargo run -p eventwork_client --example basic_server
+//!   cargo run -p pl3xus_client --example basic_server
 //!
 //! Then run this client:
-//!   cd crates/eventwork_client/examples/basic_client
+//!   cd crates/pl3xus_client/examples/basic_client
 //!   trunk serve --open
 
-use eventwork_client::{
+use pl3xus_client::{
     use_sync_component, use_sync_component_store, use_sync_connection, use_sync_context, use_sync_entity,
     ClientTypeRegistry, SyncProvider, MutationState,
 };
 
 #[cfg(target_arch = "wasm32")]
-use eventwork_client::devtools::DevTools;
+use pl3xus_client::devtools::DevTools;
 use leptos::prelude::*;
 use reactive_graph::traits::{Get, Read};
 use reactive_stores::Store;
@@ -131,7 +131,7 @@ fn Header() -> impl IntoView {
         <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur px-6 py-4">
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-lg font-semibold tracking-tight">"Eventwork Client - Basic Example"</h1>
+                    <h1 class="text-lg font-semibold tracking-tight">"Pl3xus Client - Basic Example"</h1>
                     <p class="text-xs text-slate-400">"Real-time entity synchronization with Bevy ECS"</p>
                 </div>
                 <div class="flex items-center gap-2">

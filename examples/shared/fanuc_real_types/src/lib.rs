@@ -1,7 +1,7 @@
 //! Shared types for FANUC robot control using real FANUC_RMI_API
 //!
 //! This crate provides types that mirror FANUC_RMI_API DTO types and can be
-//! used as Bevy components and synchronized via eventwork_sync.
+//! used as Bevy components and synchronized via pl3xus_sync.
 
 use serde::{Deserialize, Serialize};
 

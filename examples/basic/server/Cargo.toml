@@ -2,13 +2,13 @@
 name = "basic_server"
 version = "0.1.0"
 edition = "2021"
-description = "Basic Bevy ECS server example for eventwork_sync"
+description = "Basic Bevy ECS server example for pl3xus_sync"
 license = "MIT"
 
 [dependencies]
 bevy = { workspace = true }
-eventwork = { workspace = true }
-eventwork_sync = { workspace = true, features = ["runtime"] }
-eventwork_websockets = { workspace = true }
+pl3xus = { workspace = true }
+pl3xus_sync = { workspace = true, features = ["runtime"] }
+pl3xus_websockets = { workspace = true }
 basic_types = { workspace = true, features = ["server"] }
 

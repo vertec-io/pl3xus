@@ -1,12 +1,12 @@
 # Frequently Asked Questions
 
-Common questions about bevy_eventwork.
+Common questions about pl3xus.
 
 ## General
 
-### What is bevy_eventwork?
+### What is pl3xus?
 
-bevy_eventwork is a modular, event-driven networking solution for Bevy applications. It provides:
+pl3xus is a modular, event-driven networking solution for Bevy applications. It provides:
 
 - Core networking with TCP and WebSocket support
 - Automatic ECS component synchronization
@@ -14,7 +14,7 @@ bevy_eventwork is a modular, event-driven networking solution for Bevy applicati
 
 ### How does it compare to other Bevy networking solutions?
 
-| Feature | bevy_eventwork | bevy_renet | bevy_replicon |
+| Feature | pl3xus | bevy_renet | bevy_replicon |
 |---------|---------------|------------|---------------|
 | Transport | TCP, WebSocket | UDP (QUIC) | UDP |
 | WASM | ✅ (WebSocket) | ❌ | ❌ |
@@ -27,13 +27,13 @@ Bevy 0.17 requires Rust 1.88.0 features (Edition 2024). Once Rust 1.88 is releas
 
 ## Architecture
 
-### Can I use eventwork without eventwork_sync?
+### Can I use pl3xus without pl3xus_sync?
 
-Yes! The core `eventwork` crate works standalone for basic networking. Use `eventwork_sync` only if you need automatic component synchronization.
+Yes! The core `pl3xus` crate works standalone for basic networking. Use `pl3xus_sync` only if you need automatic component synchronization.
 
-### Can I use eventwork_client without Leptos?
+### Can I use pl3xus_client without Leptos?
 
-Currently, `eventwork_client` is designed for Leptos. For other frameworks, you can use the raw WebSocket connection with `eventwork_common` types.
+Currently, `pl3xus_client` is designed for Leptos. For other frameworks, you can use the raw WebSocket connection with `pl3xus_common` types.
 
 ### What serialization format is used?
 
@@ -128,8 +128,8 @@ See [Troubleshooting - WASM Build Fails](./troubleshooting.md#wasm-build-fails).
 ### Where can I get help?
 
 - **Discord**: [Bevy Discord](https://discord.gg/bevy) - look for `@SirCarter`
-- **Issues**: [GitHub Issues](https://github.com/jamescarterbell/bevy_eventwork/issues)
-- **Documentation**: [docs.rs](https://docs.rs/eventwork)
+- **Issues**: [GitHub Issues](https://github.com/jamescarterbell/pl3xus/issues)
+- **Documentation**: [docs.rs](https://docs.rs/pl3xus)
 
 ## Contributing
 

@@ -2,7 +2,7 @@
 name = "pl3xus_sync"
 version = "0.1.1"
 edition = "2024"
-authors = ["Augment Agent <noreply@example.com>"]
+authors = ["Arturo Pino <apino@vertec.io>"]
 description = "Reflection-driven synchronization middleware for Bevy ECS servers over pl3xus."
 license = "MIT"
 

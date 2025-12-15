@@ -3,5 +3,6 @@
 
 **/target
 **/dist
+**/node_modules
 /research
 /logs

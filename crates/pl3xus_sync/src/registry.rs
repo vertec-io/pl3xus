@@ -437,10 +437,23 @@ pub struct ComponentChangeEvent {
     pub value: Vec<u8>,
 }
 
+/// Event emitted when a component is removed from an entity (but entity still exists).
+#[derive(Debug, Clone, Message)]
+pub struct ComponentRemovedEvent {
+    pub entity: SerializableEntity,
+    pub component_type: String,
+}
+
 /// Event emitted when an entity is despawned.
 #[derive(Debug, Clone, Message)]
 pub struct EntityDespawnEvent {
     pub entity: SerializableEntity,
+}
+
+/// Helper to get short type name (just struct name, no module path).
+pub fn short_type_name<T>() -> String {
+    let full = std::any::type_name::<T>();
+    full.rsplit("::").next().unwrap_or(full).to_string()
 }
 
 fn apply_typed_mutation<T>(world: &mut World, mutation: &QueuedMutation) -> MutationStatus

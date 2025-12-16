@@ -64,3 +64,60 @@ impl Display for ConnectionId {
         f.write_fmt(format_args!("Connection with ID={0}", self.id))
     }
 }
+
+// ============================================================================
+// Control Types (shared between server and client)
+// ============================================================================
+
+/// Request to take or release control of an entity.
+///
+/// Used with `ExclusiveControlPlugin` on the server.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ControlRequest {
+    /// Request to take control of the specified entity (entity.to_bits()).
+    Take(u64),
+    /// Request to release control of the specified entity (entity.to_bits()).
+    Release(u64),
+}
+
+/// Response to a control request.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ControlResponse {
+    /// Control was successfully taken.
+    Taken,
+    /// Control was successfully released.
+    Released,
+    /// Entity is already controlled by another client.
+    AlreadyControlled {
+        /// The client that currently has control.
+        by_client: ConnectionId,
+    },
+    /// Entity is not currently controlled (when trying to release).
+    NotControlled,
+    /// An error occurred.
+    Error(String),
+}
+
+/// Component that tracks which client has control of an entity.
+///
+/// This is a default control component that can be used with `ExclusiveControlPlugin`.
+/// Applications can also define their own control components with additional fields.
+///
+/// When the `ecs` feature is enabled, this type also derives `Component`.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "ecs", derive(bevy::prelude::Component))]
+pub struct EntityControl {
+    /// The client that currently has control.
+    pub client_id: ConnectionId,
+    /// Timestamp of last activity (for timeout detection).
+    pub last_activity: f32,
+}
+
+impl Default for EntityControl {
+    fn default() -> Self {
+        Self {
+            client_id: ConnectionId { id: 0 },
+            last_activity: 0.0,
+        }
+    }
+}

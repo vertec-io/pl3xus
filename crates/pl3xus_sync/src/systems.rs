@@ -12,6 +12,7 @@ use crate::messages::{
 };
 use crate::registry::{
     ComponentChangeEvent,
+    ComponentRemovedEvent,
     EntityDespawnEvent,
     MutationAuthContext,
     MutationAuthorizerResource,
@@ -21,6 +22,7 @@ use crate::registry::{
     SyncRegistry,
     SyncSettings,
     ConflationQueue,
+    short_type_name,
 };
 use crate::subscription::{broadcast_component_changes, cleanup_disconnected, handle_client_messages};
 
@@ -52,6 +54,7 @@ pub(crate) fn install<NP: NetworkProvider>(app: &mut App) {
         .init_resource::<MutationQueue>()
         .init_resource::<SnapshotQueue>()
         .add_message::<ComponentChangeEvent>()
+        .add_message::<ComponentRemovedEvent>()
         .add_message::<EntityDespawnEvent>();
 
     // Verify resources were initialized
@@ -339,18 +342,33 @@ fn observe_component_changes<T>(
     }
 }
 
-/// Observe entity despawns and emit EntityDespawnEvent instances.
-/// This system tracks ALL entity despawns, regardless of component type.
+/// Observe component removals and entity despawns.
+///
+/// - If entity still exists: emit ComponentRemovedEvent (component was removed)
+/// - If entity no longer exists: emit EntityDespawnEvent (entity was despawned)
 fn observe_entity_despawns<T>(
     mut removed: RemovedComponents<T>,
-    mut writer: MessageWriter<EntityDespawnEvent>,
+    entities: &bevy::ecs::entity::Entities,
+    mut despawn_writer: MessageWriter<EntityDespawnEvent>,
+    mut removal_writer: MessageWriter<ComponentRemovedEvent>,
 ) where
     T: Component + Send + Sync + 'static,
 {
+    let component_type = short_type_name::<T>();
+
     for entity in removed.read() {
-        writer.write(EntityDespawnEvent {
-            entity: crate::messages::SerializableEntity::from(entity),
-        });
+        if entities.contains(entity) {
+            // Entity still exists - this was just a component removal
+            removal_writer.write(ComponentRemovedEvent {
+                entity: crate::messages::SerializableEntity::from(entity),
+                component_type: component_type.clone(),
+            });
+        } else {
+            // Entity no longer exists - this was a despawn
+            despawn_writer.write(EntityDespawnEvent {
+                entity: crate::messages::SerializableEntity::from(entity),
+            });
+        }
     }
 }
 

@@ -730,7 +730,7 @@ pub fn register_targeted_message<T, NP: NetworkProvider>(
     let provider_name = NP::PROVIDER_NAME;
     let config = bincode::config::standard();
     events.write_batch(messages.drain(..).filter_map(move |(source, msg)| {
-        match bincode::serde::decode_from_slice(&msg, config) {
+        match bincode::serde::decode_from_slice::<TargetedMessage<T>, _>(&msg, config) {
             Ok((inner, _)) => {
                 #[cfg(feature = "debug_messages")]
                 println!(

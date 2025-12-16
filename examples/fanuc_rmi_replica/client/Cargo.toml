@@ -1,0 +1,22 @@
+[package]
+name = "fanuc_replica_client"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+leptos = { version = "0.8", features = ["csr"] }
+leptos_router = { version = "0.8" }
+console_error_panic_hook = "0.1"
+console_log = "1.0"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+wasm-bindgen = "0.2"
+
+# Pl3xus client crate
+pl3xus_client = { path = "../../../crates/pl3xus_client" }
+pl3xus_common = { path = "../../../crates/pl3xus_common" }
+bincode = "1.3"
+
+# Shared types
+fanuc_replica_types = { path = "../../shared/fanuc_replica_types" }

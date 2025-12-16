@@ -19,6 +19,9 @@ members = [
     "examples/fanuc/client",
     "examples/devtools-demo/server",
     "examples/control-demo/server",
+    "examples/shared/fanuc_replica_types",
+    "examples/fanuc_rmi_replica/server",
+    "examples/fanuc_rmi_replica/client",
 ]
 
 [workspace.package]
@@ -48,6 +51,7 @@ demo_types = { path = "examples/shared/demo_types" }
 fanuc_types = { path = "examples/shared/fanuc_types" }
 fanuc_real_types = { path = "examples/shared/fanuc_real_types" }
 control_demo_types = { path = "examples/shared/control_demo_types" }
+fanuc_replica_types = { path = "examples/shared/fanuc_replica_types" }
 
 # Common dependencies
 bevy = { version = "0.17", default-features = false, features = ["multi_threaded", "bevy_log"] }

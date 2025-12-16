@@ -1,0 +1,28 @@
+[package]
+name = "fanuc_replica_server"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+bevy = { version = "0.17", default-features = false, features = ["multi_threaded", "bevy_log"] }
+tokio = { version = "1.28", features = ["full"] }
+bincode = { version = "2.0.1", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+anyhow = "1.0"
+
+# Pl3xus crates
+pl3xus = { path = "../../../crates/pl3xus", features = ["debug_messages"] }
+pl3xus_common = { path = "../../../crates/pl3xus_common" }
+pl3xus_sync = { path = "../../../crates/pl3xus_sync", features = ["runtime"] }
+pl3xus_websockets = { path = "../../../crates/pl3xus_websockets" }
+
+# Async runtime for driver
+bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_tasks" }
+
+# Shared types
+fanuc_replica_types = { path = "../../shared/fanuc_replica_types", features = ["server"] }
+
+# Fanuc driver
+fanuc_rmi = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git", features = ["driver", "logging"] }

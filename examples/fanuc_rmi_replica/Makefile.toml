@@ -1,0 +1,61 @@
+[env]
+# Development environment
+DEV_PORT = "8083"
+CLIENT_PORT = "8084"
+
+# ============================================================================
+#                          DEVELOPMENT TASKS
+# ============================================================================
+
+[tasks.server]
+description = "Run the Bevy server (connects to real robot)"
+command = "cargo"
+args = ["run", "--bin", "fanuc_replica_server"]
+cwd = "./server"
+
+[tasks.sim]
+description = "Run the FANUC simulator in realtime mode (required for testing)"
+command = "cargo"
+args = ["run", "-p", "sim", "--", "--realtime"]
+cwd = "/home/apino/dev/Fanuc_RMI_API"
+
+[tasks.mock]
+description = "Run the Bevy server in MOCK mode (no robot connection) - DEPRECATED: use 'sim' instead"
+command = "cargo"
+args = ["run", "--bin", "fanuc_replica_server", "--", "--mock"]
+cwd = "./server"
+
+[tasks.client]
+description = "Build and serve the WASM client with Trunk"
+command = "trunk"
+args = ["serve", "--port", "${CLIENT_PORT}", "--open"]
+cwd = "./client"
+
+[tasks.watch-server]
+description = "Watch and run server with auto-reload"
+command = "cargo"
+args = ["watch", "-x", "run --bin fanuc_replica_server"]
+cwd = "./server"
+
+[tasks.build-client]
+description = "Build client for production"
+command = "trunk"
+args = ["build", "--release"]
+cwd = "./client"
+
+# ============================================================================
+#                          COMBINED TASKS
+# ============================================================================
+
+[tasks.dev]
+description = "Start both server and client in parallel (requires simulator to be running)"
+run_task = { name = ["server", "client"], parallel = true }
+
+[tasks.dev-sim]
+description = "Start simulator, server, and client in parallel (full development environment)"
+run_task = { name = ["sim", "server", "client"], parallel = true }
+
+[tasks.serve]
+description = "Alias for dev"
+alias = "dev"
+

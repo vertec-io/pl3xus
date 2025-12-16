@@ -126,6 +126,88 @@ impl SyncContext {
         }
     }
 
+    /// Send a raw byte message to the server.
+    ///
+    /// This allows sending arbitrary data, such as manual NetworkPackets for RPC.
+    pub fn send_bytes(&self, bytes: &[u8]) {
+        (self.send)(bytes);
+    }
+
+    /// Send a typed message to the server.
+    ///
+    /// This is the ergonomic way to send RPC-style messages. The message is automatically
+    /// serialized to a NetworkPacket with proper type information for routing on the server.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use pl3xus_client::use_sync_context;
+    ///
+    /// #[derive(Serialize, Deserialize, Clone)]
+    /// struct InitializeRobot {
+    ///     group_mask: Option<u8>,
+    /// }
+    ///
+    /// #[component]
+    /// fn Controls() -> impl IntoView {
+    ///     let ctx = use_sync_context();
+    ///
+    ///     let init = move |_| {
+    ///         ctx.send(InitializeRobot { group_mask: Some(1) });
+    ///     };
+    ///
+    ///     view! { <button on:click=init>"Initialize"</button> }
+    /// }
+    /// ```
+    pub fn send<T>(&self, message: T)
+    where
+        T: serde::Serialize + pl3xus_common::Pl3xusMessage,
+    {
+        use pl3xus_common::NetworkPacket;
+
+        // Serialize the message to bincode
+        let data = match bincode::serde::encode_to_vec(&message, bincode::config::standard()) {
+            Ok(bytes) => bytes,
+            Err(_e) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::error!(
+                    "[SyncContext::send] Failed to serialize message '{}': {:?}",
+                    T::type_name(),
+                    _e
+                );
+                return;
+            }
+        };
+
+        // Create NetworkPacket with type info for server routing
+        let packet = NetworkPacket {
+            type_name: T::type_name().to_string(),
+            schema_hash: T::schema_hash(),
+            data,
+        };
+
+        // Serialize the packet and send
+        match bincode::serde::encode_to_vec(&packet, bincode::config::standard()) {
+            Ok(bytes) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::log!(
+                    "[SyncContext::send] Sending message '{}' ({} bytes)",
+                    T::short_name(),
+                    bytes.len()
+                );
+                (self.send)(&bytes);
+            }
+            Err(_e) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::error!(
+                    "[SyncContext::send] Failed to serialize packet for '{}': {:?}",
+                    T::type_name(),
+                    _e
+                );
+            }
+        }
+    }
+
     /// Handle an incoming message (non-sync message).
     ///
     /// This is called by the provider when it receives a NetworkPacket that is not

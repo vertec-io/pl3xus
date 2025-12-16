@@ -12,13 +12,13 @@ default = ["runtime"]
 # Bevy server applications. Frontend crates (like `pl3xus_client`) can
 # disable default features to avoid non-wasm-compatible dependencies while
 # still reusing the wire-level message types and client_registry.
-runtime = ["dep:pl3xus", "dep:bevy", "dep:pl3xus_common", "dep:thiserror"]
+runtime = ["dep:pl3xus", "dep:bevy", "pl3xus_common/ecs", "dep:thiserror"]
 
 [dependencies]
 bevy = { workspace = true, optional = true }
 bincode = { workspace = true }
 pl3xus = { path = "../pl3xus", optional = true }
-pl3xus_common = { path = "../pl3xus_common", optional = true }
+pl3xus_common = { path = "../pl3xus_common" }
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

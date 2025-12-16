@@ -136,6 +136,9 @@ pub use traits::SyncComponent;
 // Re-export mutation types from pl3xus_sync for convenience
 pub use pl3xus_sync::MutationStatus;
 
+// Re-export control types from pl3xus_common for client-side use
+pub use pl3xus_common::{ControlRequest, ControlResponse, EntityControl, ConnectionId};
+
 // Conditional re-exports
 #[cfg(feature = "stores")]
 pub use hooks::use_sync_component_store;

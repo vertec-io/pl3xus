@@ -84,24 +84,42 @@ pub fn SyncProvider(
     let last_error = RwSignal::new(None::<SyncError>);
 
     // Create SyncContext
-    // Wrap the send function to convert SyncClientMessage bytes to NetworkPacket
+    // The send function handles two cases:
+    // 1. SyncClientMessage bytes (for subscriptions, mutations) - need to wrap in NetworkPacket
+    // 2. Already-serialized NetworkPacket bytes (from SyncContext::send()) - send directly
     let send_arc = Arc::new(move |data: &[u8]| {
-        // The data is already serialized SyncClientMessage bytes from SyncContext
-        // Just wrap it in a NetworkPacket
-        let packet = NetworkPacket {
-            type_name: std::any::type_name::<SyncClientMessage>().to_string(),
-            schema_hash: 0, // Schema hash not used for sync messages
-            data: data.to_vec(),
-        };
+        // Try to deserialize as NetworkPacket first - if it works AND has a valid type_name,
+        // send it directly. This handles the case where SyncContext::send() already created a NetworkPacket.
+        let config = bincode::config::standard();
+        let is_network_packet = bincode::serde::decode_from_slice::<NetworkPacket, _>(data, config)
+            .ok()
+            .filter(|(packet, _)| !packet.type_name.is_empty() && packet.type_name.contains("::"));
 
-        #[cfg(target_arch = "wasm32")]
-        leptos::logging::log!(
-            "[SyncProvider] Sending NetworkPacket: type_name={}, data_len={}",
-            packet.type_name,
-            packet.data.len()
-        );
+        if let Some((packet, _)) = is_network_packet {
+            #[cfg(target_arch = "wasm32")]
+            leptos::logging::log!(
+                "[SyncProvider] Sending raw NetworkPacket: type_name={}, data_len={}",
+                packet.type_name,
+                packet.data.len()
+            );
+            raw_send(&packet);
+        } else {
+            // Otherwise, wrap in a SyncClientMessage packet (for subscription requests etc.)
+            let packet = NetworkPacket {
+                type_name: std::any::type_name::<SyncClientMessage>().to_string(),
+                schema_hash: 0, // Schema hash not used for sync messages
+                data: data.to_vec(),
+            };
 
-        raw_send(&packet);
+            #[cfg(target_arch = "wasm32")]
+            leptos::logging::log!(
+                "[SyncProvider] Sending SyncClientMessage NetworkPacket: type_name={}, data_len={}",
+                packet.type_name,
+                packet.data.len()
+            );
+
+            raw_send(&packet);
+        }
     });
 
     let open_arc = Arc::new(move || {

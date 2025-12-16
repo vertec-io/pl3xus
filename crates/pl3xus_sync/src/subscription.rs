@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use pl3xus::{managers::NetworkProvider, managers::Network, NetworkData, NetworkEvent};
 
 use crate::messages::{SyncClientMessage, SyncServerMessage, SyncBatch, SyncItem};
-use crate::registry::{ComponentChangeEvent, EntityDespawnEvent, MutationQueue, QueuedMutation, SnapshotQueue, SnapshotRequest, SubscriptionEntry, SubscriptionManager, SyncSettings, ConflationQueue};
+use crate::registry::{ComponentChangeEvent, ComponentRemovedEvent, EntityDespawnEvent, MutationQueue, QueuedMutation, SnapshotQueue, SnapshotRequest, SubscriptionEntry, SubscriptionManager, SyncSettings, ConflationQueue};
 
 /// System that reads incoming SyncClientMessage messages and updates the
 /// SubscriptionManager / dispatches actions accordingly.
@@ -101,13 +101,14 @@ pub fn handle_client_messages<NP: NetworkProvider>(
     }
 }
 
-/// System that takes aggregated ComponentChangeEvent and EntityDespawnEvent items
+/// System that takes aggregated ComponentChangeEvent, ComponentRemovedEvent, and EntityDespawnEvent items
 /// and routes them to all interested subscribers.
 ///
 /// If conflation is enabled, items are queued in the ConflationQueue and will be
 /// sent later by flush_conflation_queue. Otherwise, they are sent immediately.
 pub fn broadcast_component_changes<NP: NetworkProvider>(
     mut component_events: MessageReader<ComponentChangeEvent>,
+    mut removal_events: MessageReader<ComponentRemovedEvent>,
     mut despawn_events: MessageReader<EntityDespawnEvent>,
     subscriptions: Option<Res<SubscriptionManager>>,
     settings: Option<Res<SyncSettings>>,
@@ -120,7 +121,7 @@ pub fn broadcast_component_changes<NP: NetworkProvider>(
         return;
     };
 
-    if component_events.is_empty() && despawn_events.is_empty() {
+    if component_events.is_empty() && removal_events.is_empty() && despawn_events.is_empty() {
         return;
     }
 
@@ -156,6 +157,30 @@ pub fn broadcast_component_changes<NP: NetworkProvider>(
                     entity: change.entity,
                     component_type: change.component_type.clone(),
                     value: change.value.clone(),
+                });
+        }
+    }
+
+    // Process component removals (component removed but entity still exists)
+    for removal in removal_events.read() {
+        for sub in &subscriptions.subscriptions {
+            // Match by component type and entity
+            if sub.component_type != "*" && sub.component_type != removal.component_type {
+                continue;
+            }
+            if let Some(entity) = sub.entity {
+                if entity != removal.entity {
+                    continue;
+                }
+            }
+
+            per_connection
+                .entry(sub.connection_id)
+                .or_default()
+                .push(SyncItem::ComponentRemoved {
+                    subscription_id: sub.subscription_id,
+                    entity: removal.entity,
+                    component_type: removal.component_type.clone(),
                 });
         }
     }

@@ -61,17 +61,8 @@ pub enum ControlResponse {
     Error(String),
 }
 
-/// Component that tracks which client has control of an entity.
-///
-/// This is a default control component that can be used with `ExclusiveControlPlugin`.
-/// Applications can also define their own control components with additional fields.
-#[derive(Component, Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct EntityControl {
-    /// The client that currently has control.
-    pub client_id: ConnectionId,
-    /// Timestamp of last activity (for timeout detection).
-    pub last_activity: f32,
-}
+// Re-export EntityControl from pl3xus_common (with Component derive via ecs feature)
+pub use pl3xus_common::EntityControl;
 
 /// Configuration for the `ExclusiveControlPlugin`.
 #[derive(Clone, Debug, Resource)]

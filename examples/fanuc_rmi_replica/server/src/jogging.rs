@@ -5,7 +5,7 @@ use fanuc_replica_types::*;
 use fanuc_rmi::dto as raw_dto;
 use fanuc_rmi::{SpeedType, TermType};
 use pl3xus_sync::control::EntityControl;
-use crate::{FanucRobot, RmiDriver, RobotConnectionState};
+use crate::plugins::connection::{FanucRobot, RmiDriver, RobotConnectionState};
 
 /// Handle jog commands from clients - entity-based, uses pl3xus EntityControl
 pub fn handle_jog_commands(

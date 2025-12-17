@@ -155,11 +155,11 @@ impl<T: DeserializeOwned> Decoder<T> for Pl3xusBincodeSingleMsgCodec {
 
         // Decode the NetworkPacket
         let packet: NetworkPacket = bincode::serde::decode_from_slice(&val[8..], bincode::config::standard())
-            .map_err(|e| {
+            .map_err(|_e| {
                 #[cfg(target_arch = "wasm32")]
                 {
                     use web_sys::console;
-                    console::error_1(&format!("[Pl3xusBincodeSingleMsgCodec::decode] ERROR: Failed to deserialize NetworkPacket: {:?}", e).into());
+                    console::error_1(&format!("[Pl3xusBincodeSingleMsgCodec::decode] ERROR: Failed to deserialize NetworkPacket: {:?}", _e).into());
                 }
                 NetworkError::Serialization
             })
@@ -173,11 +173,11 @@ impl<T: DeserializeOwned> Decoder<T> for Pl3xusBincodeSingleMsgCodec {
 
         // Decode the message from the packet's data
         bincode::serde::decode_from_slice(&packet.data, bincode::config::standard())
-            .map_err(|e| {
+            .map_err(|_e| {
                 #[cfg(target_arch = "wasm32")]
                 {
                     use web_sys::console;
-                    console::error_1(&format!("[Pl3xusBincodeSingleMsgCodec::decode] ERROR: Failed to deserialize message from packet data: {:?}", e).into());
+                    console::error_1(&format!("[Pl3xusBincodeSingleMsgCodec::decode] ERROR: Failed to deserialize message from packet data: {:?}", _e).into());
                 }
                 NetworkError::Serialization
             })

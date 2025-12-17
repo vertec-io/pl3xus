@@ -39,20 +39,17 @@
 //! #[derive(Debug, Serialize, Deserialize, Clone)]
 //! struct RequestStatus;
 //!
+//! /// The response that the server will eventually return to the client
+//! #[derive(Debug, Serialize, Deserialize, Clone)]
+//! struct StatusResponse{
+//!     pub response: bool
+//! }
 //!
 //! impl RequestMessage for RequestStatus {
 //!     /// The type of message that the server will send back to the client.
 //!     /// It must implement Pl3xusMessage (auto-implemented for Serialize + DeserializeOwned types)
 //!    type ResponseMessage = StatusResponse;
-//!
-//!     /// A unique identifying name for the request message.
-//!    const REQUEST_NAME: &'static str = "client_request_status";
-//! }
-//!
-//! /// The response that the server will eventually return to the client
-//! #[derive(Debug, Serialize, Deserialize, Clone)]
-//! struct StatusResponse{
-//!     pub response: bool
+//!    // Note: request_name() is automatically derived from the type name ("RequestStatus")
 //! }
 //!
 //! ```
@@ -77,13 +74,12 @@
 //!
 //! # #[derive(Debug, Serialize, Deserialize, Clone)]
 //! # struct RequestStatus;
-//! # impl RequestMessage for RequestStatus {
-//! #   type ResponseMessage = StatusResponse;
-//! #   const REQUEST_NAME: &'static str = "client_request_status";
-//! # }
 //! # #[derive(Debug, Serialize, Deserialize, Clone)]
 //! # struct StatusResponse{
 //! #    pub response: bool
+//! # }
+//! # impl RequestMessage for RequestStatus {
+//! #   type ResponseMessage = StatusResponse;
 //! # }
 //!
 //! struct ClientPlugin;
@@ -157,13 +153,12 @@
 //!
 //! # #[derive(Debug, Serialize, Deserialize, Clone)]
 //! # struct RequestStatus;
-//! # impl RequestMessage for RequestStatus {
-//! #   type ResponseMessage = StatusResponse;
-//! #   const REQUEST_NAME: &'static str = "client_request_status";
-//! # }
 //! # #[derive(Debug, Serialize, Deserialize, Clone)]
 //! # struct StatusResponse{
 //! #    pub response: bool
+//! # }
+//! # impl RequestMessage for RequestStatus {
+//! #   type ResponseMessage = StatusResponse;
 //! # }
 //!
 //! struct ServerPlugin;
@@ -282,17 +277,10 @@ impl<T: RequestMessage> ResponseMap<T> {
 //     Clone + Serialize + DeserializeOwned + Send + Sync + Debug + 'static
 // {
 //     /// The response type for the request.
-//     type ResponseMessage: NetworkMessage
-//         + Clone
-//         + Serialize
-//         + DeserializeOwned
-//         + Send
-//         + Sync
-//         + Debug
-//         + 'static;
-
-//     /// The label used for the request type, same rules as [`NetworkMessage`] in terms of naming.
-//     const REQUEST_NAME: &'static str;
+//     type ResponseMessage: NetworkMessage + Clone + Debug;
+//
+//     /// Returns the request name (automatically derived from type name).
+//     fn request_name() -> &'static str { Self::short_name() }
 // }
 
 #[derive(Serialize, Deserialize)]
@@ -326,17 +314,26 @@ impl<T: RequestMessage> Request<T> {
 
     /// Consume the request and automatically send the response back to the client.
     pub fn respond(self, response: T::ResponseMessage) -> Result<(), NetworkError> {
+        let data = bincode::serde::encode_to_vec(
+            &ResponseInternal {
+                response_id: self.request_id,
+                response,
+            },
+            bincode::config::standard()
+        )
+        .map_err(|_| NetworkError::Serialization)?;
+
+        debug!(
+            "Sending response: type={}, request_id={}, data_len={}",
+            ResponseInternal::<T::ResponseMessage>::type_name(),
+            self.request_id,
+            data.len()
+        );
+
         let packet = NetworkPacket {
             type_name: ResponseInternal::<T::ResponseMessage>::type_name().to_string(),
             schema_hash: ResponseInternal::<T::ResponseMessage>::schema_hash(),
-            data: bincode::serde::encode_to_vec(
-                &ResponseInternal {
-                    response_id: self.request_id,
-                    response,
-                },
-                bincode::config::standard()
-            )
-            .map_err(|_| NetworkError::Serialization)?,
+            data,
         };
 
         self.response_tx

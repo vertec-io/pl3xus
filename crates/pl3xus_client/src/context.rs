@@ -86,6 +86,33 @@ pub struct SyncContext {
     /// This stores arbitrary Pl3xusMessage types (not component sync)
     /// Effects in subscribe_message watch this and deserialize to typed signals
     pub(crate) incoming_messages: RwSignal<HashMap<String, RwSignal<Vec<u8>>>>,
+    /// Request state tracking: request_id -> RequestState
+    /// Tracks pending requests and their responses
+    pub(crate) requests: RwSignal<HashMap<u64, RequestState>>,
+}
+
+/// State tracking for a single request/response cycle.
+#[derive(Clone, Debug)]
+pub struct RequestState {
+    /// The unique request ID
+    pub request_id: u64,
+    /// Type name of the expected response
+    pub response_type: String,
+    /// Current status of the request
+    pub status: RequestStatus,
+    /// Raw response bytes (if received)
+    pub response_bytes: Option<Vec<u8>>,
+}
+
+/// Status of a request.
+#[derive(Clone, Debug, PartialEq)]
+pub enum RequestStatus {
+    /// Request is pending (sent, waiting for response)
+    Pending,
+    /// Response received successfully
+    Success,
+    /// Request failed (timeout, network error, etc.)
+    Error(String),
 }
 
 impl SyncContext {
@@ -114,6 +141,7 @@ impl SyncContext {
             mutations: RwSignal::new(HashMap::new()),
             next_request_id: Arc::new(Mutex::new(0)),
             incoming_messages: RwSignal::new(HashMap::new()),
+            requests: RwSignal::new(HashMap::new()),
         }
     }
 
@@ -348,13 +376,13 @@ impl SyncContext {
                             );
                             typed_map.insert(*entity_id, component);
                         }
-                        Err(err) => {
+                        Err(_err) => {
                             #[cfg(target_arch = "wasm32")]
                             leptos::logging::warn!(
                                 "[SyncContext] Failed to deserialize {} for entity {}: {:?}",
                                 comp_name,
                                 entity_id,
-                                err
+                                _err
                             );
                         }
                     }
@@ -935,6 +963,181 @@ impl SyncContext {
         });
 
         store
+    }
+
+    // ============================================================================
+    // Request/Response Methods
+    // ============================================================================
+
+    /// Send a request and track its state.
+    ///
+    /// This sends a request message to the server and returns a request ID that can
+    /// be used to track the response. The request is wrapped with a correlation ID
+    /// so responses can be matched.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use pl3xus_client::use_sync_context;
+    /// use pl3xus_common::RequestMessage;
+    ///
+    /// #[derive(Clone, Serialize, Deserialize, Debug)]
+    /// struct ListRobots;
+    ///
+    /// impl RequestMessage for ListRobots {
+    ///     type ResponseMessage = Vec<RobotInfo>;
+    /// }
+    ///
+    /// #[component]
+    /// fn RobotList() -> impl IntoView {
+    ///     let ctx = use_sync_context();
+    ///     let (request_id, set_request_id) = signal(None::<u64>);
+    ///
+    ///     let fetch = move |_| {
+    ///         let id = ctx.request(ListRobots);
+    ///         set_request_id.set(Some(id));
+    ///     };
+    ///
+    ///     view! { <button on:click=fetch>"Fetch Robots"</button> }
+    /// }
+    /// ```
+    pub fn request<R>(&self, request: R) -> u64
+    where
+        R: pl3xus_common::RequestMessage,
+    {
+        use pl3xus_common::{NetworkPacket, Pl3xusMessage};
+        use serde::{Serialize, Deserialize};
+
+        // Internal wrapper for request with correlation ID
+        #[derive(Serialize, Deserialize)]
+        struct RequestInternal<T> {
+            id: u64,
+            request: T,
+        }
+
+        // Generate unique request ID
+        let request_id = {
+            let mut next_id = self.next_request_id.lock().unwrap();
+            *next_id += 1;
+            *next_id
+        };
+
+        // Track pending request
+        let response_type = format!("ResponseInternal<{}>", R::ResponseMessage::type_name());
+        self.requests.update(|map| {
+            map.insert(request_id, RequestState {
+                request_id,
+                response_type: response_type.clone(),
+                status: RequestStatus::Pending,
+                response_bytes: None,
+            });
+        });
+
+        // Wrap request with ID
+        let wrapped = RequestInternal {
+            id: request_id,
+            request,
+        };
+
+        // Create NetworkPacket with the RequestInternal type name
+        // This matches how pl3xus server expects to receive requests
+        let type_name = format!("pl3xus::managers::network_request::RequestInternal<{}>", R::type_name());
+
+        let data = match bincode::serde::encode_to_vec(&wrapped, bincode::config::standard()) {
+            Ok(bytes) => bytes,
+            Err(_e) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::error!("[SyncContext::request] Failed to serialize request: {:?}", _e);
+
+                // Mark as error
+                self.requests.update(|map| {
+                    if let Some(state) = map.get_mut(&request_id) {
+                        state.status = RequestStatus::Error("Serialization failed".to_string());
+                    }
+                });
+                return request_id;
+            }
+        };
+
+        let packet = NetworkPacket {
+            type_name,
+            schema_hash: R::schema_hash(),
+            data,
+        };
+
+        match bincode::serde::encode_to_vec(&packet, bincode::config::standard()) {
+            Ok(bytes) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::log!(
+                    "[SyncContext::request] Sending request '{}' with id {} ({} bytes)",
+                    R::request_name(),
+                    request_id,
+                    bytes.len()
+                );
+                (self.send)(&bytes);
+            }
+            Err(_e) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::error!("[SyncContext::request] Failed to serialize packet: {:?}", _e);
+
+                self.requests.update(|map| {
+                    if let Some(state) = map.get_mut(&request_id) {
+                        state.status = RequestStatus::Error("Packet serialization failed".to_string());
+                    }
+                });
+            }
+        }
+
+        request_id
+    }
+
+    /// Handle a response from the server.
+    ///
+    /// Called by the provider when a ResponseInternal message is received.
+    pub(crate) fn handle_request_response(&self, response_id: u64, response_bytes: Vec<u8>) {
+        self.requests.update(|map| {
+            if let Some(state) = map.get_mut(&response_id) {
+                state.status = RequestStatus::Success;
+                state.response_bytes = Some(response_bytes);
+            }
+        });
+
+        #[cfg(target_arch = "wasm32")]
+        leptos::logging::log!("[SyncContext] Request {} received response", response_id);
+    }
+
+    /// Get a read-only signal for tracking request states.
+    pub fn requests(&self) -> ReadSignal<HashMap<u64, RequestState>> {
+        self.requests.read_only()
+    }
+
+    /// Get the response for a completed request, deserializing it to the expected type.
+    ///
+    /// Returns None if the request is still pending or failed.
+    pub fn get_response<R>(&self, request_id: u64) -> Option<R::ResponseMessage>
+    where
+        R: pl3xus_common::RequestMessage,
+    {
+        let requests = self.requests.get();
+        let state = requests.get(&request_id)?;
+
+        if state.status != RequestStatus::Success {
+            return None;
+        }
+
+        let bytes = state.response_bytes.as_ref()?;
+
+        match bincode::serde::decode_from_slice::<R::ResponseMessage, _>(bytes, bincode::config::standard()) {
+            Ok((response, _)) => Some(response),
+            Err(_e) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::error!(
+                    "[SyncContext::get_response] Failed to deserialize response: {:?}",
+                    _e
+                );
+                None
+            }
+        }
     }
 }
 

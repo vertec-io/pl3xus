@@ -180,7 +180,7 @@ impl DatabaseResource {
     }
 
     // ==================== Robot Connections ====================
-    pub fn list_robot_connections(&self) -> anyhow::Result<Vec<RobotConnectionDto>> {
+    pub fn list_robot_connections(&self) -> anyhow::Result<Vec<RobotConnection>> {
         let conn = self.0.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, name, description, ip_address, port,
@@ -188,12 +188,13 @@ impl DatabaseResource {
                     COALESCE(default_term_type, 'CNT'),
                     COALESCE(default_w, 0.0), COALESCE(default_p, 0.0), COALESCE(default_r, 0.0),
                     COALESCE(default_cartesian_jog_speed, 10.0), COALESCE(default_cartesian_jog_step, 1.0),
-                    COALESCE(default_joint_jog_speed, 0.1), COALESCE(default_joint_jog_step, 0.25)
+                    COALESCE(default_joint_jog_speed, 0.1), COALESCE(default_joint_jog_step, 0.25),
+                    COALESCE(default_rotation_jog_speed, 5.0), COALESCE(default_rotation_jog_step, 1.0)
              FROM robot_connections ORDER BY name"
         )?;
 
         let connections = stmt.query_map([], |row| {
-            Ok(RobotConnectionDto {
+            Ok(RobotConnection {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 description: row.get(2)?,
@@ -209,19 +210,133 @@ impl DatabaseResource {
                 default_cartesian_jog_step: row.get(12)?,
                 default_joint_jog_speed: row.get(13)?,
                 default_joint_jog_step: row.get(14)?,
+                default_rotation_jog_speed: row.get(15)?,
+                default_rotation_jog_step: row.get(16)?,
             })
         })?.collect::<Result<Vec<_>, _>>()?;
 
         Ok(connections)
     }
 
-    pub fn get_robot_connection(&self, id: i64) -> anyhow::Result<Option<RobotConnectionDto>> {
+    #[allow(dead_code)]
+    pub fn get_robot_connection(&self, id: i64) -> anyhow::Result<Option<RobotConnection>> {
         let connections = self.list_robot_connections()?;
         Ok(connections.into_iter().find(|c| c.id == id))
     }
 
+    pub fn create_robot_connection(&self, req: &CreateRobotConnection) -> anyhow::Result<i64> {
+        let conn = self.0.lock().unwrap();
+
+        // Insert robot connection
+        conn.execute(
+            "INSERT INTO robot_connections (name, description, ip_address, port,
+             default_speed, default_speed_type, default_term_type,
+             default_w, default_p, default_r,
+             default_cartesian_jog_speed, default_cartesian_jog_step,
+             default_joint_jog_speed, default_joint_jog_step,
+             default_rotation_jog_speed, default_rotation_jog_step)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rusqlite::params![
+                req.name,
+                req.description,
+                req.ip_address,
+                req.port,
+                req.default_speed,
+                req.default_speed_type,
+                req.default_term_type,
+                req.default_w,
+                req.default_p,
+                req.default_r,
+                req.default_cartesian_jog_speed,
+                req.default_cartesian_jog_step,
+                req.default_joint_jog_speed,
+                req.default_joint_jog_step,
+                req.default_rotation_jog_speed,
+                req.default_rotation_jog_step,
+            ],
+        )?;
+
+        let robot_id = conn.last_insert_rowid();
+
+        // Insert default configuration
+        let cfg = &req.configuration;
+        conn.execute(
+            "INSERT INTO robot_configurations
+             (robot_connection_id, name, is_default, u_frame_number, u_tool_number,
+              front, up, left, flip, turn4, turn5, turn6)
+             VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rusqlite::params![
+                robot_id,
+                cfg.name,
+                cfg.u_frame_number,
+                cfg.u_tool_number,
+                cfg.front,
+                cfg.up,
+                cfg.left,
+                cfg.flip,
+                cfg.turn4,
+                cfg.turn5,
+                cfg.turn6,
+            ],
+        )?;
+
+        Ok(robot_id)
+    }
+
+    pub fn update_robot_connection(&self, req: &fanuc_replica_types::UpdateRobotConnection) -> anyhow::Result<()> {
+        let conn = self.0.lock().unwrap();
+
+        // Build dynamic update query based on which fields are provided
+        let mut updates = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        if let Some(ref name) = req.name {
+            updates.push("name = ?");
+            params.push(Box::new(name.clone()));
+        }
+        if let Some(ref description) = req.description {
+            updates.push("description = ?");
+            params.push(Box::new(description.clone()));
+        }
+        if let Some(ref ip_address) = req.ip_address {
+            updates.push("ip_address = ?");
+            params.push(Box::new(ip_address.clone()));
+        }
+        if let Some(port) = req.port {
+            updates.push("port = ?");
+            params.push(Box::new(port));
+        }
+
+        if updates.is_empty() {
+            return Ok(());
+        }
+
+        let sql = format!(
+            "UPDATE robot_connections SET {} WHERE id = ?",
+            updates.join(", ")
+        );
+        params.push(Box::new(req.id));
+
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        conn.execute(&sql, params_refs.as_slice())?;
+
+        Ok(())
+    }
+
+    pub fn delete_robot_connection(&self, id: i64) -> anyhow::Result<()> {
+        let conn = self.0.lock().unwrap();
+
+        // Delete configurations first (foreign key)
+        conn.execute("DELETE FROM robot_configurations WHERE robot_connection_id = ?", [id])?;
+
+        // Delete the robot connection
+        conn.execute("DELETE FROM robot_connections WHERE id = ?", [id])?;
+
+        Ok(())
+    }
+
     // ==================== Robot Configurations ====================
-    pub fn get_configurations_for_robot(&self, robot_id: i64) -> anyhow::Result<Vec<RobotConfigurationDto>> {
+    pub fn get_configurations_for_robot(&self, robot_id: i64) -> anyhow::Result<Vec<RobotConfiguration>> {
         let conn = self.0.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, robot_connection_id, name, is_default, u_frame_number, u_tool_number,
@@ -230,7 +345,7 @@ impl DatabaseResource {
         )?;
 
         let configs = stmt.query_map([robot_id], |row| {
-            Ok(RobotConfigurationDto {
+            Ok(RobotConfiguration {
                 id: row.get(0)?,
                 robot_connection_id: row.get(1)?,
                 name: row.get(2)?,
@@ -248,6 +363,153 @@ impl DatabaseResource {
         })?.collect::<Result<Vec<_>, _>>()?;
 
         Ok(configs)
+    }
+
+    pub fn create_configuration(&self, req: &CreateConfiguration) -> anyhow::Result<i64> {
+        let conn = self.0.lock().unwrap();
+
+        // If setting as default, clear other defaults for this robot
+        if req.is_default {
+            conn.execute(
+                "UPDATE robot_configurations SET is_default = 0 WHERE robot_connection_id = ?",
+                [req.robot_connection_id],
+            )?;
+        }
+
+        conn.execute(
+            "INSERT INTO robot_configurations
+             (robot_connection_id, name, is_default, u_frame_number, u_tool_number,
+              front, up, left, flip, turn4, turn5, turn6)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rusqlite::params![
+                req.robot_connection_id,
+                req.name,
+                req.is_default as i32,
+                req.u_frame_number,
+                req.u_tool_number,
+                req.front,
+                req.up,
+                req.left,
+                req.flip,
+                req.turn4,
+                req.turn5,
+                req.turn6,
+            ],
+        )?;
+
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn update_configuration(&self, req: &UpdateConfiguration) -> anyhow::Result<()> {
+        let conn = self.0.lock().unwrap();
+
+        // If setting as default, first get the robot_connection_id and clear others
+        if req.is_default == Some(true) {
+            let robot_id: i64 = conn.query_row(
+                "SELECT robot_connection_id FROM robot_configurations WHERE id = ?",
+                [req.id],
+                |row| row.get(0),
+            )?;
+            conn.execute(
+                "UPDATE robot_configurations SET is_default = 0 WHERE robot_connection_id = ?",
+                [robot_id],
+            )?;
+        }
+
+        // Build dynamic update
+        let mut updates = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        if let Some(ref name) = req.name {
+            updates.push("name = ?");
+            params.push(Box::new(name.clone()));
+        }
+        if let Some(is_default) = req.is_default {
+            updates.push("is_default = ?");
+            params.push(Box::new(is_default as i32));
+        }
+        if let Some(v) = req.u_frame_number {
+            updates.push("u_frame_number = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = req.u_tool_number {
+            updates.push("u_tool_number = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = req.front {
+            updates.push("front = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = req.up {
+            updates.push("up = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = req.left {
+            updates.push("left = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = req.flip {
+            updates.push("flip = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = req.turn4 {
+            updates.push("turn4 = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = req.turn5 {
+            updates.push("turn5 = ?");
+            params.push(Box::new(v));
+        }
+        if let Some(v) = req.turn6 {
+            updates.push("turn6 = ?");
+            params.push(Box::new(v));
+        }
+
+        if updates.is_empty() {
+            return Ok(());
+        }
+
+        params.push(Box::new(req.id));
+        let sql = format!(
+            "UPDATE robot_configurations SET {} WHERE id = ?",
+            updates.join(", ")
+        );
+
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        conn.execute(&sql, params_refs.as_slice())?;
+
+        Ok(())
+    }
+
+    pub fn delete_configuration(&self, id: i64) -> anyhow::Result<()> {
+        let conn = self.0.lock().unwrap();
+        conn.execute("DELETE FROM robot_configurations WHERE id = ?", [id])?;
+        Ok(())
+    }
+
+    pub fn set_default_configuration(&self, id: i64) -> anyhow::Result<()> {
+        let conn = self.0.lock().unwrap();
+
+        // Get the robot_connection_id for this configuration
+        let robot_id: i64 = conn.query_row(
+            "SELECT robot_connection_id FROM robot_configurations WHERE id = ?",
+            [id],
+            |row| row.get(0),
+        )?;
+
+        // Clear all defaults for this robot
+        conn.execute(
+            "UPDATE robot_configurations SET is_default = 0 WHERE robot_connection_id = ?",
+            [robot_id],
+        )?;
+
+        // Set the new default
+        conn.execute(
+            "UPDATE robot_configurations SET is_default = 1 WHERE id = ?",
+            [id],
+        )?;
+
+        Ok(())
     }
 
     // ==================== Programs ====================
@@ -317,8 +579,8 @@ impl DatabaseResource {
                  FROM program_instructions WHERE program_id = ? ORDER BY line_number"
             )?;
 
-            let instructions: Vec<InstructionDto> = stmt.query_map([id], |row| {
-                Ok(InstructionDto {
+            let instructions: Vec<Instruction> = stmt.query_map([id], |row| {
+                Ok(Instruction {
                     line_number: row.get(0)?,
                     x: row.get(1)?,
                     y: row.get(2)?,
@@ -357,7 +619,7 @@ impl DatabaseResource {
         Ok(())
     }
 
-    pub fn insert_instructions(&self, program_id: i64, instructions: &[InstructionDto]) -> anyhow::Result<()> {
+    pub fn insert_instructions(&self, program_id: i64, instructions: &[Instruction]) -> anyhow::Result<()> {
         let conn = self.0.lock().unwrap();
         // Clear existing
         conn.execute("DELETE FROM program_instructions WHERE program_id = ?", [program_id])?;
@@ -383,6 +645,125 @@ impl DatabaseResource {
                 inst.uframe,
                 inst.utool,
             ])?;
+        }
+
+        Ok(())
+    }
+
+    // ==================== Settings ====================
+    pub fn get_settings(&self) -> anyhow::Result<RobotSettings> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT key, value FROM server_settings"
+        )?;
+
+        let mut settings = RobotSettings::default();
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+        })?;
+
+        for row in rows {
+            let (key, value) = row?;
+            match key.as_str() {
+                "default_w" => if let Some(v) = value { settings.default_w = v.parse().unwrap_or(0.0); }
+                "default_p" => if let Some(v) = value { settings.default_p = v.parse().unwrap_or(0.0); }
+                "default_r" => if let Some(v) = value { settings.default_r = v.parse().unwrap_or(0.0); }
+                "default_speed" => if let Some(v) = value { settings.default_speed = v.parse().unwrap_or(100.0); }
+                "default_term_type" => if let Some(v) = value { settings.default_term_type = v; }
+                "default_uframe" => if let Some(v) = value { settings.default_uframe = v.parse().unwrap_or(1); }
+                "default_utool" => if let Some(v) = value { settings.default_utool = v.parse().unwrap_or(1); }
+                _ => {}
+            }
+        }
+
+        Ok(settings)
+    }
+
+    pub fn update_settings(&self, settings: &RobotSettings) -> anyhow::Result<()> {
+        let conn = self.0.lock().unwrap();
+
+        let settings_pairs = [
+            ("default_w", settings.default_w.to_string()),
+            ("default_p", settings.default_p.to_string()),
+            ("default_r", settings.default_r.to_string()),
+            ("default_speed", settings.default_speed.to_string()),
+            ("default_term_type", settings.default_term_type.clone()),
+            ("default_uframe", settings.default_uframe.to_string()),
+            ("default_utool", settings.default_utool.to_string()),
+        ];
+
+        for (key, value) in settings_pairs {
+            conn.execute(
+                "INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)",
+                [key, &value],
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub fn reset_database(&self) -> anyhow::Result<()> {
+        let conn = self.0.lock().unwrap();
+
+        // Delete all data from tables
+        conn.execute("DELETE FROM program_instructions", [])?;
+        conn.execute("DELETE FROM programs", [])?;
+        conn.execute("DELETE FROM robot_configurations", [])?;
+        conn.execute("DELETE FROM robot_connections", [])?;
+        conn.execute("DELETE FROM io_display_config", [])?;
+        conn.execute("DELETE FROM server_settings", [])?;
+
+        // Re-insert default settings
+        conn.execute(
+            "INSERT INTO server_settings (key, value, description) VALUES
+                ('theme', 'dark', 'UI theme: dark or light'),
+                ('default_robot_id', NULL, 'Default robot connection on startup'),
+                ('auto_connect', 'false', 'Auto-connect to default robot')",
+            [],
+        )?;
+
+        Ok(())
+    }
+
+    // ==================== I/O Config ====================
+    pub fn get_io_config(&self, robot_connection_id: i64) -> anyhow::Result<Vec<IoDisplayConfig>> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT io_type, io_index, display_name, is_visible, display_order
+             FROM io_display_config WHERE robot_connection_id = ?
+             ORDER BY display_order, io_type, io_index"
+        )?;
+
+        let configs = stmt.query_map([robot_connection_id], |row| {
+            Ok(IoDisplayConfig {
+                io_type: row.get(0)?,
+                io_index: row.get(1)?,
+                display_name: row.get(2)?,
+                is_visible: row.get::<_, i32>(3)? != 0,
+                display_order: row.get(4)?,
+            })
+        })?.collect::<Result<Vec<_>, _>>()?;
+
+        Ok(configs)
+    }
+
+    pub fn update_io_config(&self, robot_connection_id: i64, configs: &[IoDisplayConfig]) -> anyhow::Result<()> {
+        let conn = self.0.lock().unwrap();
+
+        for config in configs {
+            conn.execute(
+                "INSERT OR REPLACE INTO io_display_config
+                 (robot_connection_id, io_type, io_index, display_name, is_visible, display_order)
+                 VALUES (?, ?, ?, ?, ?, ?)",
+                rusqlite::params![
+                    robot_connection_id,
+                    config.io_type,
+                    config.io_index,
+                    config.display_name,
+                    config.is_visible as i32,
+                    config.display_order,
+                ],
+            )?;
         }
 
         Ok(())

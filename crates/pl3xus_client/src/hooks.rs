@@ -6,7 +6,7 @@ use leptos::prelude::*;
 use leptos::html::Input;
 use leptos::web_sys;
 
-use crate::context::{MutationState, SyncConnection, SyncContext};
+use crate::context::{MutationState, RequestState, RequestStatus, SyncConnection, SyncContext};
 use crate::traits::SyncComponent;
 
 #[cfg(feature = "stores")]
@@ -809,4 +809,166 @@ where
 {
     let ctx = expect_context::<SyncContext>();
     ctx.subscribe_message_store::<T>()
+}
+
+
+/// Hook to send a request and get a reactive signal for the response.
+///
+/// This provides a simple way to make request/response calls to the server
+/// with reactive state tracking. The hook returns a tuple of:
+/// - A function to trigger the request
+/// - A reactive signal with the current state (loading, data, error)
+///
+/// # Type Parameters
+///
+/// - `R`: The request type (must implement `RequestMessage`)
+///
+/// # Panics
+///
+/// Panics if called outside of a `SyncProvider` context.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_request;
+/// use pl3xus_common::RequestMessage;
+///
+/// #[derive(Clone, Serialize, Deserialize, Debug)]
+/// struct ListRobots;
+///
+/// impl RequestMessage for ListRobots {
+///     type ResponseMessage = Vec<RobotInfo>;
+/// }
+///
+/// #[component]
+/// fn RobotList() -> impl IntoView {
+///     let (fetch, state) = use_request::<ListRobots>();
+///
+///     Effect::new(move |_| {
+///         // Fetch on mount
+///         fetch(ListRobots);
+///     });
+///
+///     view! {
+///         <Show when=move || state.get().is_loading()>
+///             <p>"Loading..."</p>
+///         </Show>
+///         <Show when=move || state.get().data.is_some()>
+///             <ul>
+///                 {move || state.get().data.unwrap_or_default().iter().map(|r| view! {
+///                     <li>{&r.name}</li>
+///                 }).collect::<Vec<_>>()}
+///             </ul>
+///         </Show>
+///     }
+/// }
+/// ```
+pub fn use_request<R>() -> (
+    impl Fn(R) + Clone,
+    Signal<UseRequestState<R::ResponseMessage>>,
+)
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    let ctx = expect_context::<SyncContext>();
+
+    // Track the current request ID
+    let current_request_id = RwSignal::new(None::<u64>);
+
+    // Derive state from the context's request tracking
+    let state = {
+        let ctx = ctx.clone();
+        Signal::derive(move || {
+            let request_id = current_request_id.get();
+
+            match request_id {
+                None => UseRequestState {
+                    is_loading: false,
+                    data: None,
+                    error: None,
+                },
+                Some(id) => {
+                    let requests = ctx.requests.get();
+                    match requests.get(&id) {
+                        None => UseRequestState {
+                            is_loading: false,
+                            data: None,
+                            error: Some("Request not found".to_string()),
+                        },
+                        Some(req_state) => {
+                            match &req_state.status {
+                                RequestStatus::Pending => UseRequestState {
+                                    is_loading: true,
+                                    data: None,
+                                    error: None,
+                                },
+                                RequestStatus::Success => {
+                                    let data = ctx.get_response::<R>(id);
+                                    UseRequestState {
+                                        is_loading: false,
+                                        data,
+                                        error: None,
+                                    }
+                                }
+                                RequestStatus::Error(e) => UseRequestState {
+                                    is_loading: false,
+                                    data: None,
+                                    error: Some(e.clone()),
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    };
+
+    // Create the fetch function
+    let fetch = move |request: R| {
+        let id = ctx.request(request);
+        current_request_id.set(Some(id));
+    };
+
+    (fetch, state)
+}
+
+/// State for a request/response cycle.
+#[derive(Clone, Debug)]
+pub struct UseRequestState<T> {
+    /// Whether the request is currently in flight
+    pub is_loading: bool,
+    /// The response data (if successful)
+    pub data: Option<T>,
+    /// Error message (if failed)
+    pub error: Option<String>,
+}
+
+impl<T> UseRequestState<T> {
+    /// Returns true if the request is currently loading.
+    pub fn is_loading(&self) -> bool {
+        self.is_loading
+    }
+
+    /// Returns true if the request completed successfully.
+    pub fn is_success(&self) -> bool {
+        self.data.is_some()
+    }
+
+    /// Returns true if the request failed.
+    pub fn is_error(&self) -> bool {
+        self.error.is_some()
+    }
+}
+
+/// Hook to access request state tracking directly.
+///
+/// This returns a read-only signal containing all request states.
+/// Use this if you need more control than `use_request` provides.
+///
+/// # Panics
+///
+/// Panics if called outside of a `SyncProvider` context.
+pub fn use_request_state() -> ReadSignal<HashMap<u64, RequestState>> {
+    let ctx = expect_context::<SyncContext>();
+    ctx.requests()
 }

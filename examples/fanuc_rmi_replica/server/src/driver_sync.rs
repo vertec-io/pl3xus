@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use fanuc_replica_types::*;
 use fanuc_rmi::packets::{ResponsePacket, CommandResponse};
-use crate::{FanucRobot, RmiDriver, RmiResponseChannel, RobotConnectionState};
+use crate::plugins::connection::{FanucRobot, RmiDriver, RmiResponseChannel, RobotConnectionState};
 
 // Interval for polling status (seconds)
 const POLL_RATE: f64 = 0.1;

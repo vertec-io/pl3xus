@@ -152,22 +152,42 @@ where
     T: Serialize + DeserializeOwned + Send + Sync + 'static
 {}
 
-/// Marks a type as a request type.
-pub trait RequestMessage:
-    Clone + Serialize + DeserializeOwned + Send + Sync + Debug + 'static
-{
+/// Marks a type as a request message with an associated response type.
+///
+/// This trait extends `Pl3xusMessage` to add request/response semantics.
+/// The request name is automatically derived from the type name.
+///
+/// # Example
+///
+/// ```rust
+/// use serde::{Serialize, Deserialize};
+/// use pl3xus_common::RequestMessage;
+///
+/// #[derive(Clone, Debug, Serialize, Deserialize)]
+/// struct ListRobots;
+///
+/// #[derive(Clone, Debug, Serialize, Deserialize)]
+/// struct RobotList {
+///     robots: Vec<String>,
+/// }
+///
+/// impl RequestMessage for ListRobots {
+///     type ResponseMessage = RobotList;
+/// }
+///
+/// // The request name is automatically derived as "ListRobots"
+/// assert_eq!(ListRobots::request_name(), "ListRobots");
+/// ```
+pub trait RequestMessage: Pl3xusMessage + Clone + Debug {
     /// The response type for the request.
-    type ResponseMessage: Pl3xusMessage
-        + Clone
-        + Serialize
-        + DeserializeOwned
-        + Send
-        + Sync
-        + Debug
-        + 'static;
+    type ResponseMessage: Pl3xusMessage + Clone + Debug;
 
-    /// The label used for the request type.
-    const REQUEST_NAME: &'static str;
+    /// Returns the request name, derived from the short type name.
+    ///
+    /// This is automatically implemented using `Pl3xusMessage::short_name()`.
+    fn request_name() -> &'static str {
+        Self::short_name()
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -502,5 +522,29 @@ mod tests {
         let name1 = module1::UserMessage::type_name();
         let name2 = module2::UserMessage::type_name();
         assert_ne!(name1, name2, "Types should have different full type names");
+    }
+
+    #[test]
+    fn test_request_message_auto_name() {
+        use super::*;
+
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct ListRobots;
+
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct RobotList {
+            robots: Vec<String>,
+        }
+
+        impl RequestMessage for ListRobots {
+            type ResponseMessage = RobotList;
+        }
+
+        // Request name should be automatically derived from the type name
+        assert_eq!(ListRobots::request_name(), "ListRobots");
+
+        // It should also work with the Pl3xusMessage trait methods
+        assert!(ListRobots::type_name().contains("ListRobots"));
+        assert_eq!(ListRobots::short_name(), "ListRobots");
     }
 }

@@ -74,9 +74,9 @@ pub fn SyncProvider(
                 #[cfg(target_arch = "wasm32")]
                 leptos::logging::log!("[SyncProvider] WebSocket opened!");
             })
-            .on_error(move |e| {
+            .on_error(move |_e| {
                 #[cfg(target_arch = "wasm32")]
-                leptos::logging::warn!("[SyncProvider] WebSocket error: {:?}", e);
+                leptos::logging::warn!("[SyncProvider] WebSocket error: {:?}", _e);
             }),
     );
 
@@ -172,14 +172,51 @@ pub fn SyncProvider(
                         handle_server_message(&ctx, server_msg, &last_error);
                     }
                     Err(_) => {
-                        // Not a SyncServerMessage - treat as arbitrary Pl3xusMessage
-                        #[cfg(target_arch = "wasm32")]
-                        leptos::logging::log!(
-                            "[SyncProvider] Not a SyncServerMessage, routing as Pl3xusMessage: type_name={}",
-                            packet.type_name
-                        );
+                        // Not a SyncServerMessage - check if it's a ResponseInternal
+                        if packet.type_name.contains("ResponseInternal<") {
+                            // This is a response to a request - extract response_id and route it
+                            #[cfg(target_arch = "wasm32")]
+                            leptos::logging::log!(
+                                "[SyncProvider] Received ResponseInternal: type_name={}",
+                                packet.type_name
+                            );
 
-                        ctx.handle_incoming_message(packet.type_name.clone(), packet.data.clone());
+                            // The ResponseInternal struct has: { response_id: u64, response: T }
+                            // We need to extract the response_id from the beginning of the data
+                            // bincode with standard() uses variable-length integer encoding
+                            if let Ok((response_id, bytes_read)) = bincode::serde::decode_from_slice::<u64, _>(
+                                &packet.data,
+                                bincode::config::standard()
+                            ) {
+                                // The actual response data starts after the varint-encoded u64
+                                let response_bytes = packet.data[bytes_read..].to_vec();
+
+                                #[cfg(target_arch = "wasm32")]
+                                leptos::logging::log!(
+                                    "[SyncProvider] Routing response_id={} with {} bytes (header was {} bytes)",
+                                    response_id,
+                                    response_bytes.len(),
+                                    bytes_read
+                                );
+
+                                ctx.handle_request_response(response_id, response_bytes);
+                            } else {
+                                #[cfg(target_arch = "wasm32")]
+                                leptos::logging::warn!(
+                                    "[SyncProvider] Failed to decode response_id from {} bytes",
+                                    packet.data.len()
+                                );
+                            }
+                        } else {
+                            // Treat as arbitrary Pl3xusMessage
+                            #[cfg(target_arch = "wasm32")]
+                            leptos::logging::log!(
+                                "[SyncProvider] Not a SyncServerMessage, routing as Pl3xusMessage: type_name={}",
+                                packet.type_name
+                            );
+
+                            ctx.handle_incoming_message(packet.type_name.clone(), packet.data.clone());
+                        }
                     }
                 }
             }

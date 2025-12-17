@@ -120,12 +120,12 @@ mod traits;
 // Re-exports
 pub use client_type_registry::{ClientTypeRegistry, ClientTypeRegistryBuilder};
 pub use components::SyncFieldInput;
-pub use context::{MutationState, SyncConnection, SyncContext};
+pub use context::{MutationState, RequestState, RequestStatus, SyncConnection, SyncContext};
 pub use error::SyncError;
 pub use hooks::{
     use_sync_component, use_sync_component_where, use_sync_connection, use_sync_context,
     use_sync_entity, use_sync_field_editor, use_sync_message, use_sync_mutations,
-    use_sync_untracked,
+    use_sync_untracked, use_request, use_request_state, UseRequestState,
 };
 
 #[cfg(feature = "stores")]
@@ -138,6 +138,9 @@ pub use pl3xus_sync::MutationStatus;
 
 // Re-export control types from pl3xus_common for client-side use
 pub use pl3xus_common::{ControlRequest, ControlResponse, EntityControl, ConnectionId};
+
+// Re-export ConnectionReadyState for convenience
+pub use leptos_use::core::ConnectionReadyState;
 
 // Conditional re-exports
 #[cfg(feature = "stores")]

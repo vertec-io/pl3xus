@@ -1,0 +1,169 @@
+//! Tool Management Panel - Tool selector with Apply button.
+
+use leptos::prelude::*;
+use pl3xus_client::{use_sync_component, use_request};
+use fanuc_replica_types::{ConnectionState, SetActiveFrameTool};
+use crate::pages::dashboard::context::WorkspaceContext;
+
+/// Tool Management Panel - Tool selector with Apply button
+#[component]
+pub fn ToolManagementPanel() -> impl IntoView {
+    let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
+    let connection_state = use_sync_component::<ConnectionState>();
+    let active_tool = ctx.active_tool;
+    let active_frame = ctx.active_frame;
+
+    // Request hook for setting active frame/tool
+    let (set_frame_tool, _set_frame_tool_state) = use_request::<SetActiveFrameTool>();
+    // Store the function so it can be used in multiple closures
+    let set_frame_tool = StoredValue::new(set_frame_tool);
+
+    let robot_connected = Memo::new(move |_| {
+        connection_state.get().values().next()
+            .map(|s| s.robot_connected)
+            .unwrap_or(false)
+    });
+
+    // Local state for pending tool selection
+    let (pending_tool, set_pending_tool) = signal::<Option<usize>>(None);
+
+    // View mode: "buttons" or "dropdown"
+    let (view_mode, set_view_mode) = signal("buttons");
+
+    // Get effective tool (pending or current)
+    let effective_tool = move || {
+        pending_tool.get().unwrap_or_else(|| active_tool.get())
+    };
+
+    // Check if there are pending changes
+    let has_pending = move || pending_tool.get().is_some();
+
+    view! {
+        <Show when=move || robot_connected.get()>
+            <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-2">
+                <div class="flex items-center justify-between mb-1.5">
+                    <h3 class="text-[10px] font-semibold text-[#00d9ff] uppercase tracking-wide flex items-center group">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        "User Tools"
+                    </h3>
+                    // View toggle button
+                    <button
+                        class="text-[8px] text-[#666666] hover:text-[#00d9ff] px-1.5 py-0.5 border border-[#ffffff08] rounded"
+                        on:click=move |_| {
+                            if view_mode.get() == "buttons" {
+                                set_view_mode.set("dropdown");
+                            } else {
+                                set_view_mode.set("buttons");
+                            }
+                        }
+                        title="Toggle view mode"
+                    >
+                        {move || if view_mode.get() == "buttons" { "▼" } else { "▦" }}
+                    </button>
+                </div>
+
+                // Button grid view
+                <Show when=move || view_mode.get() == "buttons" fallback=move || {
+                    // Dropdown view
+                    view! {
+                        <div class="flex items-center gap-2">
+                            <select
+                                class="flex-1 bg-[#111111] border border-[#ffffff15] rounded px-2 py-1 text-[10px] text-white"
+                                on:change=move |ev| {
+                                    let value = event_target_value(&ev);
+                                    if let Ok(v) = value.parse::<usize>() {
+                                        set_pending_tool.set(Some(v));
+                                    }
+                                }
+                            >
+                                {(1..=10).map(|i| {
+                                    let is_selected = move || effective_tool() == i;
+                                    view! {
+                                        <option value={i.to_string()} selected=is_selected>
+                                            {format!("UTool {}", i)}
+                                        </option>
+                                    }
+                                }).collect_view()}
+                            </select>
+                            // Apply button
+                            <Show when=has_pending>
+                                <button
+                                    class="px-2 py-1 text-[9px] bg-[#00d9ff20] text-[#00d9ff] border border-[#00d9ff] rounded hover:bg-[#00d9ff30]"
+                                    on:click=move |_| {
+                                        if let Some(tool) = pending_tool.get() {
+                                            let frame = active_frame.get();
+                                            set_frame_tool.get_value()(SetActiveFrameTool {
+                                                uframe: frame as i32,
+                                                utool: tool as i32,
+                                            });
+                                            ctx.active_tool.set(tool);
+                                            set_pending_tool.set(None);
+                                        }
+                                    }
+                                    title="Apply tool change to robot"
+                                >
+                                    "Apply"
+                                </button>
+                            </Show>
+                        </div>
+                    }
+                }>
+                    <div class="space-y-1">
+                        <div class="grid grid-cols-5 gap-0.5">
+                            {(1..=10).map(|i| {
+                                let is_selected = move || effective_tool() == i;
+                                let is_active = move || active_tool.get() == i;
+                                view! {
+                                    <button
+                                        class={move || {
+                                            let selected = is_selected();
+                                            let active = is_active();
+
+                                            if selected && active {
+                                                "bg-[#00d9ff20] border border-[#00d9ff] text-[#00d9ff] text-[9px] py-1 rounded font-medium"
+                                            } else if selected {
+                                                "bg-[#ffaa0020] border border-[#ffaa00] text-[#ffaa00] text-[9px] py-1 rounded font-medium"
+                                            } else {
+                                                "bg-[#111111] border border-[#ffffff08] text-[#555555] text-[9px] py-1 rounded hover:border-[#ffffff20] hover:text-[#888888]"
+                                            }
+                                        }}
+                                        on:click=move |_| {
+                                            set_pending_tool.set(Some(i));
+                                        }
+                                        title=format!("UTool {}", i)
+                                    >
+                                        {i}
+                                    </button>
+                                }
+                            }).collect_view()}
+                        </div>
+                        // Apply button (only show if pending changes)
+                        <Show when=has_pending>
+                            <button
+                                class="w-full px-2 py-1 text-[9px] bg-[#00d9ff20] text-[#00d9ff] border border-[#00d9ff] rounded hover:bg-[#00d9ff30]"
+                                on:click=move |_| {
+                                    if let Some(tool) = pending_tool.get() {
+                                        let frame = active_frame.get();
+                                        set_frame_tool.get_value()(SetActiveFrameTool {
+                                            uframe: frame as i32,
+                                            utool: tool as i32,
+                                        });
+                                        ctx.active_tool.set(tool);
+                                        set_pending_tool.set(None);
+                                    }
+                                }
+                                title="Apply tool change to robot"
+                            >
+                                "Apply"
+                            </button>
+                        </Show>
+                    </div>
+                </Show>
+            </div>
+        </Show>
+    }
+}
+

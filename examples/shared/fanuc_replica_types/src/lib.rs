@@ -4,6 +4,7 @@
 //! - **Synced Components**: Wrapped `fanuc_rmi::dto` types (Newtype pattern) to implement `Component`.
 //! - **Network Messages**: Direct usages of `fanuc_rmi::dto` types where possible, custom types for App logic.
 //! - **DTOs**: Data transfer objects for API communication.
+//! - **Request/Response**: Use pl3xus_common::RequestMessage for correlated request/response patterns.
 
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
@@ -13,6 +14,9 @@ use bevy::prelude::*;
 
 // Re-export FANUC DTO types for easy access
 pub use fanuc_rmi::dto;
+
+// Re-export RequestMessage trait for implementing request types
+pub use pl3xus_common::RequestMessage;
 
 // ============================================================================
 //                          SYNCED COMPONENTS (Wrapped DTOs)
@@ -97,10 +101,21 @@ pub struct ExecutionState {
 #[cfg_attr(feature = "server", derive(Component))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct ConnectionState {
+    /// Whether a robot is currently connected
     pub robot_connected: bool,
+    /// Whether a robot connection is in progress
+    pub robot_connecting: bool,
+    /// The robot's address (IP:port)
     pub robot_addr: String,
+    /// The robot's display name
+    pub robot_name: String,
+    /// The saved connection name (if connected via saved connection)
     pub connection_name: Option<String>,
+    /// The saved connection ID (if connected via saved connection)
     pub connection_id: Option<i64>,
+    /// The active connection ID for the current session
+    pub active_connection_id: Option<i64>,
+    /// Whether the TP (teach pendant) is initialized
     pub tp_initialized: bool,
 }
 
@@ -174,53 +189,6 @@ pub enum ConsoleMsgType {
     Config,
 }
 
-/// Control ownership state
-///
-/// **DEPRECATED**: Use `pl3xus_sync::control::EntityControl` on server
-/// or `RobotControlState` in this crate for the client.
-#[cfg_attr(feature = "server", derive(Component))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[deprecated(note = "Use RobotControlState or pl3xus_sync::control::EntityControl")]
-pub struct ControlStatus {
-    pub holder_id: Option<String>,
-    pub locked_at: Option<u64>,
-}
-
-/// **DEPRECATED**: Use `pl3xus_common::EntityControl` directly.
-/// It's available on both server (with ecs feature) and client.
-#[cfg_attr(feature = "server", derive(Component))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[deprecated(note = "Use pl3xus_common::EntityControl directly")]
-pub struct RobotControlState {
-    /// The client ID that currently has control (matches ConnectionId structure)
-    pub client_id: ClientId,
-    /// Timestamp of last activity
-    pub last_activity: f32,
-}
-
-/// **DEPRECATED**: Use `pl3xus_common::ConnectionId` directly.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Default)]
-#[deprecated(note = "Use pl3xus_common::ConnectionId directly")]
-pub struct ClientId {
-    pub id: u32,
-}
-
-/// **DEPRECATED**: Use `pl3xus_common::ControlRequest::Take(entity_bits)` directly.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[deprecated(note = "Use pl3xus_common::ControlRequest::Take(entity_bits) directly")]
-pub struct ControlTakeRequest {
-    /// Entity bits (from Entity::to_bits())
-    pub entity_bits: u64,
-}
-
-/// **DEPRECATED**: Use `pl3xus_common::ControlRequest::Release(entity_bits)` directly.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[deprecated(note = "Use pl3xus_common::ControlRequest::Release(entity_bits) directly")]
-pub struct ControlReleaseRequest {
-    /// Entity bits (from Entity::to_bits())
-    pub entity_bits: u64,
-}
-
 /// I/O Status
 #[cfg_attr(feature = "server", derive(Component))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -233,29 +201,35 @@ pub struct IoStatus {
 //                          DATA TRANSFER OBJECTS (DTOs)
 // ============================================================================
 
-/// Robot connection DTO (for saved connections).
+/// Saved robot connection from database.
+/// Motion defaults (speed, term_type, w/p/r) and jog defaults are stored here.
+/// Frame/tool/arm configuration is stored in robot_configurations table.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct RobotConnectionDto {
+pub struct RobotConnection {
     pub id: i64,
     pub name: String,
     pub description: Option<String>,
     pub ip_address: String,
     pub port: u32,
+    // Motion defaults (required - no global fallback)
     pub default_speed: f64,
-    pub default_speed_type: String,
+    pub default_speed_type: String,  // mmSec, InchMin, Time, mSec
     pub default_term_type: String,
     pub default_w: f64,
     pub default_p: f64,
     pub default_r: f64,
+    // Jog defaults
     pub default_cartesian_jog_speed: f64,
     pub default_cartesian_jog_step: f64,
     pub default_joint_jog_speed: f64,
     pub default_joint_jog_step: f64,
+    pub default_rotation_jog_speed: f64,
+    pub default_rotation_jog_step: f64,
 }
 
-/// Robot configuration DTO (named configurations per robot).
+/// Named configuration for a robot (frame, tool, arm config).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RobotConfigurationDto {
+pub struct RobotConfiguration {
     pub id: i64,
     pub robot_connection_id: i64,
     pub name: String,
@@ -271,9 +245,9 @@ pub struct RobotConfigurationDto {
     pub turn6: i32,
 }
 
-/// New robot configuration DTO (for creating without ID).
+/// New robot configuration (for creating without ID).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NewRobotConfigurationDto {
+pub struct NewRobotConfiguration {
     pub name: String,
     pub is_default: bool,
     pub u_frame_number: i32,
@@ -312,7 +286,7 @@ pub struct ProgramDetail {
     pub id: i64,
     pub name: String,
     pub description: Option<String>,
-    pub instructions: Vec<InstructionDto>,
+    pub instructions: Vec<Instruction>,
     pub default_term_type: String,
     pub default_term_value: Option<u8>,
     pub start_x: Option<f64>,
@@ -332,9 +306,9 @@ pub struct ProgramDetail {
     pub updated_at: String,
 }
 
-/// Instruction DTO for client.
+/// Program instruction (motion command).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InstructionDto {
+pub struct Instruction {
     pub line_number: i32,
     pub x: f64,
     pub y: f64,
@@ -349,9 +323,9 @@ pub struct InstructionDto {
     pub utool: Option<i32>,
 }
 
-/// Robot settings DTO.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RobotSettingsDto {
+/// Robot default settings.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RobotSettings {
     pub default_w: f64,
     pub default_p: f64,
     pub default_r: f64,
@@ -363,15 +337,15 @@ pub struct RobotSettingsDto {
 
 /// A single change entry in the changelog.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChangeLogEntryDto {
+pub struct ChangeLogEntry {
     pub field_name: String,
     pub old_value: String,
     pub new_value: String,
 }
 
-/// I/O display configuration DTO.
+/// I/O display configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IoDisplayConfigDto {
+pub struct IoDisplayConfig {
     pub io_type: String,
     pub io_index: i32,
     pub display_name: Option<String>,
@@ -394,7 +368,7 @@ pub struct ActiveConfiguration {
     pub loaded_from_id: Option<i64>,
     pub loaded_from_name: Option<String>,
     pub changes_count: u32,
-    pub change_log: Vec<ChangeLogEntryDto>,
+    pub change_log: Vec<ChangeLogEntry>,
     pub u_frame_number: i32,
     pub u_tool_number: i32,
     pub front: i32,
@@ -409,16 +383,6 @@ pub struct ActiveConfiguration {
 // ============================================================================
 //                          NETWORK MESSAGES (RPC)
 // ============================================================================
-
-/// **DEPRECATED**: Use `pl3xus_sync::control::ControlRequest::Take` instead.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[deprecated(note = "Use pl3xus_sync::control::ControlRequest instead")]
-pub struct RequestControl;
-
-/// **DEPRECATED**: Use `pl3xus_sync::control::ControlRequest::Release` instead.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[deprecated(note = "Use pl3xus_sync::control::ControlRequest instead")]
-pub struct ReleaseControl;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JogAxis { X, Y, Z, W, P, R, J1, J2, J3, J4, J5, J6 }
@@ -446,12 +410,216 @@ pub struct StopExecution;
 pub struct ListPrograms;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ListProgramsResponse {
+    pub programs: Vec<ProgramWithLines>,
+}
+
+/// Program with lines for loading into the program display
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct ProgramWithLines {
+    pub id: i64,
+    pub name: String,
+    pub description: Option<String>,
+    pub lines: Vec<ProgramLineInfo>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct ProgramLineInfo {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub w: f64,
+    pub p: f64,
+    pub r: f64,
+    pub speed: f64,
+    pub term_type: String,
+    pub uframe: Option<i32>,
+    pub utool: Option<i32>,
+}
+
+impl RequestMessage for ListPrograms {
+    type ResponseMessage = ListProgramsResponse;
+}
+
+/// Request to get a single program with all its instructions.
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GetProgram {
     pub program_id: i64,
 }
 
+/// Response for getting a single program.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GetProgramResponse {
+    pub program: Option<ProgramDetail>,
+}
+
+impl RequestMessage for GetProgram {
+    type ResponseMessage = GetProgramResponse;
+}
+
+/// Request to create a new program.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CreateProgram {
+    pub name: String,
+    pub description: Option<String>,
+}
+
+/// Response for creating a program.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CreateProgramResponse {
+    pub success: bool,
+    pub program_id: Option<i64>,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for CreateProgram {
+    type ResponseMessage = CreateProgramResponse;
+}
+
+/// Request to delete a program.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DeleteProgram {
+    pub program_id: i64,
+}
+
+/// Response for deleting a program.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DeleteProgramResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for DeleteProgram {
+    type ResponseMessage = DeleteProgramResponse;
+}
+
+/// Request to update program settings (start/end positions, speed, termination).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateProgramSettings {
+    pub program_id: i64,
+    // Start position (approach move before toolpath)
+    pub start_x: Option<f64>,
+    pub start_y: Option<f64>,
+    pub start_z: Option<f64>,
+    pub start_w: Option<f64>,
+    pub start_p: Option<f64>,
+    pub start_r: Option<f64>,
+    // End position (retreat move after toolpath)
+    pub end_x: Option<f64>,
+    pub end_y: Option<f64>,
+    pub end_z: Option<f64>,
+    pub end_w: Option<f64>,
+    pub end_p: Option<f64>,
+    pub end_r: Option<f64>,
+    // Motion defaults
+    pub move_speed: Option<f64>,
+    pub default_term_type: Option<String>,
+    pub default_term_value: Option<u8>,
+}
+
+/// Response for updating program settings.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateProgramSettingsResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for UpdateProgramSettings {
+    type ResponseMessage = UpdateProgramSettingsResponse;
+}
+
+/// Request to upload CSV content to a program.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UploadCsv {
+    pub program_id: i64,
+    pub csv_content: String,
+    /// Optional start position to prepend before CSV points
+    pub start_position: Option<CsvStartPosition>,
+}
+
+/// Start position for CSV upload.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CsvStartPosition {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub w: f64,
+    pub p: f64,
+    pub r: f64,
+}
+
+/// Response for uploading CSV.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UploadCsvResponse {
+    pub success: bool,
+    pub lines_imported: Option<i32>,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for UploadCsv {
+    type ResponseMessage = UploadCsvResponse;
+}
+
+/// Request to unload the currently loaded program.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UnloadProgram;
+
+/// Response for unloading a program.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UnloadProgramResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for UnloadProgram {
+    type ResponseMessage = UnloadProgramResponse;
+}
+
+/// Request to list all saved robot connections from the database.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ListRobotConnections;
+
+impl RequestMessage for ListRobotConnections {
+    type ResponseMessage = RobotConnectionsResponse;
+}
+
+/// Request to create a new robot connection with configurations.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CreateRobotConnection {
+    // Connection details
+    pub name: String,
+    pub description: Option<String>,
+    pub ip_address: String,
+    pub port: u32,
+    // Motion defaults
+    pub default_speed: f64,
+    pub default_speed_type: String,
+    pub default_term_type: String,
+    pub default_w: f64,
+    pub default_p: f64,
+    pub default_r: f64,
+    // Jog defaults
+    pub default_cartesian_jog_speed: f64,
+    pub default_cartesian_jog_step: f64,
+    pub default_joint_jog_speed: f64,
+    pub default_joint_jog_step: f64,
+    pub default_rotation_jog_speed: f64,
+    pub default_rotation_jog_step: f64,
+    // Initial configuration
+    pub configuration: NewRobotConfiguration,
+}
+
+impl RequestMessage for CreateRobotConnection {
+    type ResponseMessage = CreateRobotConnectionResponse;
+}
+
+/// Response for creating a robot connection.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CreateRobotConnectionResponse {
+    pub robot_id: i64,
+    pub success: bool,
+    pub error: Option<String>,
+}
 
 /// Request to connect to a robot.
 /// Can either provide a saved connection_id or direct connection details.
@@ -585,32 +753,54 @@ pub struct RotationJogCommand {
     pub speed: f64,
 }
 
-// Program Management
+// Simple motion commands for Command Composer
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CreateProgram {
-    pub name: String,
-    pub description: Option<String>,
+pub struct JogRobot {
+    pub axis: JogAxis,
+    pub distance: f32,
+    pub speed: f32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct UpdateProgram {
-    pub program_id: i64,
-    pub name: Option<String>,
-    pub description: Option<String>,
+pub struct MoveLinear {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub w: f32,
+    pub p: f32,
+    pub r: f32,
+    pub speed: f32,
+    pub uframe: Option<u8>,
+    pub utool: Option<u8>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct DeleteProgram {
-    pub program_id: i64,
+pub struct MoveJoint {
+    pub j1: f32,
+    pub j2: f32,
+    pub j3: f32,
+    pub j4: f32,
+    pub j5: f32,
+    pub j6: f32,
+    pub speed: f32,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct MoveRelative {
+    pub dx: f32,
+    pub dy: f32,
+    pub dz: f32,
+    pub dw: f32,
+    pub dp: f32,
+    pub dr: f32,
+    pub speed: f32,
+}
+
+// Program Execution (defined with RequestMessage impls above for CRUD types)
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct LoadProgram {
     pub program_id: i64,
 }
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct UnloadProgram;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StartProgram {
@@ -626,47 +816,126 @@ pub struct ResumeProgram;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StopProgram;
 
-// CSV Upload
+// Frame/Tool Management
+
+/// Request to get the currently active frame and tool numbers.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct UploadCsv {
-    pub program_id: i64,
-    pub csv_content: String,
+pub struct GetActiveFrameTool;
+
+/// Response for GetActiveFrameTool.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GetActiveFrameToolResponse {
+    pub uframe: i32,
+    pub utool: i32,
 }
 
-// Frame/Tool Management
+impl RequestMessage for GetActiveFrameTool {
+    type ResponseMessage = GetActiveFrameToolResponse;
+}
+
+/// Request to set the active frame and tool numbers.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SetActiveFrameTool {
     pub uframe: i32,
     pub utool: i32,
 }
 
+/// Response for SetActiveFrameTool.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SetActiveFrameToolResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for SetActiveFrameTool {
+    type ResponseMessage = SetActiveFrameToolResponse;
+}
+
+/// Request to read frame data from the robot.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GetFrameData {
     pub frame_number: i32,
 }
 
+impl RequestMessage for GetFrameData {
+    type ResponseMessage = FrameDataResponse;
+}
+
+/// Request to write frame data to the robot.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WriteFrameData {
+    pub frame_number: i32,
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub w: f64,
+    pub p: f64,
+    pub r: f64,
+}
+
+/// Response for WriteFrameData.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WriteFrameDataResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for WriteFrameData {
+    type ResponseMessage = WriteFrameDataResponse;
+}
+
+/// Request to read tool data from the robot.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GetToolData {
     pub tool_number: i32,
 }
 
-// Robot Connection Management
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CreateRobotConnection {
-    pub name: String,
-    pub description: Option<String>,
-    pub ip_address: String,
-    pub port: u32,
-    pub configurations: Vec<NewRobotConfigurationDto>,
+impl RequestMessage for GetToolData {
+    type ResponseMessage = ToolDataResponse;
 }
 
+/// Request to write tool data to the robot.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WriteToolData {
+    pub tool_number: i32,
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub w: f64,
+    pub p: f64,
+    pub r: f64,
+}
+
+/// Response for WriteToolData.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WriteToolDataResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for WriteToolData {
+    type ResponseMessage = WriteToolDataResponse;
+}
+
+// Robot Connection Management - CreateRobotConnection is defined above with RequestMessage impl
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct UpdateRobotConnection {
     pub id: i64,
     pub name: Option<String>,
     pub description: Option<String>,
     pub ip_address: Option<String>,
-    pub port: Option<u32>,
+    pub port: Option<i32>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateRobotConnectionResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for UpdateRobotConnection {
+    type ResponseMessage = UpdateRobotConnectionResponse;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -675,8 +944,110 @@ pub struct DeleteRobotConnection {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DeleteRobotConnectionResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for DeleteRobotConnection {
+    type ResponseMessage = DeleteRobotConnectionResponse;
+}
+
+/// Request to get configurations for a specific robot.
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GetRobotConfigurations {
     pub robot_connection_id: i64,
+}
+
+impl RequestMessage for GetRobotConfigurations {
+    type ResponseMessage = RobotConfigurationsResponse;
+}
+
+/// Request to create a new configuration for a robot.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CreateConfiguration {
+    pub robot_connection_id: i64,
+    pub name: String,
+    pub is_default: bool,
+    pub u_frame_number: i32,
+    pub u_tool_number: i32,
+    pub front: i32,
+    pub up: i32,
+    pub left: i32,
+    pub flip: i32,
+    pub turn4: i32,
+    pub turn5: i32,
+    pub turn6: i32,
+}
+
+impl RequestMessage for CreateConfiguration {
+    type ResponseMessage = CreateConfigurationResponse;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CreateConfigurationResponse {
+    pub success: bool,
+    pub configuration_id: i64,
+    pub error: Option<String>,
+}
+
+/// Request to update an existing configuration.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateConfiguration {
+    pub id: i64,
+    pub name: Option<String>,
+    pub is_default: Option<bool>,
+    pub u_frame_number: Option<i32>,
+    pub u_tool_number: Option<i32>,
+    pub front: Option<i32>,
+    pub up: Option<i32>,
+    pub left: Option<i32>,
+    pub flip: Option<i32>,
+    pub turn4: Option<i32>,
+    pub turn5: Option<i32>,
+    pub turn6: Option<i32>,
+}
+
+impl RequestMessage for UpdateConfiguration {
+    type ResponseMessage = UpdateConfigurationResponse;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateConfigurationResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+/// Request to delete a configuration.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DeleteConfiguration {
+    pub id: i64,
+}
+
+impl RequestMessage for DeleteConfiguration {
+    type ResponseMessage = DeleteConfigurationResponse;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DeleteConfigurationResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+/// Request to set a configuration as the default for its robot.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SetDefaultConfiguration {
+    pub id: i64,
+}
+
+impl RequestMessage for SetDefaultConfiguration {
+    type ResponseMessage = SetDefaultConfigurationResponse;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SetDefaultConfigurationResponse {
+    pub success: bool,
+    pub error: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -721,13 +1092,13 @@ pub struct ProgramDetailResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RobotConnectionsResponse {
-    pub connections: Vec<RobotConnectionDto>,
+    pub connections: Vec<RobotConnection>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RobotConfigurationsResponse {
     pub robot_id: i64,
-    pub configurations: Vec<RobotConfigurationDto>,
+    pub configurations: Vec<RobotConfiguration>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -775,32 +1146,280 @@ pub enum CommandType {
     System, // Initialize, Reset, Abort
 }
 
+// ============================================================================
 // I/O Messages
+// ============================================================================
+
+// --- Digital Input (Read Only) ---
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ReadDin {
-    pub index: i32,
+    pub port_number: u16,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DinValueResponse {
+    pub port_number: u16,
+    pub port_value: bool,
+}
+
+impl RequestMessage for ReadDin {
+    type ResponseMessage = DinValueResponse;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ReadDinBatch {
+    pub port_numbers: Vec<u16>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DinBatchResponse {
+    pub values: Vec<(u16, bool)>,
+}
+
+impl RequestMessage for ReadDinBatch {
+    type ResponseMessage = DinBatchResponse;
+}
+
+// --- Digital Output (Read/Write) ---
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WriteDout {
-    pub index: i32,
-    pub value: bool,
+    pub port_number: u16,
+    pub port_value: bool,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DoutValueResponse {
+    pub port_number: u16,
+    pub port_value: bool,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for WriteDout {
+    type ResponseMessage = DoutValueResponse;
+}
+
+// --- Analog Input (Read Only) ---
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ReadAin {
-    pub index: i32,
+    pub port_number: u16,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AinValueResponse {
+    pub port_number: u16,
+    pub port_value: f64,
+}
+
+impl RequestMessage for ReadAin {
+    type ResponseMessage = AinValueResponse;
+}
+
+// --- Analog Output (Read/Write) ---
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WriteAout {
-    pub index: i32,
-    pub value: f64,
+    pub port_number: u16,
+    pub port_value: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct IoValueResponse {
-    pub io_type: String,
-    pub index: i32,
-    pub value: String, // Serialized value
+pub struct AoutValueResponse {
+    pub port_number: u16,
+    pub port_value: f64,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for WriteAout {
+    type ResponseMessage = AoutValueResponse;
+}
+
+// --- Group Input (Read Only) ---
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ReadGin {
+    pub port_number: u16,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GinValueResponse {
+    pub port_number: u16,
+    pub port_value: u32,
+}
+
+impl RequestMessage for ReadGin {
+    type ResponseMessage = GinValueResponse;
+}
+
+// --- Group Output (Read/Write) ---
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WriteGout {
+    pub port_number: u16,
+    pub port_value: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GoutValueResponse {
+    pub port_number: u16,
+    pub port_value: u32,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for WriteGout {
+    type ResponseMessage = GoutValueResponse;
+}
+
+// --- I/O Configuration ---
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GetIoConfig {
+    pub robot_connection_id: i64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct IoConfigResponse {
+    pub configs: Vec<IoDisplayConfig>,
+}
+
+impl RequestMessage for GetIoConfig {
+    type ResponseMessage = IoConfigResponse;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateIoConfig {
+    pub robot_connection_id: i64,
+    pub configs: Vec<IoDisplayConfig>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateIoConfigResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for UpdateIoConfig {
+    type ResponseMessage = UpdateIoConfigResponse;
+}
+
+// ============================================================================
+// Settings Messages
+// ============================================================================
+
+// Note: RobotSettings is already defined above
+
+/// Get current settings.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct GetSettings;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SettingsResponse {
+    pub settings: RobotSettings,
+}
+
+impl RequestMessage for GetSettings {
+    type ResponseMessage = SettingsResponse;
+}
+
+/// Update settings.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateSettings {
+    pub default_w: f64,
+    pub default_p: f64,
+    pub default_r: f64,
+    pub default_speed: f64,
+    pub default_term_type: String,
+    pub default_uframe: i32,
+    pub default_utool: i32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateSettingsResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for UpdateSettings {
+    type ResponseMessage = UpdateSettingsResponse;
+}
+
+/// Reset the database.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ResetDatabase;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ResetDatabaseResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for ResetDatabase {
+    type ResponseMessage = ResetDatabaseResponse;
+}
+
+/// Get connection status.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct GetConnectionStatus;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ConnectionStatusResponse {
+    pub connected: bool,
+    pub robot_name: Option<String>,
+    pub ip_address: Option<String>,
+    pub port: Option<i32>,
+}
+
+impl RequestMessage for GetConnectionStatus {
+    type ResponseMessage = ConnectionStatusResponse;
+}
+
+/// Get execution state.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct GetExecutionState;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExecutionStateResponse {
+    pub status: String,
+    pub current_line: Option<usize>,
+    pub total_lines: Option<usize>,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for GetExecutionState {
+    type ResponseMessage = ExecutionStateResponse;
+}
+
+/// Get active jog settings.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct GetActiveJogSettings;
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ActiveJogSettingsResponse {
+    pub cartesian_jog_speed: f64,
+    pub cartesian_jog_step: f64,
+    pub joint_jog_speed: f64,
+    pub joint_jog_step: f64,
+    pub rotation_jog_speed: f64,
+    pub rotation_jog_step: f64,
+}
+
+impl RequestMessage for GetActiveJogSettings {
+    type ResponseMessage = ActiveJogSettingsResponse;
+}
+
+// Note: UpdateJogSettings is already defined above, just add RequestMessage impl
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateJogSettingsResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for UpdateJogSettings {
+    type ResponseMessage = UpdateJogSettingsResponse;
 }

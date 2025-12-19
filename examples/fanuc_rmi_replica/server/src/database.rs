@@ -365,6 +365,35 @@ impl DatabaseResource {
         Ok(configs)
     }
 
+    pub fn get_configuration(&self, config_id: i64) -> anyhow::Result<RobotConfiguration> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, robot_connection_id, name, is_default, u_frame_number, u_tool_number,
+                    front, up, left, flip, turn4, turn5, turn6
+             FROM robot_configurations WHERE id = ?"
+        )?;
+
+        let config = stmt.query_row([config_id], |row| {
+            Ok(RobotConfiguration {
+                id: row.get(0)?,
+                robot_connection_id: row.get(1)?,
+                name: row.get(2)?,
+                is_default: row.get::<_, i32>(3)? != 0,
+                u_frame_number: row.get(4)?,
+                u_tool_number: row.get(5)?,
+                front: row.get(6)?,
+                up: row.get(7)?,
+                left: row.get(8)?,
+                flip: row.get(9)?,
+                turn4: row.get(10)?,
+                turn5: row.get(11)?,
+                turn6: row.get(12)?,
+            })
+        })?;
+
+        Ok(config)
+    }
+
     pub fn create_configuration(&self, req: &CreateConfiguration) -> anyhow::Result<i64> {
         let conn = self.0.lock().unwrap();
 

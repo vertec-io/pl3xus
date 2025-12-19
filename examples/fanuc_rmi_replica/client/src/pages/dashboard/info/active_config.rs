@@ -1,8 +1,8 @@
 //! Active Configuration Panel - Shows loaded config and arm config.
 
 use leptos::prelude::*;
-use pl3xus_client::use_sync_component;
-use fanuc_replica_types::{ConnectionState, ActiveConfigState, RobotConfiguration};
+use pl3xus_client::{use_sync_component, use_request};
+use fanuc_replica_types::{ConnectionState, ActiveConfigState, RobotConfiguration, GetRobotConfigurations, LoadConfiguration};
 
 /// Active Configuration Panel - Shows loaded config and arm config (read-only display)
 #[component]
@@ -16,8 +16,39 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
             .unwrap_or(false)
     });
 
-    // TODO: Get robot_configs from a request once ListConfigurations is wired up
+    // Get robot configurations from request
+    let (get_configs, configs_response) = use_request::<GetRobotConfigurations>();
+    let (load_config, _) = use_request::<LoadConfiguration>();
+    let load_config = StoredValue::new(load_config);
     let robot_configs: RwSignal<Vec<RobotConfiguration>> = RwSignal::new(Vec::new());
+
+    // Load configurations when robot connects
+    let (has_loaded, set_has_loaded) = signal(false);
+    Effect::new({
+        let get_configs = get_configs.clone();
+        move |_| {
+            if robot_connected.get() && !has_loaded.get() {
+                // Get the active connection ID from connection state
+                if let Some(conn_state) = connection_state.get().values().next() {
+                    if let Some(conn_id) = conn_state.active_connection_id {
+                        set_has_loaded.set(true);
+                        get_configs(GetRobotConfigurations { robot_connection_id: conn_id });
+                    }
+                }
+            } else if !robot_connected.get() {
+                set_has_loaded.set(false);
+                robot_configs.set(Vec::new());
+            }
+        }
+    });
+
+    // Update robot_configs when response arrives
+    Effect::new(move |_| {
+        let state = configs_response.get();
+        if let Some(response) = state.data {
+            robot_configs.set(response.configurations);
+        }
+    });
 
     // Get active config values
     let config = Memo::new(move |_| {
@@ -46,8 +77,11 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
                             <label class="text-[9px] text-[#666666] w-16">"Loaded From:"</label>
                             <select
                                 class="flex-1 bg-[#111111] border border-[#ffffff15] rounded px-2 py-1 text-[10px] text-white"
-                                on:change=move |_ev| {
-                                    // TODO: ws.load_configuration(id)
+                                on:change=move |ev| {
+                                    let value = event_target_value(&ev);
+                                    if let Ok(id) = value.parse::<i64>() {
+                                        load_config.get_value()(LoadConfiguration { configuration_id: id });
+                                    }
                                 }
                             >
                                 {move || robot_configs.get().into_iter().map(|cfg| {
@@ -66,7 +100,9 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
                                 <button
                                     class="px-2 py-1 text-[9px] bg-[#ffaa0020] text-[#ffaa00] border border-[#ffaa00] rounded hover:bg-[#ffaa0030]"
                                     on:click=move |_| {
-                                        // TODO: ws.load_configuration to revert
+                                        if let Some(id) = config.get().loaded_from_id {
+                                            load_config.get_value()(LoadConfiguration { configuration_id: id });
+                                        }
                                     }
                                     title="Revert to saved configuration"
                                 >

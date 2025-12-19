@@ -70,13 +70,13 @@ pub fn JointJogPanel() -> impl IntoView {
                     </svg>
                     "Joint Jog"
                 </h3>
-                // Step and Speed inputs
+                // Step and Speed inputs (text inputs for better decimal/negative handling)
                 <div class="flex items-center gap-2">
                     <div class="flex items-center gap-1">
                         <label class="text-[8px] text-[#666666]">"Step:"</label>
                         <input
-                            type="number"
-                            step="0.1"
+                            type="text"
+                            inputmode="decimal"
                             class="w-12 bg-[#111111] border border-[#ffffff08] rounded px-1 py-0.5 text-white text-[9px] focus:border-[#00d9ff] focus:outline-none text-center"
                             prop:value=move || step_str.get()
                             on:input=move |ev| set_step_str.set(event_target_value(&ev))
@@ -86,8 +86,8 @@ pub fn JointJogPanel() -> impl IntoView {
                     <div class="flex items-center gap-1">
                         <label class="text-[8px] text-[#666666]">"Speed:"</label>
                         <input
-                            type="number"
-                            step="1"
+                            type="text"
+                            inputmode="decimal"
                             class="w-12 bg-[#111111] border border-[#ffffff08] rounded px-1 py-0.5 text-white text-[9px] focus:border-[#00d9ff] focus:outline-none text-center"
                             prop:value=move || speed_str.get()
                             on:input=move |ev| set_speed_str.set(event_target_value(&ev))

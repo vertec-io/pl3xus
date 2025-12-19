@@ -58,6 +58,9 @@ pub struct SyncContext {
     pub ready_state: Signal<ConnectionReadyState>,
     /// Last error that occurred
     pub last_error: Signal<Option<SyncError>>,
+    /// This client's own connection ID (set when server sends Welcome message)
+    /// Used to determine if we have control by comparing with EntityControl.client_id
+    pub my_connection_id: RwSignal<Option<pl3xus_common::ConnectionId>>,
     /// Function to send messages to the server
     send: Arc<dyn Fn(&[u8]) + Send + Sync>,
     /// Function to open the connection
@@ -130,6 +133,7 @@ impl SyncContext {
         Self {
             ready_state,
             last_error,
+            my_connection_id: RwSignal::new(None),
             send,
             open,
             close,
@@ -214,6 +218,13 @@ impl SyncContext {
             data,
         };
 
+        #[cfg(target_arch = "wasm32")]
+        leptos::logging::log!(
+            "[SyncContext::send] Sending message type: '{}' (hash: 0x{:016x})",
+            T::type_name(),
+            T::schema_hash()
+        );
+
         // Serialize the packet and send
         match bincode::serde::encode_to_vec(&packet, bincode::config::standard()) {
             Ok(bytes) => {
@@ -242,22 +253,30 @@ impl SyncContext {
     /// a SyncServerMessage. The message bytes are stored by type_name and routed
     /// to any active subscriptions.
     pub(crate) fn handle_incoming_message(&self, type_name: String, data: Vec<u8>) {
+        // Extract short name from full type name (e.g., "pl3xus_common::ControlResponse" -> "ControlResponse")
+        // This matches how SyncComponent::component_name() works
+        let short_name = type_name.rsplit("::").next().unwrap_or(&type_name).to_string();
+
         #[cfg(target_arch = "wasm32")]
         leptos::logging::log!(
-            "[SyncContext] Routing incoming message: type_name={}, data_len={}",
+            "[SyncContext] Routing incoming message: type_name={}, short_name={}, data_len={}",
             type_name,
+            short_name,
             data.len()
         );
 
-        // Check if we already have a signal for this type_name
-        if let Some(signal) = self.incoming_messages.get().get(&type_name) {
-            // Update existing signal
-            signal.set(data);
+        // Check if we already have a signal for this short_name
+        // Use get_untracked() to avoid reactive issues when called from Effects
+        if let Some(signal) = self.incoming_messages.get_untracked().get(&short_name).cloned() {
+            // Update existing signal - use update_untracked to avoid reactive loops
+            // Then manually notify subscribers
+            signal.update_untracked(|bytes| *bytes = data);
+            signal.notify();
         } else {
             // Create new signal and insert into map
             let new_signal = RwSignal::new(data);
             self.incoming_messages.update(|map| {
-                map.insert(type_name, new_signal);
+                map.insert(short_name, new_signal);
             });
         }
     }
@@ -842,21 +861,38 @@ impl SyncContext {
         let type_name = T::component_name();
         let (read, write) = signal(T::default());
 
-        // Create a local signal to track the raw bytes
+        // Get a reference to the incoming_messages signal
         let incoming_messages = self.incoming_messages;
-        let serialized_message = RwSignal::new(Vec::new());
 
-        // Effect to update serialized_message when new messages arrive
-        Effect::new(move |_| {
-            if let Some(bytes_signal) = incoming_messages.get().get(type_name) {
-                serialized_message.set(bytes_signal.get());
-            }
-        });
+        // Track the last bytes we processed to avoid duplicate processing
+        // Use StoredValue instead of RwSignal to avoid reactive issues
+        let last_bytes_hash = StoredValue::new(0u64);
 
-        // Effect to deserialize and update the typed signal
+        // Single effect that watches for new messages and deserializes them
         Effect::new(move |_| {
-            let bytes = serialized_message.get();
-            if !bytes.is_empty() {
+            // Get the current map (creates reactive dependency on the map itself)
+            let messages_map = incoming_messages.get();
+
+            // Check if we have a signal for this message type
+            if let Some(bytes_signal) = messages_map.get(type_name) {
+                // Get the bytes (creates reactive dependency on the signal)
+                let bytes = bytes_signal.get();
+
+                if bytes.is_empty() {
+                    return;
+                }
+
+                // Simple hash to detect if bytes changed
+                let bytes_hash = bytes.iter().fold(0u64, |acc, &b| acc.wrapping_add(b as u64).wrapping_mul(31));
+
+                // Skip if we already processed these exact bytes
+                if bytes_hash == last_bytes_hash.get_value() {
+                    return;
+                }
+
+                // Update the hash BEFORE processing to prevent loops
+                last_bytes_hash.set_value(bytes_hash);
+
                 match bincode::serde::decode_from_slice::<T, _>(&bytes, bincode::config::standard()) {
                     Ok((deserialized, _)) => {
                         #[cfg(target_arch = "wasm32")]
@@ -926,21 +962,38 @@ impl SyncContext {
         let store = Store::new(T::default());
         let store_clone = store.clone();
 
-        // Create a local signal to track the raw bytes
+        // Get a reference to the incoming_messages signal
         let incoming_messages = self.incoming_messages;
-        let serialized_message = RwSignal::new(Vec::new());
 
-        // Effect to update serialized_message when new messages arrive
-        Effect::new(move |_| {
-            if let Some(bytes_signal) = incoming_messages.get().get(type_name) {
-                serialized_message.set(bytes_signal.get());
-            }
-        });
+        // Track the last bytes we processed to avoid duplicate processing
+        // Use StoredValue instead of RwSignal to avoid reactive issues
+        let last_bytes_hash = StoredValue::new(0u64);
 
-        // Effect to deserialize and update the store
+        // Single effect that watches for new messages and deserializes them
         Effect::new(move |_| {
-            let bytes = serialized_message.get();
-            if !bytes.is_empty() {
+            // Get the current map (creates reactive dependency on the map itself)
+            let messages_map = incoming_messages.get();
+
+            // Check if we have a signal for this message type
+            if let Some(bytes_signal) = messages_map.get(type_name) {
+                // Get the bytes (creates reactive dependency on the signal)
+                let bytes = bytes_signal.get();
+
+                if bytes.is_empty() {
+                    return;
+                }
+
+                // Simple hash to detect if bytes changed
+                let bytes_hash = bytes.iter().fold(0u64, |acc, &b| acc.wrapping_add(b as u64).wrapping_mul(31));
+
+                // Skip if we already processed these exact bytes
+                if bytes_hash == last_bytes_hash.get_value() {
+                    return;
+                }
+
+                // Update the hash BEFORE processing to prevent loops
+                last_bytes_hash.set_value(bytes_hash);
+
                 match bincode::serde::decode_from_slice::<T, _>(&bytes, bincode::config::standard()) {
                     Ok((deserialized, _)) => {
                         #[cfg(target_arch = "wasm32")]

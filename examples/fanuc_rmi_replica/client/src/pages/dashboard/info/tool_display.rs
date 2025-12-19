@@ -2,7 +2,7 @@
 
 use leptos::prelude::*;
 use pl3xus_client::use_sync_component;
-use fanuc_replica_types::ConnectionState;
+use fanuc_replica_types::{ConnectionState, FrameToolDataState};
 use crate::pages::dashboard::context::WorkspaceContext;
 
 /// Multi Tool Display - Accordion showing detailed tool geometry for tools 1-10
@@ -10,6 +10,7 @@ use crate::pages::dashboard::context::WorkspaceContext;
 pub fn MultiToolDisplay() -> impl IntoView {
     let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let connection_state = use_sync_component::<ConnectionState>();
+    let frame_tool_data = use_sync_component::<FrameToolDataState>();
     let expanded_tools = ctx.expanded_tools;
 
     let robot_connected = Memo::new(move |_| {
@@ -18,10 +19,11 @@ pub fn MultiToolDisplay() -> impl IntoView {
             .unwrap_or(false)
     });
 
-    // TODO: Get tool data from server via request or sync component
-    // For now, use placeholder data
-    let tool_data = move |_tool_num: i32| -> (f64, f64, f64, f64, f64, f64) {
-        (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    // Get tool data from synced component
+    let get_ft_data = move || frame_tool_data.get().values().next().cloned().unwrap_or_default();
+    let tool_data = move |tool_num: i32| -> (f64, f64, f64, f64, f64, f64) {
+        let data = get_ft_data().get_tool(tool_num);
+        (data.x, data.y, data.z, data.w, data.p, data.r)
     };
 
     view! {

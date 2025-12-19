@@ -73,6 +73,7 @@ impl Display for ConnectionId {
 ///
 /// Used with `ExclusiveControlPlugin` on the server.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "ecs", derive(bevy::prelude::Message))]
 pub enum ControlRequest {
     /// Request to take control of the specified entity (entity.to_bits()).
     Take(u64),
@@ -81,8 +82,12 @@ pub enum ControlRequest {
 }
 
 /// Response to a control request.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "ecs", derive(bevy::prelude::Message))]
 pub enum ControlResponse {
+    /// No response yet (default state).
+    #[default]
+    None,
     /// Control was successfully taken.
     Taken,
     /// Control was successfully released.

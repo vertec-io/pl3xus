@@ -2,7 +2,7 @@
 
 use leptos::prelude::*;
 use pl3xus_client::use_sync_component;
-use fanuc_replica_types::ConnectionState;
+use fanuc_replica_types::{ConnectionState, FrameToolDataState};
 use crate::pages::dashboard::context::WorkspaceContext;
 
 /// Multi Frame Display - Accordion showing detailed frame data (X,Y,Z,W,P,R) for frames 0-9
@@ -10,6 +10,7 @@ use crate::pages::dashboard::context::WorkspaceContext;
 pub fn MultiFrameDisplay() -> impl IntoView {
     let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let connection_state = use_sync_component::<ConnectionState>();
+    let frame_tool_data = use_sync_component::<FrameToolDataState>();
     let expanded_frames = ctx.expanded_frames;
 
     let robot_connected = Memo::new(move |_| {
@@ -18,10 +19,11 @@ pub fn MultiFrameDisplay() -> impl IntoView {
             .unwrap_or(false)
     });
 
-    // TODO: Get frame data from server via request or sync component
-    // For now, use placeholder data
-    let frame_data = move |_frame_num: i32| -> (f64, f64, f64, f64, f64, f64) {
-        (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    // Get frame data from synced component
+    let get_ft_data = move || frame_tool_data.get().values().next().cloned().unwrap_or_default();
+    let frame_data = move |frame_num: i32| -> (f64, f64, f64, f64, f64, f64) {
+        let data = get_ft_data().get_frame(frame_num);
+        (data.x, data.y, data.z, data.w, data.p, data.r)
     };
 
     view! {

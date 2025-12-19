@@ -17,10 +17,14 @@ where
     let (list_programs, programs_state) = use_request::<ListPrograms>();
     let (selected_id, set_selected_id) = signal::<Option<i64>>(None);
     let (loading, set_loading) = signal(false);
+    let (has_loaded, set_has_loaded) = signal(false);
 
-    // Fetch programs on mount
+    // Fetch programs on mount - with guard to prevent infinite loop
     Effect::new(move |_| {
-        list_programs(ListPrograms);
+        if !has_loaded.get_untracked() {
+            set_has_loaded.set(true);
+            list_programs(ListPrograms);
+        }
     });
 
     // Get programs from state

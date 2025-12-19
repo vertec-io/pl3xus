@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use serde::Serialize;
 
-use pl3xus::{managers::Network, managers::NetworkProvider};
+use pl3xus::{managers::Network, managers::NetworkProvider, NetworkEvent};
 
 use crate::messages::{
     MutationResponse,
@@ -9,6 +9,7 @@ use crate::messages::{
     SyncClientMessage,
     SyncItem,
     SyncServerMessage,
+    WelcomeMessage,
 };
 use crate::registry::{
     ComponentChangeEvent,
@@ -24,7 +25,7 @@ use crate::registry::{
     ConflationQueue,
     short_type_name,
 };
-use crate::subscription::{broadcast_component_changes, cleanup_disconnected, handle_client_messages};
+use crate::subscription::{broadcast_component_changes, handle_client_messages};
 
 /// System set for sync-related systems so downstream apps can schedule around
 /// them if needed.
@@ -82,10 +83,12 @@ pub(crate) fn install<NP: NetworkProvider>(app: &mut App) {
             Update,
             handle_client_messages::<NP>.in_set(Pl3xusSyncSystems::Inbound),
         )
-        // Connection lifecycle -> cleanup subscriptions and mutation queue
+        // Send Welcome message to newly connected clients (must run before cleanup_disconnected
+        // since both read NetworkEvent and events can only be read once)
+        // We handle both Connected and Disconnected events in a single system now
         .add_systems(
             Update,
-            cleanup_disconnected.in_set(Pl3xusSyncSystems::Inbound),
+            handle_connection_events::<NP>.in_set(Pl3xusSyncSystems::Inbound),
         )
         // Process queued mutations: authorization + apply + MutationResponse
         .add_systems(
@@ -118,6 +121,53 @@ fn register_network_messages<NP: NetworkProvider>(app: &mut App) {
 
     app.register_network_message::<SyncClientMessage, NP>();
     app.register_network_message::<crate::messages::SyncServerMessage, NP>();
+}
+
+/// Handle connection events: send Welcome to new connections and cleanup disconnected ones.
+/// This combines both operations in a single system since NetworkEvent can only be read once.
+fn handle_connection_events<NP: NetworkProvider>(
+    net: Res<Network<NP>>,
+    mut network_events: MessageReader<NetworkEvent>,
+    subscriptions: Option<ResMut<SubscriptionManager>>,
+    mutations: Option<ResMut<MutationQueue>>,
+) {
+    let (mut subscriptions, mut mutations) = match (subscriptions, mutations) {
+        (Some(s), Some(m)) => (s, m),
+        _ => return,
+    };
+
+    for event in network_events.read() {
+        match event {
+            NetworkEvent::Connected(conn_id) => {
+                info!("[pl3xus_sync] Sending Welcome message to client {:?}", conn_id);
+                let welcome = SyncServerMessage::Welcome(WelcomeMessage {
+                    connection_id: *conn_id,
+                });
+                if let Err(e) = net.send(*conn_id, welcome) {
+                    warn!("[pl3xus_sync] Failed to send Welcome to {:?}: {:?}", conn_id, e);
+                }
+            }
+            NetworkEvent::Disconnected(connection_id) => {
+                info!("[pl3xus_sync] Connection disconnected: {:?}", connection_id);
+                // Remove all subscriptions for this connection
+                subscriptions.subscriptions.retain(|sub| {
+                    let keep = sub.connection_id != *connection_id;
+                    if !keep {
+                        info!("[pl3xus_sync] Removed subscription for {:?}", connection_id);
+                    }
+                    keep
+                });
+                // Remove pending mutations from this connection
+                let before_count = mutations.pending.len();
+                mutations
+                    .pending
+                    .retain(|m| m.connection_id != *connection_id);
+                let after_count = mutations.pending.len();
+                info!("[pl3xus_sync] Removed {} pending mutations for {:?}", before_count - after_count, connection_id);
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Drain the global mutation queue, run authorization, apply mutations and

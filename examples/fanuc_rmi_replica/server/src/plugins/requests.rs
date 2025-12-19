@@ -9,6 +9,7 @@ use pl3xus_websockets::WebSocketProvider;
 use fanuc_replica_types::*;
 
 use crate::database::DatabaseResource;
+use crate::plugins::connection::FanucRobot;
 
 pub struct RequestHandlerPlugin;
 
@@ -24,6 +25,7 @@ impl Plugin for RequestHandlerPlugin {
         app.listen_for_request_message::<UpdateConfiguration, WebSocketProvider>();
         app.listen_for_request_message::<DeleteConfiguration, WebSocketProvider>();
         app.listen_for_request_message::<SetDefaultConfiguration, WebSocketProvider>();
+        app.listen_for_request_message::<LoadConfiguration, WebSocketProvider>();
 
         // Register request listeners - Programs
         app.listen_for_request_message::<ListPrograms, WebSocketProvider>();
@@ -31,6 +33,11 @@ impl Plugin for RequestHandlerPlugin {
         app.listen_for_request_message::<CreateProgram, WebSocketProvider>();
         app.listen_for_request_message::<DeleteProgram, WebSocketProvider>();
         app.listen_for_request_message::<UploadCsv, WebSocketProvider>();
+        app.listen_for_request_message::<UnloadProgram, WebSocketProvider>();
+        app.listen_for_request_message::<StartProgram, WebSocketProvider>();
+        app.listen_for_request_message::<PauseProgram, WebSocketProvider>();
+        app.listen_for_request_message::<ResumeProgram, WebSocketProvider>();
+        app.listen_for_request_message::<StopProgram, WebSocketProvider>();
 
         // Register request listeners - Frame/Tool
         app.listen_for_request_message::<GetActiveFrameTool, WebSocketProvider>();
@@ -71,6 +78,7 @@ impl Plugin for RequestHandlerPlugin {
             handle_update_configuration,
             handle_delete_configuration,
             handle_set_default_configuration,
+            handle_load_configuration,
         ));
 
         // Add handler systems - Programs
@@ -80,6 +88,11 @@ impl Plugin for RequestHandlerPlugin {
             handle_create_program,
             handle_delete_program,
             handle_upload_csv,
+            handle_unload_program,
+            handle_start_program,
+            handle_pause_program,
+            handle_resume_program,
+            handle_stop_program,
         ));
 
         // Add handler systems - Frame/Tool
@@ -418,6 +431,60 @@ fn handle_set_default_configuration(
     }
 }
 
+/// Handle LoadConfiguration request - loads a configuration and updates the active config state.
+fn handle_load_configuration(
+    mut requests: MessageReader<Request<LoadConfiguration>>,
+    db: Option<Res<DatabaseResource>>,
+    mut robot_query: Query<&mut ActiveConfigState, With<FanucRobot>>,
+) {
+    for request in requests.read() {
+        let inner = request.get_request();
+        info!("📋 Handling LoadConfiguration for id={}", inner.configuration_id);
+
+        // Get the configuration from database
+        let result = db.as_ref()
+            .map(|db| db.get_configuration(inner.configuration_id))
+            .unwrap_or(Err(anyhow::anyhow!("Database not available")));
+
+        let response = match result {
+            Ok(config) => {
+                info!("✅ Loaded configuration id={}", inner.configuration_id);
+
+                // Update the ActiveConfigState on the robot entity
+                for mut active_config in robot_query.iter_mut() {
+                    active_config.loaded_from_id = Some(config.id);
+                    active_config.u_frame_number = config.u_frame_number;
+                    active_config.u_tool_number = config.u_tool_number;
+                    active_config.front = config.front;
+                    active_config.up = config.up;
+                    active_config.left = config.left;
+                    active_config.flip = config.flip;
+                    active_config.turn4 = config.turn4;
+                    active_config.turn5 = config.turn5;
+                    active_config.turn6 = config.turn6;
+                    active_config.changes_count = 0; // Reset changes count
+                }
+
+                LoadConfigurationResponse {
+                    success: true,
+                    error: None,
+                }
+            }
+            Err(e) => {
+                error!("❌ Failed to load configuration: {}", e);
+                LoadConfigurationResponse {
+                    success: false,
+                    error: Some(e.to_string()),
+                }
+            }
+        };
+
+        if let Err(e) = request.clone().respond(response) {
+            error!("Failed to send response: {:?}", e);
+        }
+    }
+}
+
 // ============================================================================
 // Programs CRUD Handlers
 // ============================================================================
@@ -638,6 +705,92 @@ fn parse_and_insert_csv(
     Ok(count)
 }
 
+/// Handle UnloadProgram request - unloads the currently loaded program.
+fn handle_unload_program(
+    mut requests: MessageReader<Request<UnloadProgram>>,
+) {
+    for request in requests.read() {
+        info!("📋 Handling UnloadProgram request");
+
+        // TODO: Clear loaded program state from server
+        // For now, just acknowledge success
+        let response = UnloadProgramResponse { success: true, error: None };
+
+        if let Err(e) = request.clone().respond(response) {
+            error!("Failed to send response: {:?}", e);
+        }
+    }
+}
+
+/// Handle StartProgram request - starts executing a program.
+fn handle_start_program(
+    mut requests: MessageReader<Request<StartProgram>>,
+) {
+    for request in requests.read() {
+        let inner = request.get_request();
+        info!("📋 Handling StartProgram for program_id={}", inner.program_id);
+
+        // TODO: Start program execution on robot
+        // For now, just acknowledge success
+        let response = StartProgramResponse { success: true, error: None };
+
+        if let Err(e) = request.clone().respond(response) {
+            error!("Failed to send response: {:?}", e);
+        }
+    }
+}
+
+/// Handle PauseProgram request - pauses program execution.
+fn handle_pause_program(
+    mut requests: MessageReader<Request<PauseProgram>>,
+) {
+    for request in requests.read() {
+        info!("📋 Handling PauseProgram request");
+
+        // TODO: Pause program execution on robot
+        // For now, just acknowledge success
+        let response = PauseProgramResponse { success: true, error: None };
+
+        if let Err(e) = request.clone().respond(response) {
+            error!("Failed to send response: {:?}", e);
+        }
+    }
+}
+
+/// Handle ResumeProgram request - resumes program execution.
+fn handle_resume_program(
+    mut requests: MessageReader<Request<ResumeProgram>>,
+) {
+    for request in requests.read() {
+        info!("📋 Handling ResumeProgram request");
+
+        // TODO: Resume program execution on robot
+        // For now, just acknowledge success
+        let response = ResumeProgramResponse { success: true, error: None };
+
+        if let Err(e) = request.clone().respond(response) {
+            error!("Failed to send response: {:?}", e);
+        }
+    }
+}
+
+/// Handle StopProgram request - stops program execution.
+fn handle_stop_program(
+    mut requests: MessageReader<Request<StopProgram>>,
+) {
+    for request in requests.read() {
+        info!("📋 Handling StopProgram request");
+
+        // TODO: Stop program execution on robot
+        // For now, just acknowledge success
+        let response = StopProgramResponse { success: true, error: None };
+
+        if let Err(e) = request.clone().respond(response) {
+            error!("Failed to send response: {:?}", e);
+        }
+    }
+}
+
 // ============================================================================
 // Frame/Tool Handlers
 // ============================================================================
@@ -665,10 +818,17 @@ fn handle_get_active_frame_tool(
 /// Handle SetActiveFrameTool request - sets active frame and tool on robot.
 fn handle_set_active_frame_tool(
     mut requests: MessageReader<Request<SetActiveFrameTool>>,
+    mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling SetActiveFrameTool: uframe={}, utool={}", inner.uframe, inner.utool);
+
+        // Update synced component so all clients get the active frame/tool
+        for mut ft_state in robots.iter_mut() {
+            ft_state.active_frame = inner.uframe;
+            ft_state.active_tool = inner.utool;
+        }
 
         // TODO: Send to connected robot driver when available
         // For now, just acknowledge success
@@ -680,18 +840,18 @@ fn handle_set_active_frame_tool(
     }
 }
 
-/// Handle GetFrameData request - reads frame data from robot.
+/// Handle GetFrameData request - reads frame data from robot and updates synced state.
 fn handle_get_frame_data(
     mut requests: MessageReader<Request<GetFrameData>>,
+    mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
 ) {
     for request in requests.read() {
         let frame_number = request.get_request().frame_number;
         info!("📋 Handling GetFrameData for frame {}", frame_number);
 
         // TODO: Read from connected robot driver when available
-        // For now, return mock data
-        let response = FrameDataResponse {
-            frame_number,
+        // For now, return mock data (zeros)
+        let frame_data = FrameToolData {
             x: 0.0,
             y: 0.0,
             z: 0.0,
@@ -700,19 +860,48 @@ fn handle_get_frame_data(
             r: 0.0,
         };
 
+        // Update synced component so all clients get the data
+        for mut ft_state in robots.iter_mut() {
+            ft_state.frames.insert(frame_number, frame_data.clone());
+        }
+
+        let response = FrameDataResponse {
+            frame_number,
+            x: frame_data.x,
+            y: frame_data.y,
+            z: frame_data.z,
+            w: frame_data.w,
+            p: frame_data.p,
+            r: frame_data.r,
+        };
+
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
         }
     }
 }
 
-/// Handle WriteFrameData request - writes frame data to robot.
+/// Handle WriteFrameData request - writes frame data to robot and updates synced state.
 fn handle_write_frame_data(
     mut requests: MessageReader<Request<WriteFrameData>>,
+    mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling WriteFrameData for frame {}", inner.frame_number);
+
+        // Update synced component
+        let frame_data = FrameToolData {
+            x: inner.x,
+            y: inner.y,
+            z: inner.z,
+            w: inner.w,
+            p: inner.p,
+            r: inner.r,
+        };
+        for mut ft_state in robots.iter_mut() {
+            ft_state.frames.insert(inner.frame_number, frame_data.clone());
+        }
 
         // TODO: Write to connected robot driver when available
         // For now, just acknowledge success
@@ -724,18 +913,18 @@ fn handle_write_frame_data(
     }
 }
 
-/// Handle GetToolData request - reads tool data from robot.
+/// Handle GetToolData request - reads tool data from robot and updates synced state.
 fn handle_get_tool_data(
     mut requests: MessageReader<Request<GetToolData>>,
+    mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
 ) {
     for request in requests.read() {
         let tool_number = request.get_request().tool_number;
         info!("📋 Handling GetToolData for tool {}", tool_number);
 
         // TODO: Read from connected robot driver when available
-        // For now, return mock data
-        let response = ToolDataResponse {
-            tool_number,
+        // For now, return mock data (zeros)
+        let tool_data = FrameToolData {
             x: 0.0,
             y: 0.0,
             z: 0.0,
@@ -744,19 +933,48 @@ fn handle_get_tool_data(
             r: 0.0,
         };
 
+        // Update synced component so all clients get the data
+        for mut ft_state in robots.iter_mut() {
+            ft_state.tools.insert(tool_number, tool_data.clone());
+        }
+
+        let response = ToolDataResponse {
+            tool_number,
+            x: tool_data.x,
+            y: tool_data.y,
+            z: tool_data.z,
+            w: tool_data.w,
+            p: tool_data.p,
+            r: tool_data.r,
+        };
+
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
         }
     }
 }
 
-/// Handle WriteToolData request - writes tool data to robot.
+/// Handle WriteToolData request - writes tool data to robot and updates synced state.
 fn handle_write_tool_data(
     mut requests: MessageReader<Request<WriteToolData>>,
+    mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling WriteToolData for tool {}", inner.tool_number);
+
+        // Update synced component
+        let tool_data = FrameToolData {
+            x: inner.x,
+            y: inner.y,
+            z: inner.z,
+            w: inner.w,
+            p: inner.p,
+            r: inner.r,
+        };
+        for mut ft_state in robots.iter_mut() {
+            ft_state.tools.insert(inner.tool_number, tool_data.clone());
+        }
 
         // TODO: Write to connected robot driver when available
         // For now, just acknowledge success

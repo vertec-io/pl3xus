@@ -144,6 +144,10 @@ pub fn SyncProvider(
 
     // Set up message handler
     // Use the same pattern as DevTools: watch raw_message with .with() instead of .get()
+    // Track last processed message hash to avoid duplicate processing
+    // Use StoredValue instead of RwSignal to avoid any reactive issues
+    let last_message_hash = StoredValue::new(0u64);
+
     Effect::new(move || {
         raw_message.with(|packet_opt| {
             #[cfg(target_arch = "wasm32")]
@@ -153,6 +157,30 @@ pub fn SyncProvider(
             );
 
             if let Some(packet) = packet_opt {
+                // Compute a simple hash of the packet to detect duplicates
+                let packet_hash = {
+                    let mut hash = 0u64;
+                    for byte in packet.type_name.bytes() {
+                        hash = hash.wrapping_add(byte as u64).wrapping_mul(31);
+                    }
+                    for byte in &packet.data {
+                        hash = hash.wrapping_add(*byte as u64).wrapping_mul(31);
+                    }
+                    hash
+                };
+
+                // Skip if we already processed this exact packet
+                let last_hash = last_message_hash.get_value();
+                if packet_hash == last_hash {
+                    #[cfg(target_arch = "wasm32")]
+                    leptos::logging::log!(
+                        "[SyncProvider] Skipping duplicate packet: type_name={}, hash=0x{:016x}",
+                        packet.type_name,
+                        packet_hash
+                    );
+                    return;
+                }
+                last_message_hash.set_value(packet_hash);
                 #[cfg(target_arch = "wasm32")]
                 leptos::logging::log!(
                     "[SyncProvider] Received NetworkPacket: type_name={}, data_len={}",
@@ -234,6 +262,12 @@ fn handle_server_message(
     last_error: &RwSignal<Option<SyncError>>,
 ) {
     match msg {
+        SyncServerMessage::Welcome(welcome) => {
+            // Store our connection ID so we can compare with EntityControl
+            #[cfg(target_arch = "wasm32")]
+            leptos::logging::log!("Received Welcome message with connection ID: {:?}", welcome.connection_id);
+            ctx.my_connection_id.set(Some(welcome.connection_id));
+        }
         SyncServerMessage::SyncBatch(batch) => {
             // Process each sync item in the batch
             for item in batch.items {

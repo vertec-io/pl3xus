@@ -1,6 +1,8 @@
 //! Program visual display - G-code style line-by-line view.
 
 use leptos::prelude::*;
+use pl3xus_client::use_request;
+use fanuc_replica_types::*;
 use crate::pages::dashboard::context::{WorkspaceContext, ProgramLine};
 use super::LoadProgramModal;
 
@@ -15,6 +17,20 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
     let is_running = ctx.program_running;
     let is_paused = ctx.program_paused;
     let (show_load_modal, set_show_load_modal) = signal(false);
+
+    // Request hooks for program control - store in StoredValue for use in multiple closures
+    let (start_program_fn, _) = use_request::<StartProgram>();
+    let (pause_program_fn, _) = use_request::<PauseProgram>();
+    let (resume_program_fn, _) = use_request::<ResumeProgram>();
+    let (stop_program_fn, _) = use_request::<StopProgram>();
+    let (unload_program_fn, _) = use_request::<UnloadProgram>();
+
+    // Store in StoredValue so they can be accessed from multiple closures
+    let start_program = StoredValue::new(start_program_fn);
+    let pause_program = StoredValue::new(pause_program_fn);
+    let resume_program = StoredValue::new(resume_program_fn);
+    let stop_program = StoredValue::new(stop_program_fn);
+    let unload_program = StoredValue::new(unload_program_fn);
 
     view! {
         <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] flex flex-col overflow-hidden">
@@ -45,8 +61,9 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             <button
                                 class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
                                 on:click=move |_| {
-                                    ctx.program_running.set(true);
-                                    ctx.executing_line.set(0);
+                                    if let Some(id) = loaded_id.get() {
+                                        start_program.with_value(|f| f(StartProgram { program_id: id }));
+                                    }
                                 }
                             >
                                 "▶ Run"
@@ -59,7 +76,9 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                                     view! {
                                         <button
                                             class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
-                                            on:click=move |_| ctx.program_paused.set(false)
+                                            on:click=move |_| {
+                                                resume_program.with_value(|f| f(ResumeProgram));
+                                            }
                                         >
                                             "▶ Resume"
                                         </button>
@@ -68,7 +87,9 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                                     view! {
                                         <button
                                             class="bg-[#f59e0b20] border border-[#f59e0b40] text-[#f59e0b] text-[8px] px-2 py-0.5 rounded hover:bg-[#f59e0b30]"
-                                            on:click=move |_| ctx.program_paused.set(true)
+                                            on:click=move |_| {
+                                                pause_program.with_value(|f| f(PauseProgram));
+                                            }
                                         >
                                             "⏸ Pause"
                                         </button>
@@ -81,9 +102,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             <button
                                 class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430]"
                                 on:click=move |_| {
-                                    ctx.program_running.set(false);
-                                    ctx.program_paused.set(false);
-                                    ctx.executing_line.set(-1);
+                                    stop_program.with_value(|f| f(StopProgram));
                                 }
                             >
                                 "■ Stop"
@@ -95,9 +114,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                         <button
                             class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430] flex items-center gap-1"
                             on:click=move |_| {
-                                ctx.loaded_program_id.set(None);
-                                ctx.loaded_program_name.set(None);
-                                ctx.program_lines.set(Vec::new());
+                                unload_program.with_value(|f| f(UnloadProgram));
                             }
                             title="Unload program"
                         >

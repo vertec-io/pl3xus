@@ -5,10 +5,11 @@ use std::sync::Arc;
 use leptos::prelude::*;
 use leptos_router::components::Router;
 
-use pl3xus_client::{ClientTypeRegistry, SyncProvider, EntityControl};
+use pl3xus_client::{ClientTypeRegistry, SyncProvider, EntityControl, ControlResponse};
 use fanuc_replica_types::*;
 
-use crate::layout::{DesktopLayout, FloatingJogControls, FloatingIOStatus};
+use crate::components::ToastProvider;
+use crate::layout::{DesktopLayout, FloatingJogControls, FloatingIOStatus, ControlResponseHandler};
 
 /// Build the client type registry with all synced components.
 fn build_registry() -> Arc<ClientTypeRegistry> {
@@ -22,6 +23,7 @@ fn build_registry() -> Arc<ClientTypeRegistry> {
         .register::<ConnectionState>()
         .register::<ActiveConfigState>()
         .register::<JogSettingsState>()
+        .register::<ControlResponse>()
         .build()
 }
 
@@ -32,14 +34,18 @@ pub fn App() -> impl IntoView {
     let ws_url = "ws://127.0.0.1:8083/sync";
 
     view! {
-        <SyncProvider url=ws_url.to_string() registry=registry auto_connect=true>
-            <Router>
-                <DesktopLayout/>
-            </Router>
-            // Floating controls (rendered outside normal flow)
-            <FloatingJogControls/>
-            <FloatingIOStatus/>
-        </SyncProvider>
+        <ToastProvider>
+            <SyncProvider url=ws_url.to_string() registry=registry auto_connect=true>
+                <Router>
+                    <DesktopLayout/>
+                </Router>
+                // Floating controls (rendered outside normal flow)
+                <FloatingJogControls/>
+                <FloatingIOStatus/>
+                // Headless component to handle control responses
+                <ControlResponseHandler/>
+            </SyncProvider>
+        </ToastProvider>
     }
 }
 

@@ -5,7 +5,7 @@
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
 
-use pl3xus_client::{use_sync_component, use_sync_context, use_sync_connection, use_request, ControlRequest, EntityControl, ConnectionReadyState};
+use pl3xus_client::{use_sync_component, use_sync_context, use_sync_connection, use_request, use_sync_message, ControlRequest, ControlResponse, EntityControl, ConnectionReadyState};
 use fanuc_replica_types::*;
 
 /// Top bar with connection status, robot info, and settings.
@@ -345,7 +345,7 @@ fn WebSocketDropdown(
 /// Quick Settings button with popup - focused on robot connection switching
 #[component]
 fn QuickSettingsButton() -> impl IntoView {
-    let _ctx = use_sync_context();
+    let ctx = use_sync_context();
     let _navigate = use_navigate();
     let (fetch_robots, robots_state) = use_request::<ListRobotConnections>();
     let connection_state = use_sync_component::<ConnectionState>();
@@ -382,9 +382,11 @@ fn QuickSettingsButton() -> impl IntoView {
             .and_then(|s| s.active_connection_id)
     };
 
+    // Check if THIS client has control by comparing EntityControl.client_id with our own connection ID
     let has_control = move || {
+        let my_id = ctx.my_connection_id.get();
         control_state.get().values().next()
-            .map(|s| s.client_id.id != 0)
+            .map(|s| Some(s.client_id) == my_id)
             .unwrap_or(false)
     };
 
@@ -571,6 +573,7 @@ fn SavedConnectionsList(
                     let conn_name = conn.name.clone();
                     let conn_addr = format!("{}:{}", conn.ip_address, conn.port);
                     let is_active = move || active_connection_id.get() == Some(conn_id);
+                    // Require control to connect - control = ownership of the apparatus/system
                     let can_connect = move || has_control.get() && !is_active();
                     let ctx = ctx.clone();
 
@@ -604,7 +607,7 @@ fn SavedConnectionsList(
                                         </button>
                                     }.into_any()
                                 } else {
-                                    // Show connect button for other connections
+                                    // Show connect button for other connections - requires control
                                     view! {
                                         <button
                                             class="text-[8px] px-2 py-0.5 bg-[#00d9ff20] text-[#00d9ff] rounded hover:bg-[#00d9ff30] disabled:opacity-50 disabled:cursor-not-allowed"
@@ -696,16 +699,41 @@ fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
 #[component]
 fn ControlButton() -> impl IntoView {
     let ctx = use_sync_context();
+    let toast = crate::components::use_toast();
     let control_state = use_sync_component::<EntityControl>();
     let connection_state = use_sync_component::<ConnectionState>();
+    let robot_position = use_sync_component::<RobotPosition>();
+
+    // Debug: show connection state count in console on render
+    Effect::new(move |_| {
+        let state = connection_state.get();
+        leptos::logging::log!("[ControlButton::Effect] ConnectionState has {} entries", state.len());
+        for (k, v) in state.iter() {
+            leptos::logging::log!("[ControlButton::Effect] Entity bits: {}, connected: {}", k, v.robot_connected);
+        }
+        let pos = robot_position.get();
+        leptos::logging::log!("[ControlButton::Effect] RobotPosition has {} entries", pos.len());
+        for (k, v) in pos.iter() {
+            leptos::logging::log!("[ControlButton::Effect] Entity bits: {}, x: {}", k, v.x);
+        }
+    });
 
     let robot_entity_bits = move || -> Option<u64> {
-        connection_state.get().keys().next().copied()
+        // Try ConnectionState first, then fall back to RobotPosition
+        let state = connection_state.get();
+        if let Some(k) = state.keys().next() {
+            return Some(*k);
+        }
+        // Fallback: use RobotPosition keys
+        let pos = robot_position.get();
+        pos.keys().next().copied()
     };
 
+    // Check if THIS client has control by comparing EntityControl.client_id with our own connection ID
     let has_control = move || {
+        let my_id = ctx.my_connection_id.get();
         control_state.get().values().next()
-            .map(|s| s.client_id.id != 0)
+            .map(|s| Some(s.client_id) == my_id)
             .unwrap_or(false)
     };
 
@@ -718,16 +746,24 @@ fn ControlButton() -> impl IntoView {
             }
             on:click={
                 let ctx = ctx.clone();
+                let toast = toast.clone();
                 move |_| {
+                    leptos::logging::log!("[ControlButton] Button clicked");
                     let Some(entity_bits) = robot_entity_bits() else {
-                        log::warn!("No robot entity found to control");
+                        leptos::logging::log!("[ControlButton] No robot entity bits found");
+                        toast.error("No robot connected to control");
                         return;
                     };
+                    leptos::logging::log!("[ControlButton] Entity bits: {}", entity_bits);
 
                     if has_control() {
+                        leptos::logging::log!("[ControlButton] Releasing control");
                         ctx.send(ControlRequest::Release(entity_bits));
+                        toast.info("Control released");
                     } else {
+                        leptos::logging::log!("[ControlButton] Requesting control");
                         ctx.send(ControlRequest::Take(entity_bits));
+                        toast.success("Control requested");
                     }
                 }
             }
@@ -754,4 +790,59 @@ fn ControlButton() -> impl IntoView {
             }}
         </button>
     }
+}
+
+/// Component that listens for ControlResponse messages and shows appropriate feedback.
+///
+/// This is a "headless" component that doesn't render anything visible, but handles
+/// the server's response to control requests.
+#[component]
+pub fn ControlResponseHandler() -> impl IntoView {
+    let toast = crate::components::use_toast();
+    let control_response = use_sync_message::<ControlResponse>();
+
+    // Track the last response we processed to avoid duplicate toasts
+    // Use StoredValue instead of RwSignal to avoid any reactive issues
+    let last_processed = StoredValue::new(ControlResponse::None);
+
+    // Effect to handle control responses
+    Effect::new(move |_| {
+        let response = control_response.get();
+
+        // Skip the None (default) state
+        if response == ControlResponse::None {
+            return;
+        }
+
+        // Check last processed WITHOUT creating a reactive dependency
+        let last = last_processed.get_value();
+        if response == last {
+            return;
+        }
+
+        // Update last processed first to avoid duplicate processing
+        last_processed.set_value(response.clone());
+
+        match &response {
+            ControlResponse::None => {}
+            ControlResponse::Taken => {
+                toast.success("You now have control of the robot");
+            }
+            ControlResponse::Released => {
+                toast.info("Control released");
+            }
+            ControlResponse::AlreadyControlled { by_client } => {
+                toast.warning(format!("Control denied - robot is controlled by client {}", by_client));
+            }
+            ControlResponse::NotControlled => {
+                toast.info("Robot is not currently controlled");
+            }
+            ControlResponse::Error(msg) => {
+                toast.error(format!("Control error: {}", msg));
+            }
+        }
+    });
+
+    // This component doesn't render anything visible
+    view! {}
 }

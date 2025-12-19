@@ -415,7 +415,7 @@ fn register_message_internal<T: Pl3xusMessage, NP: NetworkProvider>(app: &mut Ap
     let schema_hash = T::schema_hash();
     let short_name = T::short_name();
 
-    debug!("Registered network message: {} (short: {}, hash: 0x{:016x})",
+    info!("Registered network message: {} (short: {}, hash: 0x{:016x})",
            message_name, short_name, schema_hash);
 
     // Check for duplicate registration by type_name

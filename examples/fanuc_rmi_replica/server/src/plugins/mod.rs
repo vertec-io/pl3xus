@@ -4,11 +4,14 @@
 //! - `connection`: Robot connection state machine
 //! - `sync`: Robot state synchronization from driver
 //! - `requests`: Request/Response handlers for database queries
+//! - `polling`: Periodic robot status polling
 
 pub mod connection;
 pub mod sync;
 pub mod requests;
+pub mod polling;
 
 pub use connection::RobotConnectionPlugin;
 pub use sync::RobotSyncPlugin;
 pub use requests::RequestHandlerPlugin;
+pub use polling::RobotPollingPlugin;

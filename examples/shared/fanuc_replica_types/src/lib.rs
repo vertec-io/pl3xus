@@ -77,11 +77,21 @@ pub struct RobotStatus {
     pub in_motion: bool,
     pub speed_override: u8,
     pub error_message: Option<String>,
+    /// Whether the TP program is initialized and ready for motion commands.
+    /// This must be true to send motion commands. False after abort/disconnect.
+    pub tp_program_initialized: bool,
 }
 
 impl Default for RobotStatus {
     fn default() -> Self {
-        Self { servo_ready: true, tp_enabled: false, in_motion: false, speed_override: 100, error_message: None }
+        Self {
+            servo_ready: true,
+            tp_enabled: false,
+            in_motion: false,
+            speed_override: 100,
+            error_message: None,
+            tp_program_initialized: false,
+        }
     }
 }
 
@@ -189,12 +199,87 @@ pub enum ConsoleMsgType {
     Config,
 }
 
-/// I/O Status
+/// I/O Status - contains all I/O types
+/// Digital I/O: Each u16 represents 16 bits (ports 1-16, 17-32, etc.)
+/// Analog I/O: HashMap of port number to value
+/// Group I/O: HashMap of port number to value
 #[cfg_attr(feature = "server", derive(Component))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct IoStatus {
     pub digital_inputs: Vec<u16>,
     pub digital_outputs: Vec<u16>,
+    pub analog_inputs: std::collections::HashMap<u16, f64>,
+    pub analog_outputs: std::collections::HashMap<u16, f64>,
+    pub group_inputs: std::collections::HashMap<u16, u32>,
+    pub group_outputs: std::collections::HashMap<u16, u32>,
+}
+
+/// I/O display configuration state - synced component.
+/// Stores display names and visibility settings for I/O ports.
+/// Key: (io_type, io_index) where io_type is "DIN", "DOUT", "AIN", "AOUT", "GIN", "GOUT"
+#[cfg_attr(feature = "server", derive(Component))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct IoConfigState {
+    pub configs: std::collections::HashMap<(String, i32), IoDisplayConfig>,
+}
+
+impl IoConfigState {
+    /// Get display name for an I/O port, returns port number as string if not configured.
+    pub fn get_display_name(&self, io_type: &str, port: u16) -> String {
+        if let Some(cfg) = self.configs.get(&(io_type.to_string(), port as i32)) {
+            if let Some(ref name) = cfg.display_name {
+                return name.clone();
+            }
+        }
+        port.to_string()
+    }
+
+    /// Check if a port is visible (defaults to true if not configured).
+    pub fn is_port_visible(&self, io_type: &str, port: u16) -> bool {
+        if let Some(cfg) = self.configs.get(&(io_type.to_string(), port as i32)) {
+            return cfg.is_visible;
+        }
+        true
+    }
+}
+
+/// Frame/Tool data state - synced component.
+/// Stores all frame (1-9) and tool (1-10) data read from the robot.
+/// Also tracks active frame/tool indices.
+#[cfg_attr(feature = "server", derive(Component))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct FrameToolDataState {
+    /// Active user frame (0-9)
+    pub active_frame: i32,
+    /// Active user tool (1-10)
+    pub active_tool: i32,
+    /// Frame data: key is frame number (1-9), value is (x, y, z, w, p, r)
+    pub frames: std::collections::HashMap<i32, FrameToolData>,
+    /// Tool data: key is tool number (1-10), value is (x, y, z, w, p, r)
+    pub tools: std::collections::HashMap<i32, FrameToolData>,
+}
+
+/// Frame or tool position/orientation data.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct FrameToolData {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub w: f64,
+    pub p: f64,
+    pub r: f64,
+}
+
+impl FrameToolDataState {
+    /// Get frame data by number, returns zeros if not loaded.
+    pub fn get_frame(&self, frame_num: i32) -> FrameToolData {
+        self.frames.get(&frame_num).cloned().unwrap_or_default()
+    }
+
+    /// Get tool data by number, returns zeros if not loaded.
+    pub fn get_tool(&self, tool_num: i32) -> FrameToolData {
+        self.tools.get(&tool_num).cloned().unwrap_or_default()
+    }
 }
 
 // ============================================================================
@@ -344,7 +429,7 @@ pub struct ChangeLogEntry {
 }
 
 /// I/O display configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IoDisplayConfig {
     pub io_type: String,
     pub io_index: i32,
@@ -808,13 +893,53 @@ pub struct StartProgram {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct StartProgramResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for StartProgram {
+    type ResponseMessage = StartProgramResponse;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PauseProgram;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PauseProgramResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for PauseProgram {
+    type ResponseMessage = PauseProgramResponse;
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ResumeProgram;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ResumeProgramResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for ResumeProgram {
+    type ResponseMessage = ResumeProgramResponse;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StopProgram;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct StopProgramResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for StopProgram {
+    type ResponseMessage = StopProgramResponse;
+}
 
 // Frame/Tool Management
 
@@ -1030,6 +1155,16 @@ impl RequestMessage for DeleteConfiguration {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DeleteConfigurationResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for LoadConfiguration {
+    type ResponseMessage = LoadConfigurationResponse;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LoadConfigurationResponse {
     pub success: bool,
     pub error: Option<String>,
 }

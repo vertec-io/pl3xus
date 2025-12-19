@@ -49,12 +49,22 @@ pub enum SyncClientMessage {
 /// Server -> client sync messages.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SyncServerMessage {
+    /// Welcome message sent to client upon connection with their assigned connection ID.
+    /// This allows the client to know their own identity for comparing with EntityControl.
+    Welcome(WelcomeMessage),
     /// A batch of component snapshot/update events.
     SyncBatch(SyncBatch),
     /// Response to a mutation request.
     MutationResponse(MutationResponse),
     /// Response to a query request.
     QueryResponse(QueryResponse),
+}
+
+/// Welcome message sent to newly connected clients.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WelcomeMessage {
+    /// The connection ID assigned to this client.
+    pub connection_id: pl3xus_common::ConnectionId,
 }
 
 /// Subscribe to component data.

@@ -15,19 +15,27 @@ pub fn NewProgramModal(
     let (program_name, set_program_name) = signal("".to_string());
     let (description, set_description) = signal("".to_string());
     let (error_message, set_error_message) = signal::<Option<String>>(None);
+    let (has_processed, set_has_processed) = signal(false);
 
     let (create_program, create_state) = use_request::<CreateProgram>();
 
-    // Watch for create response
+    // Watch for create response - with guard to prevent re-processing
     let on_created_clone = on_created.clone();
     Effect::new(move |_| {
+        // Only process once
+        if has_processed.get_untracked() {
+            return;
+        }
         if let Some(response) = create_state.get().data {
+            set_has_processed.set(true);
             if response.success {
                 if let Some(program_id) = response.program_id {
                     on_created_clone(program_id);
                 }
             } else {
                 set_error_message.set(response.error);
+                // Allow retrying after an error
+                set_has_processed.set(false);
             }
         }
     });
@@ -144,10 +152,14 @@ pub fn OpenProgramModal(
 ) -> impl IntoView {
     let (list_programs, programs_state) = use_request::<ListPrograms>();
     let (selected_id, set_selected_id) = signal::<Option<i64>>(None);
+    let (has_loaded, set_has_loaded) = signal(false);
 
-    // Load programs on mount
+    // Load programs on mount - with guard to prevent infinite loop
     Effect::new(move |_| {
-        list_programs(ListPrograms);
+        if !has_loaded.get_untracked() {
+            set_has_loaded.set(true);
+            list_programs(ListPrograms);
+        }
     });
 
     let programs = Memo::new(move |_| {
@@ -338,18 +350,25 @@ pub fn CSVUploadModal(
     let (file_name, set_file_name) = signal::<Option<String>>(None);
     let (csv_content, set_csv_content) = signal::<Option<String>>(None);
     let (error_message, set_error_message) = signal::<Option<String>>(None);
+    let (has_processed, set_has_processed) = signal(false);
     let on_close_clone = on_close.clone();
 
     let (upload_csv, upload_state) = use_request::<UploadCsv>();
 
-    // Watch for upload response
+    // Watch for upload response - with guard to prevent re-processing
     let on_uploaded_clone = on_uploaded.clone();
     Effect::new(move |_| {
+        if has_processed.get_untracked() {
+            return;
+        }
         if let Some(response) = upload_state.get().data {
+            set_has_processed.set(true);
             if response.success {
                 on_uploaded_clone();
             } else {
                 set_error_message.set(response.error);
+                // Allow retrying after an error
+                set_has_processed.set(false);
             }
         }
     });

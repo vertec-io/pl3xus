@@ -1,11 +1,16 @@
 //! Robot connection state machine plugin.
 //!
 //! Handles connecting to and disconnecting from FANUC robots via RMI driver.
+//!
+//! IMPORTANT: Only the client who has control of the apparatus/system can
+//! connect to or disconnect from the robot. The robot connection is a shared
+//! resource visible to all clients, but only controllable by the controller.
 
 use bevy::prelude::*;
 use bevy::ecs::message::MessageReader;
 use bevy_tokio_tasks::TokioTasksRuntime;
 use pl3xus::AppNetworkMessage;
+use pl3xus_sync::control::EntityControl;
 use pl3xus_websockets::WebSocketProvider;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -96,6 +101,8 @@ fn spawn_robot_entity(mut commands: Commands) {
         JointAngles::default(),
         RobotStatus::default(),
         IoStatus::default(),
+        IoConfigState::default(),
+        FrameToolDataState::default(),
         ExecutionState::default(),
         ConnectionState::default(),
         ActiveConfigState::default(),
@@ -106,16 +113,32 @@ fn spawn_robot_entity(mut commands: Commands) {
 }
 
 /// Handle incoming connection requests - transition to Connecting state.
+///
+/// IMPORTANT: Only the client who has control of the apparatus can connect.
+/// This enforces the "control = system ownership" model.
 fn handle_connect_requests(
     mut connect_events: MessageReader<pl3xus::NetworkData<ConnectToRobot>>,
-    mut robots: Query<(Entity, &mut RobotConnectionState, &mut RobotConnectionDetails, &mut ConnectionState), With<FanucRobot>>,
+    mut robots: Query<(Entity, &mut RobotConnectionState, &mut RobotConnectionDetails, &mut ConnectionState, Option<&EntityControl>), With<FanucRobot>>,
 ) {
     for event in connect_events.read() {
+        let client_id = *event.source();
         let msg: &ConnectToRobot = &*event;
-        info!("📡 Received ConnectToRobot: {:?}:{} (connection_id: {:?})", msg.addr, msg.port, msg.connection_id);
+        info!("📡 Received ConnectToRobot: {:?}:{} (connection_id: {:?}) from {:?}", msg.addr, msg.port, msg.connection_id, client_id);
 
         match robots.single_mut() {
-            Ok((entity, mut state, mut details, mut conn_state)) => {
+            Ok((entity, mut state, mut details, mut conn_state, control)) => {
+                // Check if client has control of the apparatus
+                if let Some(entity_control) = control {
+                    if entity_control.client_id != client_id {
+                        warn!("ConnectToRobot rejected from {:?}: No control (held by {:?})", client_id, entity_control.client_id);
+                        continue;
+                    }
+                } else {
+                    // No control assigned yet - allow first connection attempt
+                    // This is development mode behavior; in production, control should be required
+                    trace!("No EntityControl on apparatus {:?}, allowing connect", entity);
+                }
+
                 if *state == RobotConnectionState::Disconnected {
                     // If connection_id is provided, use saved connection details
                     if msg.connection_id.is_some() {
@@ -222,15 +245,28 @@ fn handle_connecting_state(
 }
 
 /// Handle disconnect requests.
+///
+/// IMPORTANT: Only the client who has control of the apparatus can disconnect.
 fn handle_disconnect_requests(
     mut commands: Commands,
     mut disconnect_events: MessageReader<pl3xus::NetworkData<DisconnectRobot>>,
-    mut robots: Query<(Entity, &mut RobotConnectionState, &mut ConnectionState), With<FanucRobot>>,
+    mut robots: Query<(Entity, &mut RobotConnectionState, &mut ConnectionState, Option<&EntityControl>), With<FanucRobot>>,
 ) {
-    for _event in disconnect_events.read() {
-        info!("📡 Received DisconnectRobot");
+    for event in disconnect_events.read() {
+        let client_id = *event.source();
+        info!("📡 Received DisconnectRobot from {:?}", client_id);
 
-        if let Ok((entity, mut state, mut conn_state)) = robots.single_mut() {
+        if let Ok((entity, mut state, mut conn_state, control)) = robots.single_mut() {
+            // Check if client has control of the apparatus
+            if let Some(entity_control) = control {
+                if entity_control.client_id != client_id {
+                    warn!("DisconnectRobot rejected from {:?}: No control (held by {:?})", client_id, entity_control.client_id);
+                    continue;
+                }
+            } else {
+                trace!("No EntityControl on apparatus {:?}, allowing disconnect", entity);
+            }
+
             if *state == RobotConnectionState::Connected {
                 *state = RobotConnectionState::Disconnected;
                 conn_state.robot_connected = false;

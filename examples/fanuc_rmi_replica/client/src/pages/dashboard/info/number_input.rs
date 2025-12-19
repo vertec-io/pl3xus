@@ -26,6 +26,7 @@ pub fn NumberInput(
     view! {
         <input
             type="text"
+            inputmode="decimal"
             class=move || format!(
                 "w-full bg-[#0a0a0a] rounded px-2 py-1 text-[10px] text-white {} {}",
                 if is_valid() {

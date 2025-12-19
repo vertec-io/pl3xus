@@ -15,6 +15,7 @@ impl Plugin for RobotSyncPlugin {
     fn build(&self, app: &mut App) {
         // Register network messages for jogging
         app.register_network_message::<JogCommand, WebSocketProvider>();
+        app.register_network_message::<JogRobot, WebSocketProvider>();
         app.register_network_message::<InitializeRobot, WebSocketProvider>();
         app.register_network_message::<ResetRobot, WebSocketProvider>();
         app.register_network_message::<AbortMotion, WebSocketProvider>();
@@ -28,11 +29,20 @@ impl Plugin for RobotSyncPlugin {
         app.register_network_message::<PauseProgram, WebSocketProvider>();
         app.register_network_message::<ResumeProgram, WebSocketProvider>();
         app.register_network_message::<StopProgram, WebSocketProvider>();
+        // Motion commands from Command Composer
+        app.register_network_message::<MoveLinear, WebSocketProvider>();
+        app.register_network_message::<MoveJoint, WebSocketProvider>();
+        app.register_network_message::<MoveRelative, WebSocketProvider>();
 
         // Add sync systems
         app.add_systems(Update, (
             crate::driver_sync::sync_robot_state,
             jogging::handle_jog_commands,
+            jogging::handle_jog_robot_commands,
+            jogging::handle_initialize_robot,
+            jogging::handle_abort_motion,
+            jogging::handle_reset_robot,
+            jogging::handle_set_speed_override,
         ));
     }
 }

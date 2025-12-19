@@ -40,11 +40,17 @@ pub fn ProgramsView() -> impl IntoView {
     // Current program state
     let current_program: RwSignal<Option<ProgramWithLines>> = RwSignal::new(None);
 
-    // Load programs on mount
+    // Guard to prevent infinite loop
+    let (has_loaded, set_has_loaded) = signal(false);
+
+    // Load programs on mount - with guard
     {
         let list_programs = list_programs.clone();
         Effect::new(move |_| {
-            list_programs(ListPrograms);
+            if !has_loaded.get_untracked() {
+                set_has_loaded.set(true);
+                list_programs(ListPrograms);
+            }
         });
     }
 

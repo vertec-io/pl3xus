@@ -31,38 +31,9 @@
 //! ```
 
 use bevy::prelude::*;
-use pl3xus_common::ConnectionId;
-use serde::{Deserialize, Serialize};
 
-/// Request to take or release control of an entity.
-#[derive(Message, Serialize, Deserialize, Clone, Debug)]
-pub enum ControlRequest {
-    /// Request to take control of the specified entity.
-    Take(u64),
-    /// Request to release control of the specified entity.
-    Release(u64),
-}
-
-/// Response to a control request.
-#[derive(Message, Serialize, Deserialize, Clone, Debug)]
-pub enum ControlResponse {
-    /// Control was successfully taken.
-    Taken,
-    /// Control was successfully released.
-    Released,
-    /// Entity is already controlled by another client.
-    AlreadyControlled {
-        /// The client that currently has control.
-        by_client: ConnectionId,
-    },
-    /// Entity is not currently controlled (when trying to release).
-    NotControlled,
-    /// An error occurred.
-    Error(String),
-}
-
-// Re-export EntityControl from pl3xus_common (with Component derive via ecs feature)
-pub use pl3xus_common::EntityControl;
+// Re-export control types from pl3xus_common (with Message derive via ecs feature)
+pub use pl3xus_common::{ConnectionId, ControlRequest, ControlResponse, EntityControl};
 
 /// Configuration for the `ExclusiveControlPlugin`.
 #[derive(Clone, Debug, Resource)]
@@ -78,7 +49,7 @@ pub struct ExclusiveControlConfig {
 impl Default for ExclusiveControlConfig {
     fn default() -> Self {
         Self {
-            timeout_seconds: Some(30.0), // 30 second default timeout
+            timeout_seconds: Some(1800.0), // 30 minute default timeout
             propagate_to_children: true,
         }
     }
@@ -179,6 +150,7 @@ impl AppExclusiveControlExt for App {
             Update,
             (
                 handle_control_requests::<NP>,
+                cleanup_disconnected_control,
                 timeout_inactive_control,
                 notify_control_changes,
             )
@@ -211,9 +183,12 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
         let client_id = *request.source();
         let current_time = time.elapsed_secs();
 
+        info!("[ExclusiveControl] Received control request from {:?}: {:?}", client_id, **request);
+
         match **request {
             ControlRequest::Take(entity_bits) => {
                 let entity = Entity::from_bits(entity_bits);
+                info!("[ExclusiveControl] Take request for entity {:?} from {:?}", entity, client_id);
 
                 // Try to get the entity
                 let Ok((entity, control, children)) = entities.get_mut(entity) else {
@@ -224,6 +199,7 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
                 // Check if already controlled by another client
                 if let Some(existing_control) = control {
                     if existing_control.client_id != client_id {
+                        info!("[ExclusiveControl] Entity {:?} already controlled by {:?}, denying {:?}", entity, existing_control.client_id, client_id);
                         let _ = net.send(
                             client_id,
                             ControlResponse::AlreadyControlled {
@@ -233,12 +209,14 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
                         continue;
                     } else {
                         // Already controlled by this client, just update activity
+                        info!("[ExclusiveControl] Entity {:?} already controlled by {:?}, refreshing", entity, client_id);
                         let _ = net.send(client_id, ControlResponse::Taken);
                         continue;
                     }
                 }
 
                 // Grant control
+                info!("[ExclusiveControl] Granting control of {:?} to {:?}", entity, client_id);
                 let control = EntityControl {
                     client_id,
                     last_activity: current_time,
@@ -254,6 +232,7 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
                     }
                 }
 
+                info!("[ExclusiveControl] Sending Taken response to {:?}", client_id);
                 let _ = net.send(client_id, ControlResponse::Taken);
             }
 
@@ -330,6 +309,47 @@ fn timeout_inactive_control(
                 if let Some(children) = children {
                     for child in children.iter() {
                         commands.entity(child).remove::<EntityControl>();
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// System that releases control from disconnected clients.
+///
+/// This system listens for `NetworkEvent::Disconnected` events and removes
+/// `EntityControl` components from any entities controlled by that client.
+fn cleanup_disconnected_control(
+    mut events: MessageReader<pl3xus::NetworkEvent>,
+    entities: Query<(Entity, &EntityControl, Option<&Children>)>,
+    config: Res<ExclusiveControlConfig>,
+    mut commands: Commands,
+) {
+    for event in events.read() {
+        if let pl3xus::NetworkEvent::Disconnected(disconnected_id) = event {
+            info!(
+                "[ExclusiveControl] Client {:?} disconnected, releasing any controlled entities",
+                disconnected_id
+            );
+
+            for (entity, control, children) in entities.iter() {
+                if control.client_id == *disconnected_id {
+                    info!(
+                        "[ExclusiveControl] Releasing control from disconnected client {:?} on entity {:?}",
+                        disconnected_id, entity
+                    );
+
+                    // Release control
+                    commands.entity(entity).remove::<EntityControl>();
+
+                    // Propagate to children if configured
+                    if config.propagate_to_children {
+                        if let Some(children) = children {
+                            for child in children.iter() {
+                                commands.entity(child).remove::<EntityControl>();
+                            }
+                        }
                     }
                 }
             }

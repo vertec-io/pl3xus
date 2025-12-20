@@ -80,6 +80,10 @@ pub struct RobotStatus {
     /// Whether the TP program is initialized and ready for motion commands.
     /// This must be true to send motion commands. False after abort/disconnect.
     pub tp_program_initialized: bool,
+    /// Active user frame number
+    pub active_uframe: u8,
+    /// Active user tool number
+    pub active_utool: u8,
 }
 
 impl Default for RobotStatus {
@@ -91,6 +95,8 @@ impl Default for RobotStatus {
             speed_override: 100,
             error_message: None,
             tp_program_initialized: false,
+            active_uframe: 0,
+            active_utool: 1,
         }
     }
 }
@@ -105,6 +111,8 @@ pub struct ExecutionState {
     pub paused: bool,
     pub current_line: usize,
     pub total_lines: usize,
+    /// The program lines for the loaded program (synced to all clients)
+    pub program_lines: Vec<ProgramLineInfo>,
 }
 
 /// Connection state (Synced 1-way: Server -> Client)
@@ -372,8 +380,17 @@ pub struct ProgramDetail {
     pub name: String,
     pub description: Option<String>,
     pub instructions: Vec<Instruction>,
+    // Program defaults for motion
+    pub default_w: f64,
+    pub default_p: f64,
+    pub default_r: f64,
+    pub default_speed: Option<f64>,
+    pub default_speed_type: Option<String>,
     pub default_term_type: String,
     pub default_term_value: Option<u8>,
+    pub default_uframe: Option<i32>,
+    pub default_utool: Option<i32>,
+    // Approach/retreat positions
     pub start_x: Option<f64>,
     pub start_y: Option<f64>,
     pub start_z: Option<f64>,
@@ -885,6 +902,18 @@ pub struct MoveRelative {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct LoadProgram {
     pub program_id: i64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LoadProgramResponse {
+    pub success: bool,
+    /// The loaded program info (if successful)
+    pub program: Option<ProgramWithLines>,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for LoadProgram {
+    type ResponseMessage = LoadProgramResponse;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

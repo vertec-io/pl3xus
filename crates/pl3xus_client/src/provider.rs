@@ -143,44 +143,16 @@ pub fn SyncProvider(
     provide_context(ctx.clone());
 
     // Set up message handler
-    // Use the same pattern as DevTools: watch raw_message with .with() instead of .get()
-    // Track last processed message hash to avoid duplicate processing
-    // Use StoredValue instead of RwSignal to avoid any reactive issues
-    let last_message_hash = StoredValue::new(0u64);
-
+    // We only want to track changes to raw_message, not signals that we update
+    // when handling messages. Use untrack() around the handler to prevent
+    // reactive cascades.
     Effect::new(move || {
-        raw_message.with(|packet_opt| {
-            #[cfg(target_arch = "wasm32")]
-            leptos::logging::log!(
-                "[SyncProvider] raw_message signal fired, packet present: {}",
-                packet_opt.is_some()
-            );
+        // Only subscribe to raw_message changes
+        let packet_opt = raw_message.get();
 
+        // Untrack everything else to prevent reactive loops
+        untrack(|| {
             if let Some(packet) = packet_opt {
-                // Compute a simple hash of the packet to detect duplicates
-                let packet_hash = {
-                    let mut hash = 0u64;
-                    for byte in packet.type_name.bytes() {
-                        hash = hash.wrapping_add(byte as u64).wrapping_mul(31);
-                    }
-                    for byte in &packet.data {
-                        hash = hash.wrapping_add(*byte as u64).wrapping_mul(31);
-                    }
-                    hash
-                };
-
-                // Skip if we already processed this exact packet
-                let last_hash = last_message_hash.get_value();
-                if packet_hash == last_hash {
-                    #[cfg(target_arch = "wasm32")]
-                    leptos::logging::log!(
-                        "[SyncProvider] Skipping duplicate packet: type_name={}, hash=0x{:016x}",
-                        packet.type_name,
-                        packet_hash
-                    );
-                    return;
-                }
-                last_message_hash.set_value(packet_hash);
                 #[cfg(target_arch = "wasm32")]
                 leptos::logging::log!(
                     "[SyncProvider] Received NetworkPacket: type_name={}, data_len={}",

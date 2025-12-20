@@ -4,7 +4,7 @@ use leptos::prelude::*;
 use leptos::either::Either;
 use leptos::web_sys;
 use pl3xus_client::use_request;
-use fanuc_replica_types::{ListPrograms, CreateProgram, UploadCsv};
+use fanuc_replica_types::{CreateProgram, UploadCsv, GetProgram, ProgramDetail};
 
 /// New Program Modal - Simple modal to create a program with name and description
 #[component]
@@ -147,28 +147,43 @@ pub fn NewProgramModal(
 /// Open Program Modal - Select a program to open
 #[component]
 pub fn OpenProgramModal(
+    programs: Memo<Vec<fanuc_replica_types::ProgramWithLines>>,
     on_close: impl Fn() + 'static + Clone + Send,
-    on_selected: impl Fn(i64) + 'static + Clone + Send,
+    on_selected: impl Fn(ProgramDetail) + 'static + Clone + Send,
 ) -> impl IntoView {
-    let (list_programs, programs_state) = use_request::<ListPrograms>();
     let (selected_id, set_selected_id) = signal::<Option<i64>>(None);
-    let (has_loaded, set_has_loaded) = signal(false);
+    let (loading, set_loading) = signal(false);
+    let (has_processed, set_has_processed) = signal(false);
 
-    // Load programs on mount - with guard to prevent infinite loop
-    Effect::new(move |_| {
-        if !has_loaded.get_untracked() {
-            set_has_loaded.set(true);
-            list_programs(ListPrograms);
-        }
-    });
-
-    let programs = Memo::new(move |_| {
-        programs_state.get().data
-            .map(|r| r.programs)
-            .unwrap_or_default()
-    });
+    // Request hook for fetching full program data
+    let (get_program, get_program_state) = use_request::<GetProgram>();
 
     let on_close_clone = on_close.clone();
+
+    // Watch for GetProgram response
+    let on_selected_clone = on_selected.clone();
+    let on_close_for_effect = on_close.clone();
+    Effect::new(move |_| {
+        let state = get_program_state.get();
+        leptos::logging::log!("[OpenProgramModal] Effect triggered - is_loading: {}, has_data: {}, has_error: {:?}, has_processed: {}",
+            state.is_loading, state.data.is_some(), state.error, has_processed.get_untracked());
+
+        if has_processed.get_untracked() {
+            return;
+        }
+        if let Some(response) = state.data {
+            leptos::logging::log!("[OpenProgramModal] Got response - program: {:?}", response.program.as_ref().map(|p| &p.name));
+            set_has_processed.set(true);
+            set_loading.set(false);
+            if let Some(program_detail) = response.program {
+                // Pass the full ProgramDetail directly
+                on_selected_clone(program_detail);
+            } else {
+                // Program not found, close modal
+                on_close_for_effect();
+            }
+        }
+    });
 
     view! {
         <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
@@ -245,20 +260,34 @@ pub fn OpenProgramModal(
                     <button
                         class={move || format!(
                             "text-[10px] px-3 py-1.5 rounded {}",
-                            if selected_id.get().is_some() {
+                            if loading.get() {
+                                "bg-[#111111] border border-[#ffffff08] text-[#555555] cursor-wait"
+                            } else if selected_id.get().is_some() {
                                 "bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] hover:bg-[#00d9ff30]"
                             } else {
                                 "bg-[#111111] border border-[#ffffff08] text-[#555555] cursor-not-allowed"
                             }
                         )}
-                        disabled=move || selected_id.get().is_none()
-                        on:click=move |_| {
-                            if let Some(id) = selected_id.get() {
-                                on_selected(id);
+                        disabled=move || selected_id.get().is_none() || loading.get()
+                        on:click={
+                            let get_program = get_program.clone();
+                            move |ev| {
+                                leptos::logging::log!("[OpenProgramModal] Open button clicked! Event: {:?}", ev.type_());
+                                let sel_id = selected_id.get();
+                                leptos::logging::log!("[OpenProgramModal] selected_id = {:?}", sel_id);
+                                if let Some(id) = sel_id {
+                                    leptos::logging::log!("[OpenProgramModal] Calling get_program with id={}", id);
+                                    set_loading.set(true);
+                                    set_has_processed.set(false);
+                                    get_program(GetProgram { program_id: id });
+                                    leptos::logging::log!("[OpenProgramModal] get_program called!");
+                                } else {
+                                    leptos::logging::log!("[OpenProgramModal] No program selected!");
+                                }
                             }
                         }
                     >
-                        "Open"
+                        {move || if loading.get() { "Loading..." } else { "Open" }}
                     </button>
                 </div>
             </div>

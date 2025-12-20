@@ -390,6 +390,12 @@ fn QuickSettingsButton() -> impl IntoView {
             .unwrap_or(false)
     };
 
+    // Get the controlling client ID (if any)
+    let controlling_client_id = move || -> Option<u32> {
+        control_state.get().values().next()
+            .map(|s| s.client_id.id)
+    };
+
     view! {
         <div class="relative">
             <button
@@ -413,6 +419,7 @@ fn QuickSettingsButton() -> impl IntoView {
                     connected_robot_name=Signal::derive(connected_robot_name)
                     active_connection_id=Signal::derive(active_connection_id)
                     has_control=Signal::derive(has_control)
+                    controlling_client_id=Signal::derive(controlling_client_id)
                 />
             </Show>
         </div>
@@ -429,8 +436,9 @@ fn QuickSettingsPopup(
     connected_robot_name: Signal<Option<String>>,
     active_connection_id: Signal<Option<i64>>,
     has_control: Signal<bool>,
+    controlling_client_id: Signal<Option<u32>>,
 ) -> impl IntoView {
-    let _ctx = use_sync_context();
+    let ctx = use_sync_context();
     let navigate = use_navigate();
 
     view! {
@@ -483,10 +491,24 @@ fn QuickSettingsPopup(
                 <div class="flex items-center justify-between">
                     <span class="text-[9px] text-[#666666] uppercase">"Control"</span>
                     {move || {
+                        let my_id = ctx.my_connection_id.get();
                         if has_control.get() {
                             view! {
                                 <span class="text-[10px] text-[#00d9ff] font-medium">"You have control"</span>
                             }.into_any()
+                        } else if let Some(client_id) = controlling_client_id.get() {
+                            // Another client has control
+                            let is_me = my_id.map(|id| id.id == client_id).unwrap_or(false);
+                            if is_me {
+                                // This shouldn't happen, but handle it gracefully
+                                view! {
+                                    <span class="text-[10px] text-[#00d9ff] font-medium">"You have control"</span>
+                                }.into_any()
+                            } else {
+                                view! {
+                                    <span class="text-[10px] text-[#f59e0b]">{format!("Client {} has control", client_id)}</span>
+                                }.into_any()
+                            }
                         } else {
                             view! {
                                 <span class="text-[10px] text-[#888888]">"No control"</span>
@@ -737,10 +759,24 @@ fn ControlButton() -> impl IntoView {
             .unwrap_or(false)
     };
 
+    // Check if another client has control
+    let other_has_control = move || {
+        let my_id = ctx.my_connection_id.get();
+        control_state.get().values().next()
+            .map(|s| {
+                // Someone has control and it's not us
+                s.client_id.id != 0 && Some(s.client_id) != my_id
+            })
+            .unwrap_or(false)
+    };
+
     view! {
         <button
             class=move || if has_control() {
                 "bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30] flex items-center gap-1"
+            } else if other_has_control() {
+                // Another client has control - show red/warning style
+                "bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430] flex items-center gap-1"
             } else {
                 "bg-[#f59e0b20] border border-[#f59e0b40] text-[#f59e0b] text-[8px] px-2 py-0.5 rounded hover:bg-[#f59e0b30] flex items-center gap-1"
             }
@@ -759,18 +795,20 @@ fn ControlButton() -> impl IntoView {
                     if has_control() {
                         leptos::logging::log!("[ControlButton] Releasing control");
                         ctx.send(ControlRequest::Release(entity_bits));
-                        toast.info("Control released");
+                        // Toast will be shown by ControlResponseHandler when server responds
                     } else {
                         leptos::logging::log!("[ControlButton] Requesting control");
                         ctx.send(ControlRequest::Take(entity_bits));
-                        toast.success("Control requested");
+                        // Toast will be shown by ControlResponseHandler when server responds
                     }
                 }
             }
             title=move || if has_control() {
-                "You have control. Click to release."
+                "You have control. Click to release.".to_string()
+            } else if other_has_control() {
+                "Another client has control. Click to request.".to_string()
             } else {
-                "Request control of the robot"
+                "Request control of the robot".to_string()
             }
         >
             {move || if has_control() {
@@ -779,6 +817,13 @@ fn ControlButton() -> impl IntoView {
                         <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
                     </svg>
                     "IN CONTROL"
+                }.into_any()
+            } else if other_has_control() {
+                view! {
+                    <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+                    </svg>
+                    "CONTROLLED"
                 }.into_any()
             } else {
                 view! {
@@ -798,51 +843,161 @@ fn ControlButton() -> impl IntoView {
 /// the server's response to control requests.
 #[component]
 pub fn ControlResponseHandler() -> impl IntoView {
+    use pl3xus_common::ControlResponseKind;
+
     let toast = crate::components::use_toast();
     let control_response = use_sync_message::<ControlResponse>();
 
-    // Track the last response we processed to avoid duplicate toasts
+    // Track the last sequence number we processed to avoid duplicate toasts
     // Use StoredValue instead of RwSignal to avoid any reactive issues
-    let last_processed = StoredValue::new(ControlResponse::None);
+    let last_sequence = StoredValue::new(0u64);
 
     // Effect to handle control responses
     Effect::new(move |_| {
         let response = control_response.get();
 
-        // Skip the None (default) state
-        if response == ControlResponse::None {
+        // Skip if sequence is 0 (default state) or same as last processed
+        if response.sequence == 0 {
             return;
         }
 
         // Check last processed WITHOUT creating a reactive dependency
-        let last = last_processed.get_value();
-        if response == last {
+        let last = last_sequence.get_value();
+        if response.sequence == last {
             return;
         }
 
         // Update last processed first to avoid duplicate processing
-        last_processed.set_value(response.clone());
+        last_sequence.set_value(response.sequence);
 
-        match &response {
-            ControlResponse::None => {}
-            ControlResponse::Taken => {
+        match &response.kind {
+            ControlResponseKind::None => {}
+            ControlResponseKind::Taken => {
                 toast.success("You now have control of the robot");
             }
-            ControlResponse::Released => {
+            ControlResponseKind::Released => {
                 toast.info("Control released");
             }
-            ControlResponse::AlreadyControlled { by_client } => {
+            ControlResponseKind::AlreadyControlled { by_client } => {
                 toast.warning(format!("Control denied - robot is controlled by client {}", by_client));
             }
-            ControlResponse::NotControlled => {
+            ControlResponseKind::NotControlled => {
                 toast.info("Robot is not currently controlled");
             }
-            ControlResponse::Error(msg) => {
+            ControlResponseKind::ControlRequested { by_client } => {
+                toast.warning(format!("Client {} is requesting control of the robot", by_client));
+            }
+            ControlResponseKind::Error(msg) => {
                 toast.error(format!("Control error: {}", msg));
             }
         }
     });
 
     // This component doesn't render anything visible
+    view! {}
+}
+
+/// Component that watches ExecutionState changes and updates WorkspaceContext.
+///
+/// This is a "headless" component that syncs the server's ExecutionState
+/// to the client's WorkspaceContext for program execution UI updates.
+/// All program state (loaded program, lines, running, paused) comes from server.
+#[component]
+pub fn ExecutionStateHandler() -> impl IntoView {
+    use fanuc_replica_types::ExecutionState;
+    use crate::pages::dashboard::context::{WorkspaceContext, ProgramLine};
+
+    let execution_state = use_sync_component::<ExecutionState>();
+
+    // Only proceed if WorkspaceContext is available (on dashboard pages)
+    if let Some(ctx) = use_context::<WorkspaceContext>() {
+        Effect::new(move |_| {
+            let state_map = execution_state.get();
+
+            // Get the first (and only) execution state
+            if let Some(state) = state_map.values().next() {
+                // Update context from server state
+                ctx.program_running.set(state.running);
+                ctx.program_paused.set(state.paused);
+                ctx.executing_line.set(state.current_line as i32);
+
+                // Update loaded program info if it changed
+                let current_id = ctx.loaded_program_id.get_untracked();
+                if current_id != state.loaded_program_id {
+                    ctx.loaded_program_id.set(state.loaded_program_id);
+                    ctx.loaded_program_name.set(state.loaded_program_name.clone());
+                }
+
+                // Sync program lines from server state
+                // Convert ProgramLineInfo to ProgramLine for UI display
+                let current_lines_len = ctx.program_lines.get_untracked().len();
+                if current_lines_len != state.program_lines.len() || state.loaded_program_id != current_id {
+                    let lines: Vec<ProgramLine> = state.program_lines.iter().enumerate().map(|(i, line)| {
+                        ProgramLine {
+                            line_number: i + 1,
+                            x: line.x,
+                            y: line.y,
+                            z: line.z,
+                            w: line.w,
+                            p: line.p,
+                            r: line.r,
+                            speed: line.speed,
+                            term_type: line.term_type.clone(),
+                            uframe: line.uframe,
+                            utool: line.utool,
+                        }
+                    }).collect();
+                    ctx.program_lines.set(lines);
+                }
+            }
+        });
+    }
+
+    view! {}
+}
+
+/// Component that watches connection state changes and shows toast notifications.
+///
+/// This is a "headless" component that detects when:
+/// - Connection attempt fails (was connecting, now disconnected)
+/// - Connection succeeds (was connecting, now connected)
+/// - Connection lost (was connected, now disconnected)
+#[component]
+pub fn ConnectionStateHandler() -> impl IntoView {
+    let toast = crate::components::use_toast();
+    let connection_state = use_sync_component::<ConnectionState>();
+
+    // Track previous state to detect transitions
+    // (was_connecting, was_connected, robot_name)
+    let prev_state = StoredValue::new((false, false, String::new()));
+
+    Effect::new(move |_| {
+        let state = connection_state.get();
+        let current = state.values().next();
+
+        let (is_connecting, is_connected, robot_name) = current
+            .map(|s| (s.robot_connecting, s.robot_connected, s.robot_name.clone()))
+            .unwrap_or((false, false, String::new()));
+
+        let (was_connecting, was_connected, prev_name) = prev_state.get_value();
+
+        // Detect state transitions
+        if was_connecting && !is_connecting && !is_connected {
+            // Was connecting, now not connecting and not connected = connection failed
+            toast.error("Failed to connect to robot");
+        } else if was_connecting && is_connected {
+            // Was connecting, now connected = success
+            let name = if robot_name.is_empty() { "Robot".to_string() } else { robot_name.clone() };
+            toast.success(format!("Connected to {}", name));
+        } else if was_connected && !is_connected && !is_connecting {
+            // Was connected, now disconnected = connection lost or intentional disconnect
+            let name = if prev_name.is_empty() { "Robot".to_string() } else { prev_name };
+            toast.info(format!("Disconnected from {}", name));
+        }
+
+        // Update previous state
+        prev_state.set_value((is_connecting, is_connected, robot_name));
+    });
+
     view! {}
 }

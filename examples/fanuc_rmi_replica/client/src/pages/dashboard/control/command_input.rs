@@ -1,26 +1,91 @@
 //! Command input section with recent commands and composer button.
+//!
+//! Matches original Fanuc_RMI_API implementation - uses fanuc_rmi::dto types directly.
 
 use leptos::prelude::*;
-use pl3xus_client::use_sync_component;
+use pl3xus_client::{use_sync_context, use_sync_component};
 use fanuc_replica_types::*;
-use crate::pages::dashboard::context::{WorkspaceContext, CommandLogEntry, CommandStatus};
-use wasm_bindgen::prelude::*;
+use fanuc_rmi::dto::{SendPacket, Instruction, FrcLinearMotion, FrcLinearRelative, FrcJointMotion, Position, Configuration};
+use fanuc_rmi::{SpeedType, TermType};
+use crate::pages::dashboard::context::{WorkspaceContext, RecentCommand};
 
-#[wasm_bindgen]
-extern "C" {
-    type Date;
-    #[wasm_bindgen(constructor)]
-    fn new() -> Date;
-    #[wasm_bindgen(method, js_name = toLocaleTimeString)]
-    fn to_locale_time_string(this: &Date, locale: &str) -> String;
+/// Helper function to create a motion packet from a RecentCommand.
+/// Uses the active configuration from server-synced state for arm configuration.
+/// Returns None if no robot is connected (can't create valid packet without config).
+fn create_motion_packet(cmd: &RecentCommand, active_config: &ActiveConfigState) -> SendPacket {
+    // Use active configuration values from server state
+    let config = Configuration {
+        u_tool_number: cmd.utool as i8,
+        u_frame_number: cmd.uframe as i8,
+        front: active_config.front as i8,
+        up: active_config.up as i8,
+        left: active_config.left as i8,
+        flip: active_config.flip as i8,
+        turn4: active_config.turn4 as i8,
+        turn5: active_config.turn5 as i8,
+        turn6: active_config.turn6 as i8,
+    };
+    let position = Position {
+        x: cmd.x, y: cmd.y, z: cmd.z,
+        w: cmd.w, p: cmd.p, r: cmd.r,
+        ext1: 0.0, ext2: 0.0, ext3: 0.0,
+    };
+    let speed_type = SpeedType::MMSec;
+    let term_type = if cmd.term_type == "FINE" { TermType::FINE } else { TermType::CNT };
+    let term_value = if cmd.term_type == "FINE" { 0 } else { 100 };
+
+    match cmd.command_type.as_str() {
+        "linear_rel" => SendPacket::Instruction(Instruction::FrcLinearRelative(FrcLinearRelative {
+            sequence_id: 0,
+            configuration: config,
+            position,
+            speed_type,
+            speed: cmd.speed,
+            term_type,
+            term_value,
+        })),
+        "linear_abs" => SendPacket::Instruction(Instruction::FrcLinearMotion(FrcLinearMotion {
+            sequence_id: 0,
+            configuration: config,
+            position,
+            speed_type,
+            speed: cmd.speed,
+            term_type,
+            term_value,
+        })),
+        // Both joint_abs and joint_rel use FrcJointMotion - the position determines absolute vs relative
+        "joint_abs" | "joint_rel" => SendPacket::Instruction(Instruction::FrcJointMotion(FrcJointMotion {
+            sequence_id: 0,
+            configuration: config,
+            position,
+            speed_type,
+            speed: cmd.speed,
+            term_type,
+            term_value,
+        })),
+        _ => {
+            // Default to linear relative for unknown types
+            SendPacket::Instruction(Instruction::FrcLinearRelative(FrcLinearRelative {
+                sequence_id: 0,
+                configuration: config,
+                position,
+                speed_type,
+                speed: cmd.speed,
+                term_type,
+                term_value,
+            }))
+        }
+    }
 }
 
 /// Command input section with recent commands and composer button
 #[component]
 pub fn CommandInputSection() -> impl IntoView {
     let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
+    let sync_ctx = use_sync_context();
     let connection_state = use_sync_component::<ConnectionState>();
-    
+    let active_config = use_sync_component::<ActiveConfigState>();
+
     let recent_commands = ctx.recent_commands;
     let selected_cmd_id = ctx.selected_command_id;
 
@@ -105,19 +170,22 @@ pub fn CommandInputSection() -> impl IntoView {
                         }
                     )}
                     disabled=move || controls_disabled() || selected_cmd_id.get().is_none()
-                    on:click=move |_| {
-                        if let Some(idx) = selected_cmd_id.get() {
-                            let cmds = recent_commands.get();
-                            if let Some(cmd) = cmds.iter().find(|c| c.id == idx) {
-                                // Log the command
-                                ctx.command_log.update(|log| {
-                                    log.push(CommandLogEntry {
-                                        timestamp: Date::new().to_locale_time_string("en-US"),
-                                        command: cmd.name.clone(),
-                                        status: CommandStatus::Pending,
-                                    });
-                                });
-                                // TODO: Send command to robot via pl3xus
+                    on:click={
+                        let sync_ctx = sync_ctx.clone();
+                        move |_| {
+                            if let Some(idx) = selected_cmd_id.get() {
+                                let cmds = recent_commands.get();
+                                if let Some(cmd) = cmds.iter().find(|c| c.id == idx) {
+                                    // Get active config from server state
+                                    let config = active_config.get();
+                                    if let Some(cfg) = config.values().next() {
+                                        // Create motion packet using fanuc_rmi::dto types
+                                        let packet = create_motion_packet(cmd, cfg);
+                                        sync_ctx.send(packet);
+                                    } else {
+                                        ctx.add_error("Cannot run command: No active configuration".to_string());
+                                    }
+                                }
                             }
                         }
                     }

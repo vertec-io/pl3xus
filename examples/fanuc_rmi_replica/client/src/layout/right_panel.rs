@@ -33,14 +33,58 @@ pub fn RightPanel() -> impl IntoView {
 
                 // I/O Status (only show when robot connected and not popped)
                 <Show when=move || robot_connected.get() && !layout_ctx.io_popped.get()>
-                    <IoStatusPanel/>
+                    <IOStatusPanelWrapper/>
                 </Show>
 
                 // Jog controls (only show when robot connected and not popped)
                 <Show when=move || robot_connected.get() && !layout_ctx.jog_popped.get()>
-                    <JogControls/>
+                    <JogControlsPanelWrapper/>
                 </Show>
             </div>
         </aside>
+    }
+}
+
+/// I/O Status panel wrapper with pop-out button.
+#[component]
+fn IOStatusPanelWrapper() -> impl IntoView {
+    let layout_ctx = use_context::<LayoutContext>().expect("LayoutContext required");
+
+    view! {
+        <div class="relative">
+            // Pop-out button
+            <button
+                class="absolute top-1.5 right-1.5 p-0.5 hover:bg-[#ffffff10] rounded z-10"
+                title="Pop out I/O panel"
+                on:click=move |_| layout_ctx.io_popped.set(true)
+            >
+                <svg class="w-3 h-3 text-[#555555] hover:text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                </svg>
+            </button>
+            <IoStatusPanel/>
+        </div>
+    }
+}
+
+/// Jog controls panel wrapper with pop-out button.
+#[component]
+fn JogControlsPanelWrapper() -> impl IntoView {
+    let layout_ctx = use_context::<LayoutContext>().expect("LayoutContext required");
+
+    view! {
+        <div class="relative">
+            // Pop-out button
+            <button
+                class="absolute top-1.5 right-1.5 p-0.5 hover:bg-[#ffffff10] rounded z-10"
+                title="Pop out jog controls"
+                on:click=move |_| layout_ctx.jog_popped.set(true)
+            >
+                <svg class="w-3 h-3 text-[#555555] hover:text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                </svg>
+            </button>
+            <JogControls/>
+        </div>
     }
 }

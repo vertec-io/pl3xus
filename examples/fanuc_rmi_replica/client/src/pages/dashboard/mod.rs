@@ -12,14 +12,10 @@ use leptos::prelude::*;
 use leptos_router::hooks::use_location;
 
 /// Dashboard view with tabbed navigation.
-/// Provides WorkspaceContext to all child components.
+/// NOTE: WorkspaceContext is provided by DesktopLayout, not here.
 #[component]
 pub fn DashboardView() -> impl IntoView {
     let location = use_location();
-
-    // Create and provide WorkspaceContext
-    let workspace_ctx = WorkspaceContext::new();
-    provide_context(workspace_ctx);
 
     let is_control = move || {
         let path = location.pathname.get();

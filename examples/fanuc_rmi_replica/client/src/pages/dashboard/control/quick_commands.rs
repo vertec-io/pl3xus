@@ -3,6 +3,7 @@
 use leptos::prelude::*;
 use pl3xus_client::{use_sync_context, use_sync_component};
 use fanuc_replica_types::*;
+use crate::pages::dashboard::context::{WorkspaceContext, MessageDirection, MessageType};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -15,6 +16,7 @@ extern "C" {
 #[component]
 pub fn QuickCommandsPanel() -> impl IntoView {
     let ctx = use_sync_context();
+    let ws_ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let status = use_sync_component::<RobotStatus>();
     let connection_state = use_sync_component::<ConnectionState>();
 
@@ -59,15 +61,24 @@ pub fn QuickCommandsPanel() -> impl IntoView {
 
     let init_click = {
         let ctx = ctx.clone();
-        move |_| ctx.send(InitializeRobot { group_mask: Some(1) })
+        move |_| {
+            ws_ctx.add_console_message("Initialize Robot".to_string(), MessageDirection::Sent, MessageType::Command);
+            ctx.send(InitializeRobot { group_mask: Some(1) });
+        }
     };
     let reset_click = {
         let ctx = ctx.clone();
-        move |_| ctx.send(ResetRobot)
+        move |_| {
+            ws_ctx.add_console_message("Reset Robot".to_string(), MessageDirection::Sent, MessageType::Command);
+            ctx.send(ResetRobot);
+        }
     };
     let abort_click = {
         let ctx = ctx.clone();
-        move |_| ctx.send(AbortMotion)
+        move |_| {
+            ws_ctx.add_console_message("Abort Motion".to_string(), MessageDirection::Sent, MessageType::Command);
+            ctx.send(AbortMotion);
+        }
     };
 
     view! {

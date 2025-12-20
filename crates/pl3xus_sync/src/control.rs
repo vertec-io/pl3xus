@@ -31,9 +31,23 @@
 //! ```
 
 use bevy::prelude::*;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 // Re-export control types from pl3xus_common (with Message derive via ecs feature)
-pub use pl3xus_common::{ConnectionId, ControlRequest, ControlResponse, EntityControl};
+pub use pl3xus_common::{ConnectionId, ControlRequest, ControlResponse, ControlResponseKind, EntityControl};
+
+/// Global sequence counter for control responses.
+/// Each response gets a unique sequence number to ensure identical responses
+/// are treated as distinct messages by the client.
+static RESPONSE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+/// Create a new ControlResponse with a unique sequence number.
+fn new_response(kind: ControlResponseKind) -> ControlResponse {
+    ControlResponse {
+        sequence: RESPONSE_SEQUENCE.fetch_add(1, Ordering::Relaxed),
+        kind,
+    }
+}
 
 /// Configuration for the `ExclusiveControlPlugin`.
 #[derive(Clone, Debug, Resource)]
@@ -192,7 +206,7 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
 
                 // Try to get the entity
                 let Ok((entity, control, children)) = entities.get_mut(entity) else {
-                    let _ = net.send(client_id, ControlResponse::Error("Entity not found".to_string()));
+                    let _ = net.send(client_id, new_response(ControlResponseKind::Error("Entity not found".to_string())));
                     continue;
                 };
 
@@ -200,17 +214,28 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
                 if let Some(existing_control) = control {
                     if existing_control.client_id != client_id {
                         info!("[ExclusiveControl] Entity {:?} already controlled by {:?}, denying {:?}", entity, existing_control.client_id, client_id);
+
+                        // Notify the requesting client that control is denied
                         let _ = net.send(
                             client_id,
-                            ControlResponse::AlreadyControlled {
+                            new_response(ControlResponseKind::AlreadyControlled {
                                 by_client: existing_control.client_id,
-                            },
+                            }),
+                        );
+
+                        // Notify the controlling client that someone else is requesting control
+                        info!("[ExclusiveControl] Notifying {:?} that {:?} is requesting control", existing_control.client_id, client_id);
+                        let _ = net.send(
+                            existing_control.client_id,
+                            new_response(ControlResponseKind::ControlRequested {
+                                by_client: client_id,
+                            }),
                         );
                         continue;
                     } else {
                         // Already controlled by this client, just update activity
                         info!("[ExclusiveControl] Entity {:?} already controlled by {:?}, refreshing", entity, client_id);
-                        let _ = net.send(client_id, ControlResponse::Taken);
+                        let _ = net.send(client_id, new_response(ControlResponseKind::Taken));
                         continue;
                     }
                 }
@@ -233,7 +258,7 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
                 }
 
                 info!("[ExclusiveControl] Sending Taken response to {:?}", client_id);
-                let _ = net.send(client_id, ControlResponse::Taken);
+                let _ = net.send(client_id, new_response(ControlResponseKind::Taken));
             }
 
             ControlRequest::Release(entity_bits) => {
@@ -241,7 +266,7 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
 
                 // Try to get the entity
                 let Ok((entity, control, children)) = entities.get_mut(entity) else {
-                    let _ = net.send(client_id, ControlResponse::Error("Entity not found".to_string()));
+                    let _ = net.send(client_id, new_response(ControlResponseKind::Error("Entity not found".to_string())));
                     continue;
                 };
 
@@ -250,7 +275,7 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
                     if existing_control.client_id != client_id {
                         let _ = net.send(
                             client_id,
-                            ControlResponse::Error("Not controlled by you".to_string()),
+                            new_response(ControlResponseKind::Error("Not controlled by you".to_string())),
                         );
                         continue;
                     }
@@ -267,9 +292,9 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
                         }
                     }
 
-                    let _ = net.send(client_id, ControlResponse::Released);
+                    let _ = net.send(client_id, new_response(ControlResponseKind::Released));
                 } else {
-                    let _ = net.send(client_id, ControlResponse::NotControlled);
+                    let _ = net.send(client_id, new_response(ControlResponseKind::NotControlled));
                 }
             }
         }

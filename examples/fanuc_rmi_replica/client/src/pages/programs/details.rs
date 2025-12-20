@@ -2,31 +2,87 @@
 
 use leptos::prelude::*;
 use leptos::either::Either;
-use fanuc_replica_types::ProgramWithLines;
+use pl3xus_client::use_request;
+use fanuc_replica_types::{ProgramDetail, UpdateProgramSettings};
 
 /// Program details panel
 #[component]
 pub fn ProgramDetails(
-    current_program: RwSignal<Option<ProgramWithLines>>,
+    current_program: RwSignal<Option<ProgramDetail>>,
     #[allow(unused_variables)]
     selected_program_id: ReadSignal<Option<i64>>,
-    #[allow(unused_variables)]
     set_selected_program_id: WriteSignal<Option<i64>>,
     set_show_csv_upload: WriteSignal<bool>,
     set_show_open_modal: WriteSignal<bool>,
     set_show_new_program: WriteSignal<bool>,
 ) -> impl IntoView {
+    // Editable position signals - X, Y, Z, W, P, R for start and end
+    let (start_x, set_start_x) = signal(String::new());
+    let (start_y, set_start_y) = signal(String::new());
+    let (start_z, set_start_z) = signal(String::new());
+    let (start_w, set_start_w) = signal(String::new());
+    let (start_p, set_start_p) = signal(String::new());
+    let (start_r, set_start_r) = signal(String::new());
+    let (end_x, set_end_x) = signal(String::new());
+    let (end_y, set_end_y) = signal(String::new());
+    let (end_z, set_end_z) = signal(String::new());
+    let (end_w, set_end_w) = signal(String::new());
+    let (end_p, set_end_p) = signal(String::new());
+    let (end_r, set_end_r) = signal(String::new());
+    let (move_speed, set_move_speed) = signal(String::new());
+    // Termination settings
+    let (term_type, set_term_type) = signal(String::from("CNT"));
+    let (term_value, set_term_value) = signal(String::from("100"));
+    let (settings_modified, set_settings_modified) = signal(false);
+
+    // Track current program ID and instruction count to detect changes
+    let (current_prog_id, set_current_prog_id) = signal::<Option<i64>>(None);
+    let (current_inst_count, set_current_inst_count) = signal::<usize>(0);
+
+    // Request hook for updating settings
+    let (update_settings, _update_state) = use_request::<UpdateProgramSettings>();
+
+    // Sync signals when program changes or is re-fetched with new data
+    Effect::new(move |_| {
+        if let Some(prog) = current_program.get() {
+            let id_changed = current_prog_id.get() != Some(prog.id);
+            let inst_count_changed = current_inst_count.get() != prog.instructions.len();
+
+            // Update when ID changes OR when instruction count changes (i.e. after CSV upload)
+            // but only if settings haven't been modified by user
+            if id_changed || (inst_count_changed && !settings_modified.get()) {
+                set_current_prog_id.set(Some(prog.id));
+                set_current_inst_count.set(prog.instructions.len());
+                set_start_x.set(prog.start_x.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_start_y.set(prog.start_y.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_start_z.set(prog.start_z.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_start_w.set(prog.start_w.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_start_p.set(prog.start_p.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_start_r.set(prog.start_r.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_end_x.set(prog.end_x.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_end_y.set(prog.end_y.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_end_z.set(prog.end_z.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_end_w.set(prog.end_w.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_end_p.set(prog.end_p.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_end_r.set(prog.end_r.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_move_speed.set(prog.move_speed.map(|v| format!("{:.0}", v)).unwrap_or_else(|| "100".to_string()));
+                set_term_type.set(prog.default_term_type.clone());
+                set_term_value.set(prog.default_term_value.map(|v| v.to_string()).unwrap_or_else(|| "100".to_string()));
+                set_settings_modified.set(false);
+            }
+        }
+    });
+
     view! {
         <div class="flex-1 bg-[#0a0a0a] rounded border border-[#ffffff08] flex flex-col overflow-hidden">
             {move || {
                 if let Some(prog) = current_program.get() {
-                    let _prog_id = prog.id;
+                    let prog_id = prog.id;
                     let prog_name = prog.name.clone();
                     let prog_desc = prog.description.clone().unwrap_or_default();
-                    let line_count = prog.lines.len();
-
-                    // Clone instructions for the table display
-                    let instructions_for_table = prog.lines.clone();
+                    let line_count = prog.instructions.len();
+                    let instructions_for_table = prog.instructions.clone();
+                    let update_settings = update_settings.clone();
 
                     Either::Left(view! {
                         <div class="h-full flex flex-col">
@@ -51,7 +107,7 @@ pub fn ProgramDetails(
                                                 current_program.set(None);
                                             }
                                         >
-                                            "Delete"
+                                            "Close"
                                         </button>
                                     </div>
                                 </div>
@@ -65,7 +121,116 @@ pub fn ProgramDetails(
                                 </div>
                             </div>
 
-                            // Position inputs and instructions table will be added in next edit
+                            // Start Position
+                            <PositionInputRow
+                                label="Start Position"
+                                hint="(approach before toolpath)"
+                                x=start_x set_x=set_start_x
+                                y=start_y set_y=set_start_y
+                                z=start_z set_z=set_start_z
+                                w=start_w set_w=set_start_w
+                                p=start_p set_p=set_start_p
+                                r=start_r set_r=set_start_r
+                                set_modified=set_settings_modified
+                            />
+
+                            // End Position
+                            <PositionInputRow
+                                label="End Position"
+                                hint="(retreat after toolpath)"
+                                x=end_x set_x=set_end_x
+                                y=end_y set_y=set_end_y
+                                z=end_z set_z=set_end_z
+                                w=end_w set_w=set_end_w
+                                p=end_p set_p=set_end_p
+                                r=end_r set_r=set_end_r
+                                set_modified=set_settings_modified
+                            />
+
+                            // Motion Settings Row
+                            <div class="px-3 pb-3 border-b border-[#ffffff08] flex items-end gap-3 flex-wrap">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <div class="text-[8px] text-[#555555] uppercase">"Move Speed"</div>
+                                        <div class="text-[7px] text-[#444444]">"(mm/s)"</div>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        class="w-20 bg-[#111111] border border-[#ffffff10] rounded px-2 py-1 text-[10px] text-white font-mono"
+                                        placeholder="100"
+                                        prop:value=move || move_speed.get()
+                                        on:input=move |ev| {
+                                            set_move_speed.set(event_target_value(&ev));
+                                            set_settings_modified.set(true);
+                                        }
+                                    />
+                                </div>
+                                <div>
+                                    <div class="text-[8px] text-[#555555] uppercase mb-1">"Term Type"</div>
+                                    <select
+                                        class="w-20 bg-[#111111] border border-[#ffffff10] rounded px-2 py-1 text-[10px] text-white"
+                                        prop:value=move || term_type.get()
+                                        on:change=move |ev| {
+                                            set_term_type.set(event_target_value(&ev));
+                                            set_settings_modified.set(true);
+                                        }
+                                    >
+                                        <option value="CNT">"CNT"</option>
+                                        <option value="FINE">"FINE"</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <div class="text-[8px] text-[#555555] uppercase">"Term Value"</div>
+                                        <div class="text-[7px] text-[#444444]">"(0-100)"</div>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        class="w-16 bg-[#111111] border border-[#ffffff10] rounded px-2 py-1 text-[10px] text-white font-mono"
+                                        placeholder="100"
+                                        prop:value=move || term_value.get()
+                                        on:input=move |ev| {
+                                            set_term_value.set(event_target_value(&ev));
+                                            set_settings_modified.set(true);
+                                        }
+                                    />
+                                </div>
+                                <Show when=move || settings_modified.get()>
+                                    {
+                                        let update_settings = update_settings.clone();
+                                        view! {
+                                            <button
+                                                class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[9px] px-3 py-1 rounded hover:bg-[#22c55e30]"
+                                                on:click=move |_| {
+                                                    update_settings(UpdateProgramSettings {
+                                                        program_id: prog_id,
+                                                        start_x: start_x.get().parse().ok(),
+                                                        start_y: start_y.get().parse().ok(),
+                                                        start_z: start_z.get().parse().ok(),
+                                                        start_w: start_w.get().parse().ok(),
+                                                        start_p: start_p.get().parse().ok(),
+                                                        start_r: start_r.get().parse().ok(),
+                                                        end_x: end_x.get().parse().ok(),
+                                                        end_y: end_y.get().parse().ok(),
+                                                        end_z: end_z.get().parse().ok(),
+                                                        end_w: end_w.get().parse().ok(),
+                                                        end_p: end_p.get().parse().ok(),
+                                                        end_r: end_r.get().parse().ok(),
+                                                        move_speed: move_speed.get().parse().ok(),
+                                                        default_term_type: Some(term_type.get()),
+                                                        default_term_value: term_value.get().parse().ok(),
+                                                    });
+                                                    set_settings_modified.set(false);
+                                                }
+                                            >
+                                                "Save Settings"
+                                            </button>
+                                        }
+                                    }
+                                </Show>
+                            </div>
+
+                            // Instructions table
                             <div class="flex-1 p-3 overflow-auto">
                                 <h4 class="text-[9px] text-[#666666] uppercase mb-2">"Program Instructions"</h4>
                                 <InstructionsTable instructions=instructions_for_table />
@@ -85,9 +250,71 @@ pub fn ProgramDetails(
     }
 }
 
+/// Position input row component (6 inputs: X, Y, Z, W, P, R)
+#[component]
+fn PositionInputRow(
+    label: &'static str,
+    hint: &'static str,
+    x: ReadSignal<String>,
+    set_x: WriteSignal<String>,
+    y: ReadSignal<String>,
+    set_y: WriteSignal<String>,
+    z: ReadSignal<String>,
+    set_z: WriteSignal<String>,
+    w: ReadSignal<String>,
+    set_w: WriteSignal<String>,
+    p: ReadSignal<String>,
+    set_p: WriteSignal<String>,
+    r: ReadSignal<String>,
+    set_r: WriteSignal<String>,
+    set_modified: WriteSignal<bool>,
+) -> impl IntoView {
+    view! {
+        <div class="px-3 pb-2">
+            <div class="flex items-center gap-2 mb-1">
+                <div class="text-[8px] text-[#555555] uppercase">{label}</div>
+                <div class="text-[7px] text-[#444444]">{hint}</div>
+            </div>
+            <div class="grid grid-cols-6 gap-2">
+                <PositionInput label="X" value=x set_value=set_x set_modified=set_modified />
+                <PositionInput label="Y" value=y set_value=set_y set_modified=set_modified />
+                <PositionInput label="Z" value=z set_value=set_z set_modified=set_modified />
+                <PositionInput label="W" value=w set_value=set_w set_modified=set_modified />
+                <PositionInput label="P" value=p set_value=set_p set_modified=set_modified />
+                <PositionInput label="R" value=r set_value=set_r set_modified=set_modified />
+            </div>
+        </div>
+    }
+}
+
+/// Single position input
+#[component]
+fn PositionInput(
+    label: &'static str,
+    value: ReadSignal<String>,
+    set_value: WriteSignal<String>,
+    set_modified: WriteSignal<bool>,
+) -> impl IntoView {
+    view! {
+        <div>
+            <label class="text-[7px] text-[#444444]">{label}</label>
+            <input
+                type="text"
+                class="w-full bg-[#111111] border border-[#ffffff10] rounded px-2 py-1 text-[10px] text-white font-mono"
+                placeholder=label
+                prop:value=move || value.get()
+                on:input=move |ev| {
+                    set_value.set(event_target_value(&ev));
+                    set_modified.set(true);
+                }
+            />
+        </div>
+    }
+}
+
 /// Instructions table component
 #[component]
-fn InstructionsTable(instructions: Vec<fanuc_replica_types::ProgramLineInfo>) -> impl IntoView {
+fn InstructionsTable(instructions: Vec<fanuc_replica_types::Instruction>) -> impl IntoView {
     if instructions.is_empty() {
         Either::Left(view! {
             <div class="bg-[#111111] rounded border border-[#ffffff08] p-4 text-center text-[#555555] text-[10px]">
@@ -114,20 +341,25 @@ fn InstructionsTable(instructions: Vec<fanuc_replica_types::ProgramLineInfo>) ->
                         </tr>
                     </thead>
                     <tbody>
-                        {instructions.into_iter().enumerate().map(|(idx, instr)| {
+                        {instructions.into_iter().map(|instr| {
+                            let w_str = instr.w.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "-".to_string());
+                            let p_str = instr.p.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "-".to_string());
+                            let r_str = instr.r.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "-".to_string());
+                            let speed_str = instr.speed.map(|v| format!("{:.0}", v)).unwrap_or_else(|| "-".to_string());
+                            let term_str = instr.term_type.clone().unwrap_or_else(|| "-".to_string());
                             let uframe_str = instr.uframe.map(|v| v.to_string()).unwrap_or_else(|| "-".to_string());
                             let utool_str = instr.utool.map(|v| v.to_string()).unwrap_or_else(|| "-".to_string());
                             view! {
                                 <tr class="border-t border-[#ffffff08] hover:bg-[#ffffff05]">
-                                    <td class="px-2 py-1 text-[#00d9ff]">{idx + 1}</td>
+                                    <td class="px-2 py-1 text-[#00d9ff]">{instr.line_number}</td>
                                     <td class="px-2 py-1 text-white">{format!("{:.2}", instr.x)}</td>
                                     <td class="px-2 py-1 text-white">{format!("{:.2}", instr.y)}</td>
                                     <td class="px-2 py-1 text-white">{format!("{:.2}", instr.z)}</td>
-                                    <td class="px-2 py-1 text-[#888888]">{format!("{:.2}", instr.w)}</td>
-                                    <td class="px-2 py-1 text-[#888888]">{format!("{:.2}", instr.p)}</td>
-                                    <td class="px-2 py-1 text-[#888888]">{format!("{:.2}", instr.r)}</td>
-                                    <td class="px-2 py-1 text-[#22c55e]">{format!("{:.0}", instr.speed)}</td>
-                                    <td class="px-2 py-1 text-[#888888]">{instr.term_type.clone()}</td>
+                                    <td class="px-2 py-1 text-[#888888]">{w_str}</td>
+                                    <td class="px-2 py-1 text-[#888888]">{p_str}</td>
+                                    <td class="px-2 py-1 text-[#888888]">{r_str}</td>
+                                    <td class="px-2 py-1 text-[#22c55e]">{speed_str}</td>
+                                    <td class="px-2 py-1 text-[#888888]">{term_str}</td>
                                     <td class="px-2 py-1 text-[#888888]">{uframe_str}</td>
                                     <td class="px-2 py-1 text-[#888888]">{utool_str}</td>
                                 </tr>

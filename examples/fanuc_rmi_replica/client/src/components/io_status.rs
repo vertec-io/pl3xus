@@ -9,7 +9,14 @@ use crate::layout::LayoutContext;
 
 /// I/O status panel showing digital/analog/group inputs and outputs.
 #[component]
-pub fn IoStatusPanel() -> impl IntoView {
+pub fn IoStatusPanel(
+    /// Whether to start collapsed. Defaults to true for docked panel, false for floating.
+    #[prop(default = true)]
+    start_collapsed: bool,
+    /// Whether to show the pop-out button. Defaults to true.
+    #[prop(default = true)]
+    show_popout: bool,
+) -> impl IntoView {
     let layout_ctx = use_context::<LayoutContext>().expect("LayoutContext required");
     let io_status = use_sync_component::<IoStatus>();
     let io_config = use_sync_component::<IoConfigState>();
@@ -22,7 +29,7 @@ pub fn IoStatusPanel() -> impl IntoView {
     let (read_gin, _) = use_request::<ReadGin>();
 
     // State
-    let (collapsed, set_collapsed) = signal(true);
+    let (collapsed, set_collapsed) = signal(start_collapsed);
     let (selected_tab, set_selected_tab) = signal::<&'static str>("din");
 
     // Default ports to display (1-8)
@@ -93,16 +100,18 @@ pub fn IoStatusPanel() -> impl IntoView {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
                 </button>
-                // Pop-out button
-                <button
-                    class="p-0.5 hover:bg-[#ffffff10] rounded"
-                    title="Pop out I/O panel"
-                    on:click=move |_| layout_ctx.io_popped.set(true)
-                >
-                    <svg class="w-3 h-3 text-[#555555] hover:text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-                    </svg>
-                </button>
+                // Pop-out button (only show when not already popped out)
+                <Show when=move || show_popout>
+                    <button
+                        class="p-0.5 hover:bg-[#ffffff10] rounded"
+                        title="Pop out I/O panel"
+                        on:click=move |_| layout_ctx.io_popped.set(true)
+                    >
+                        <svg class="w-3 h-3 text-[#555555] hover:text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                        </svg>
+                    </button>
+                </Show>
             </div>
 
             // Collapsible header
@@ -336,11 +345,6 @@ fn AnalogOutput(
     let display_name = name.clone();
     let title_name = name;
 
-    let start_edit = move |_| {
-        set_input_value.set(format!("{:.2}", value.get()));
-        set_editing.set(true);
-    };
-
     // Inline submit for blur
     let do_blur_submit = {
         let write_aout = write_aout.clone();
@@ -376,6 +380,12 @@ fn AnalogOutput(
         <div
             class="flex flex-col items-center justify-center p-1 rounded text-[8px] bg-[#ff880010] cursor-pointer hover:bg-[#ff880020]"
             title=format!("AOUT[{}] - Click to edit", port)
+            on:click=move |_| {
+                if !editing.get() {
+                    set_input_value.set(format!("{:.2}", value.get()));
+                    set_editing.set(true);
+                }
+            }
         >
             <span class="font-mono text-[#ff8800] truncate max-w-full" title=title_name>{display_name}</span>
             {move || {
@@ -388,14 +398,12 @@ fn AnalogOutput(
                             on:input=move |ev| set_input_value.set(event_target_value(&ev))
                             on:blur=do_blur_submit.clone()
                             on:keydown=do_key_submit.clone()
+                            on:click=move |ev| ev.stop_propagation()
                         />
                     }.into_any()
                 } else {
                     view! {
-                        <span
-                            class="font-mono text-[#888888] text-[7px] cursor-pointer"
-                            on:click=start_edit
-                        >
+                        <span class="font-mono text-[#888888] text-[7px]">
                             {move || format!("{:.1}", value.get())}
                         </span>
                     }.into_any()
@@ -440,11 +448,6 @@ fn GroupOutput(
     let display_name = name.clone();
     let title_name = name;
 
-    let start_edit = move |_| {
-        set_input_value.set(value.get().to_string());
-        set_editing.set(true);
-    };
-
     // Inline submit for blur
     let do_blur_submit = {
         let write_gout = write_gout.clone();
@@ -480,6 +483,12 @@ fn GroupOutput(
         <div
             class="flex flex-col items-center justify-center p-1 rounded text-[8px] bg-[#ff880010] cursor-pointer hover:bg-[#ff880020]"
             title=format!("GOUT[{}] - Click to edit", port)
+            on:click=move |_| {
+                if !editing.get() {
+                    set_input_value.set(value.get().to_string());
+                    set_editing.set(true);
+                }
+            }
         >
             <span class="font-mono text-[#ff8800] truncate max-w-full" title=title_name>{display_name}</span>
             {move || {
@@ -492,14 +501,12 @@ fn GroupOutput(
                             on:input=move |ev| set_input_value.set(event_target_value(&ev))
                             on:blur=do_blur_submit.clone()
                             on:keydown=do_key_submit.clone()
+                            on:click=move |ev| ev.stop_propagation()
                         />
                     }.into_any()
                 } else {
                     view! {
-                        <span
-                            class="font-mono text-[#888888] text-[7px] cursor-pointer"
-                            on:click=start_edit
-                        >
+                        <span class="font-mono text-[#888888] text-[7px]">
                             {move || value.get()}
                         </span>
                     }.into_any()

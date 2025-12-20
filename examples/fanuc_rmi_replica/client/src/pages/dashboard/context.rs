@@ -5,6 +5,7 @@
 
 use leptos::prelude::*;
 use std::collections::HashSet;
+use js_sys;
 
 /// Shared context for frame/tool data and program state
 #[derive(Clone, Copy)]
@@ -63,6 +64,39 @@ impl WorkspaceContext {
             console_messages: RwSignal::new(Vec::new()),
             error_log: RwSignal::new(Vec::new()),
         }
+    }
+
+    /// Add a console message
+    pub fn add_console_message(&self, content: String, direction: MessageDirection, msg_type: MessageType) {
+        let now = js_sys::Date::new_0();
+        let timestamp = now.to_locale_time_string("en-US").as_string().unwrap_or_default();
+        let timestamp_ms = now.get_time() as u64;
+
+        self.console_messages.update(|msgs| {
+            msgs.push(ConsoleMessage {
+                timestamp,
+                timestamp_ms,
+                content,
+                direction,
+                msg_type,
+                sequence_id: None,
+            });
+            // Keep only last 500 messages
+            if msgs.len() > 500 {
+                msgs.remove(0);
+            }
+        });
+    }
+
+    /// Add an error to the error log
+    pub fn add_error(&self, error: String) {
+        self.error_log.update(|errors| {
+            errors.push(error);
+            // Keep only last 100 errors
+            if errors.len() > 100 {
+                errors.remove(0);
+            }
+        });
     }
 }
 

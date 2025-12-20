@@ -82,9 +82,22 @@ pub enum ControlRequest {
 }
 
 /// Response to a control request.
+///
+/// Each response includes a unique `sequence` number to ensure that identical
+/// responses (e.g., multiple "AlreadyControlled" for repeated requests) are
+/// treated as distinct messages by the client's message deduplication logic.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "ecs", derive(bevy::prelude::Message))]
-pub enum ControlResponse {
+pub struct ControlResponse {
+    /// Unique sequence number to distinguish otherwise identical responses.
+    pub sequence: u64,
+    /// The actual response variant.
+    pub kind: ControlResponseKind,
+}
+
+/// The kind of control response.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub enum ControlResponseKind {
     /// No response yet (default state).
     #[default]
     None,
@@ -99,6 +112,12 @@ pub enum ControlResponse {
     },
     /// Entity is not currently controlled (when trying to release).
     NotControlled,
+    /// Another client is requesting control of an entity you control.
+    /// Sent to the controlling client when someone else requests control.
+    ControlRequested {
+        /// The client that is requesting control.
+        by_client: ConnectionId,
+    },
     /// An error occurred.
     Error(String),
 }

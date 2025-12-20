@@ -925,7 +925,11 @@ where
 
     // Create the fetch function
     let fetch = move |request: R| {
+        #[cfg(target_arch = "wasm32")]
+        leptos::logging::log!("[use_request] fetch called for request type: {}", R::request_name());
         let id = ctx.request(request);
+        #[cfg(target_arch = "wasm32")]
+        leptos::logging::log!("[use_request] request sent with id: {}", id);
         current_request_id.set(Some(id));
     };
 

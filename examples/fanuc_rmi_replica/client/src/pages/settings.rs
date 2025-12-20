@@ -7,13 +7,16 @@
 use leptos::prelude::*;
 use leptos::web_sys;
 
-use pl3xus_client::use_request;
+use pl3xus_client::{use_request, use_sync_context, ConnectionReadyState};
 use fanuc_replica_types::*;
 use crate::components::RobotCreationWizard;
 
 /// Settings view with two-panel layout.
 #[component]
 pub fn SettingsView() -> impl IntoView {
+    // Get sync context for WebSocket state
+    let ctx = use_sync_context();
+
     // Selected robot for editing
     let (selected_robot_id, set_selected_robot_id) = signal::<Option<i64>>(None);
 
@@ -28,12 +31,13 @@ pub fn SettingsView() -> impl IntoView {
     // Track if we've loaded the robots
     let (has_loaded, set_has_loaded) = signal(false);
 
-    // Load robot connections on mount (only once)
+    // Load robot connections when WebSocket is open (only once)
     {
         let fetch_robots = fetch_robots.clone();
+        let ready_state = ctx.ready_state;
         Effect::new(move |_| {
-            // Only fetch once on mount
-            if !has_loaded.get() {
+            // Only fetch when WebSocket is open AND we haven't loaded yet
+            if ready_state.get() == ConnectionReadyState::Open && !has_loaded.get_untracked() {
                 set_has_loaded.set(true);
                 fetch_robots(ListRobotConnections);
             }

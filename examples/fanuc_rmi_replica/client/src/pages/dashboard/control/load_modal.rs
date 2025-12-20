@@ -4,6 +4,7 @@ use leptos::prelude::*;
 use pl3xus_client::use_request;
 use fanuc_replica_types::*;
 use crate::pages::dashboard::context::{WorkspaceContext, ProgramLine};
+use crate::components::{use_toast, ToastType};
 
 /// Load Program Modal - Select and load a program for execution.
 #[component]
@@ -14,7 +15,9 @@ where
     F: Fn() + Clone + 'static,
 {
     let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
+    let toast = use_toast();
     let (list_programs, programs_state) = use_request::<ListPrograms>();
+    let (load_program_fn, load_state) = use_request::<LoadProgram>();
     let (selected_id, set_selected_id) = signal::<Option<i64>>(None);
     let (loading, set_loading) = signal(false);
     let (has_loaded, set_has_loaded) = signal(false);
@@ -41,38 +44,53 @@ where
     let on_close_cancel = on_close.clone();
     let on_close_load = on_close.clone();
 
-    // Load selected program
+    // Store load_program_fn for use in effect
+    let load_program_fn = StoredValue::new(load_program_fn);
+
+    // Handle load response
+    Effect::new(move |_| {
+        let state = load_state.get();
+        if let Some(response) = state.data {
+            set_loading.set(false);
+            if response.success {
+                if let Some(program) = response.program {
+                    // Convert program lines to ProgramLine format
+                    let lines: Vec<ProgramLine> = program.lines.iter().enumerate().map(|(i, line)| {
+                        ProgramLine {
+                            line_number: i + 1,
+                            x: line.x,
+                            y: line.y,
+                            z: line.z,
+                            w: line.w,
+                            p: line.p,
+                            r: line.r,
+                            speed: line.speed,
+                            term_type: line.term_type.clone(),
+                            uframe: line.uframe,
+                            utool: line.utool,
+                        }
+                    }).collect();
+
+                    ctx.program_lines.set(lines);
+                    ctx.loaded_program_id.set(Some(program.id));
+                    ctx.loaded_program_name.set(Some(program.name.clone()));
+                    ctx.executing_line.set(-1);
+                    ctx.program_running.set(false);
+                    ctx.program_paused.set(false);
+                    toast.show(&format!("Loaded program '{}'", program.name), ToastType::Success);
+                    on_close_load();
+                }
+            } else if let Some(error) = response.error {
+                toast.show(&error, ToastType::Error);
+            }
+        }
+    });
+
+    // Load selected program - sends request to server
     let load_program = move |_| {
         if let Some(id) = selected_id.get() {
             set_loading.set(true);
-            // Find the program
-            if let Some(program) = programs.get().iter().find(|p| p.id == id).cloned() {
-                // Convert program lines to ProgramLine format
-                let lines: Vec<ProgramLine> = program.lines.iter().enumerate().map(|(i, line)| {
-                    ProgramLine {
-                        line_number: i + 1,
-                        x: line.x,
-                        y: line.y,
-                        z: line.z,
-                        w: line.w,
-                        p: line.p,
-                        r: line.r,
-                        speed: line.speed,
-                        term_type: line.term_type.clone(),
-                        uframe: line.uframe,
-                        utool: line.utool,
-                    }
-                }).collect();
-
-                ctx.program_lines.set(lines);
-                ctx.loaded_program_id.set(Some(id));
-                ctx.loaded_program_name.set(Some(program.name));
-                ctx.executing_line.set(-1);
-                ctx.program_running.set(false);
-                ctx.program_paused.set(false);
-                on_close_load();
-            }
-            set_loading.set(false);
+            load_program_fn.with_value(|f| f(LoadProgram { program_id: id }));
         }
     };
 

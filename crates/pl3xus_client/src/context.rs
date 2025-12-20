@@ -268,10 +268,17 @@ impl SyncContext {
         // Check if we already have a signal for this short_name
         // Use get_untracked() to avoid reactive issues when called from Effects
         if let Some(signal) = self.incoming_messages.get_untracked().get(&short_name).cloned() {
-            // Update existing signal - use update_untracked to avoid reactive loops
-            // Then manually notify subscribers
-            signal.update_untracked(|bytes| *bytes = data);
-            signal.notify();
+            // Update existing signal - use try_update_untracked to handle disposed signals
+            // If the signal was disposed (component unmounted), create a new one
+            if signal.try_update_untracked(|bytes| *bytes = data.clone()).is_some() {
+                signal.notify();
+            } else {
+                // Signal was disposed, remove it and create a new one
+                let new_signal = RwSignal::new(data);
+                self.incoming_messages.update(|map| {
+                    map.insert(short_name, new_signal);
+                });
+            }
         } else {
             // Create new signal and insert into map
             let new_signal = RwSignal::new(data);
@@ -1122,8 +1129,9 @@ impl SyncContext {
             Ok(bytes) => {
                 #[cfg(target_arch = "wasm32")]
                 leptos::logging::log!(
-                    "[SyncContext::request] Sending request '{}' with id {} ({} bytes)",
+                    "[SyncContext::request] Sending request '{}' (type_name='{}') with id {} ({} bytes)",
                     R::request_name(),
+                    packet.type_name,
                     request_id,
                     bytes.len()
                 );

@@ -1,7 +1,7 @@
 //! Menu components for the Programs view.
 
 use leptos::prelude::*;
-use fanuc_replica_types::ProgramWithLines;
+use fanuc_replica_types::ProgramDetail;
 use crate::layout::LayoutContext;
 
 /// File menu dropdown
@@ -15,7 +15,7 @@ pub fn FileMenu(
     set_show_save_as_modal: WriteSignal<bool>,
     set_show_csv_upload: WriteSignal<bool>,
     selected_program_id: ReadSignal<Option<i64>>,
-    current_program: RwSignal<Option<ProgramWithLines>>,
+    current_program: RwSignal<Option<ProgramDetail>>,
 ) -> impl IntoView {
     view! {
         <div class="relative">

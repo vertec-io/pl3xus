@@ -5,7 +5,7 @@ mod left_navbar;
 mod right_panel;
 mod floating;
 
-pub use top_bar::{TopBar, ControlResponseHandler};
+pub use top_bar::{TopBar, ControlResponseHandler, ConnectionStateHandler, ExecutionStateHandler};
 pub use left_navbar::LeftNavbar;
 pub use right_panel::RightPanel;
 pub use floating::{FloatingJogControls, FloatingIOStatus};
@@ -14,6 +14,7 @@ use leptos::prelude::*;
 use leptos_router::hooks::use_location;
 
 use crate::pages::MainWorkspace;
+use crate::pages::dashboard::context::WorkspaceContext;
 
 /// Desktop layout context - provides shared state across layout components.
 #[derive(Clone, Copy)]
@@ -39,28 +40,6 @@ impl LayoutContext {
             jog_position: RwSignal::new((100, 100)),
             io_popped: RwSignal::new(false),
             show_program_browser: RwSignal::new(false),
-        }
-    }
-}
-
-/// Workspace context - provides shared state for workspace components.
-#[derive(Clone, Copy)]
-#[allow(dead_code)]
-pub struct WorkspaceContext {
-    /// Recently used commands for quick access.
-    pub recent_commands: RwSignal<Vec<String>>,
-    /// Currently selected command ID.
-    pub selected_command_id: RwSignal<Option<i64>>,
-    /// Command execution log.
-    pub command_log: RwSignal<Vec<String>>,
-}
-
-impl WorkspaceContext {
-    pub fn new() -> Self {
-        Self {
-            recent_commands: RwSignal::new(Vec::new()),
-            selected_command_id: RwSignal::new(None),
-            command_log: RwSignal::new(Vec::new()),
         }
     }
 }
@@ -102,6 +81,10 @@ pub fn DesktopLayout() -> impl IntoView {
                 </Show>
             </div>
         </div>
+
+        // Headless component to sync ExecutionState to WorkspaceContext
+        // Must be rendered here (inside DesktopLayout) where WorkspaceContext is provided
+        <ExecutionStateHandler/>
     }
 }
 

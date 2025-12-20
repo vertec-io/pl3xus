@@ -9,7 +9,7 @@ use pl3xus_client::{ClientTypeRegistry, SyncProvider, EntityControl, ControlResp
 use fanuc_replica_types::*;
 
 use crate::components::ToastProvider;
-use crate::layout::{DesktopLayout, FloatingJogControls, FloatingIOStatus, ControlResponseHandler};
+use crate::layout::{DesktopLayout, FloatingJogControls, FloatingIOStatus, ControlResponseHandler, ConnectionStateHandler};
 
 /// Build the client type registry with all synced components.
 fn build_registry() -> Arc<ClientTypeRegistry> {
@@ -42,8 +42,9 @@ pub fn App() -> impl IntoView {
                 // Floating controls (rendered outside normal flow)
                 <FloatingJogControls/>
                 <FloatingIOStatus/>
-                // Headless component to handle control responses
+                // Headless components to handle server responses
                 <ControlResponseHandler/>
+                <ConnectionStateHandler/>
             </SyncProvider>
         </ToastProvider>
     }

@@ -20,3 +20,8 @@ bincode = "1.3"
 
 # Shared types
 fanuc_replica_types = { path = "../../shared/fanuc_replica_types" }
+js-sys = "0.3.83"
+
+# Fanuc RMI types (DTO only, no driver)
+fanuc_rmi = { path = "/home/apino/dev/Fanuc_RMI_API/fanuc_rmi", default-features = false, features = ["DTO"] }
+leptos-use = "0.16"

@@ -26,6 +26,7 @@ impl DatabaseResource {
                 default_p REAL DEFAULT 0.0,
                 default_r REAL DEFAULT 0.0,
                 default_speed REAL,
+                default_speed_type TEXT DEFAULT 'mmSec',
                 default_term_type TEXT DEFAULT 'CNT',
                 default_term_value INTEGER DEFAULT 100,
                 default_uframe INTEGER,
@@ -175,6 +176,28 @@ impl DatabaseResource {
              SELECT id, 'Default Config', 1, 1, 1 FROM robot_connections WHERE name = 'Local Test Robot'",
             [],
         )?;
+
+        // Run migrations for existing databases
+        Self::run_migrations(&conn)?;
+
+        Ok(())
+    }
+
+    /// Run schema migrations for existing databases
+    fn run_migrations(conn: &Connection) -> anyhow::Result<()> {
+        // Migration: Add default_speed_type column to programs table if missing
+        let has_speed_type: bool = conn.query_row(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('programs') WHERE name = 'default_speed_type'",
+            [],
+            |row| row.get(0),
+        )?;
+
+        if !has_speed_type {
+            conn.execute(
+                "ALTER TABLE programs ADD COLUMN default_speed_type TEXT DEFAULT 'mmSec'",
+                [],
+            )?;
+        }
 
         Ok(())
     }
@@ -394,6 +417,41 @@ impl DatabaseResource {
         Ok(config)
     }
 
+    /// Get the default configuration for a robot connection.
+    /// Returns None if no default configuration is set.
+    pub fn get_default_configuration_for_robot(&self, robot_connection_id: i64) -> anyhow::Result<Option<RobotConfiguration>> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, robot_connection_id, name, is_default, u_frame_number, u_tool_number,
+                    front, up, left, flip, turn4, turn5, turn6
+             FROM robot_configurations WHERE robot_connection_id = ? AND is_default = 1"
+        )?;
+
+        let config = stmt.query_row([robot_connection_id], |row| {
+            Ok(RobotConfiguration {
+                id: row.get(0)?,
+                robot_connection_id: row.get(1)?,
+                name: row.get(2)?,
+                is_default: row.get::<_, i32>(3)? != 0,
+                u_frame_number: row.get(4)?,
+                u_tool_number: row.get(5)?,
+                front: row.get(6)?,
+                up: row.get(7)?,
+                left: row.get(8)?,
+                flip: row.get(9)?,
+                turn4: row.get(10)?,
+                turn5: row.get(11)?,
+                turn6: row.get(12)?,
+            })
+        });
+
+        match config {
+            Ok(c) => Ok(Some(c)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     pub fn create_configuration(&self, req: &CreateConfiguration) -> anyhow::Result<i64> {
         let conn = self.0.lock().unwrap();
 
@@ -569,7 +627,10 @@ impl DatabaseResource {
         let conn = self.0.lock().unwrap();
 
         let program = conn.query_row(
-            "SELECT id, name, description, default_term_type, default_term_value,
+            "SELECT id, name, description,
+                    COALESCE(default_w, 0.0), COALESCE(default_p, 0.0), COALESCE(default_r, 0.0),
+                    default_speed, default_speed_type, COALESCE(default_term_type, 'CNT'), default_term_value,
+                    default_uframe, default_utool,
                     start_x, start_y, start_z, start_w, start_p, start_r,
                     end_x, end_y, end_z, end_w, end_p, end_r, move_speed,
                     created_at, updated_at
@@ -581,23 +642,30 @@ impl DatabaseResource {
                     name: row.get(1)?,
                     description: row.get(2)?,
                     instructions: Vec::new(), // Will be filled below
-                    default_term_type: row.get::<_, Option<String>>(3)?.unwrap_or("CNT".to_string()),
-                    default_term_value: row.get(4)?,
-                    start_x: row.get(5)?,
-                    start_y: row.get(6)?,
-                    start_z: row.get(7)?,
-                    start_w: row.get(8)?,
-                    start_p: row.get(9)?,
-                    start_r: row.get(10)?,
-                    end_x: row.get(11)?,
-                    end_y: row.get(12)?,
-                    end_z: row.get(13)?,
-                    end_w: row.get(14)?,
-                    end_p: row.get(15)?,
-                    end_r: row.get(16)?,
-                    move_speed: row.get(17)?,
-                    created_at: row.get(18)?,
-                    updated_at: row.get(19)?,
+                    default_w: row.get(3)?,
+                    default_p: row.get(4)?,
+                    default_r: row.get(5)?,
+                    default_speed: row.get(6)?,
+                    default_speed_type: row.get(7)?,
+                    default_term_type: row.get(8)?,
+                    default_term_value: row.get(9)?,
+                    default_uframe: row.get(10)?,
+                    default_utool: row.get(11)?,
+                    start_x: row.get(12)?,
+                    start_y: row.get(13)?,
+                    start_z: row.get(14)?,
+                    start_w: row.get(15)?,
+                    start_p: row.get(16)?,
+                    start_r: row.get(17)?,
+                    end_x: row.get(18)?,
+                    end_y: row.get(19)?,
+                    end_z: row.get(20)?,
+                    end_w: row.get(21)?,
+                    end_p: row.get(22)?,
+                    end_r: row.get(23)?,
+                    move_speed: row.get(24)?,
+                    created_at: row.get(25)?,
+                    updated_at: row.get(26)?,
                 })
             },
         ).ok();
@@ -645,6 +713,47 @@ impl DatabaseResource {
         let conn = self.0.lock().unwrap();
         conn.execute("DELETE FROM program_instructions WHERE program_id = ?", [id])?;
         conn.execute("DELETE FROM programs WHERE id = ?", [id])?;
+        Ok(())
+    }
+
+    pub fn update_program_settings(
+        &self,
+        program_id: i64,
+        start_x: Option<f64>,
+        start_y: Option<f64>,
+        start_z: Option<f64>,
+        start_w: Option<f64>,
+        start_p: Option<f64>,
+        start_r: Option<f64>,
+        end_x: Option<f64>,
+        end_y: Option<f64>,
+        end_z: Option<f64>,
+        end_w: Option<f64>,
+        end_p: Option<f64>,
+        end_r: Option<f64>,
+        move_speed: Option<f64>,
+        default_term_type: Option<String>,
+        default_term_value: Option<u8>,
+    ) -> anyhow::Result<()> {
+        let conn = self.0.lock().unwrap();
+        conn.execute(
+            "UPDATE programs SET
+                start_x = ?, start_y = ?, start_z = ?,
+                start_w = ?, start_p = ?, start_r = ?,
+                end_x = ?, end_y = ?, end_z = ?,
+                end_w = ?, end_p = ?, end_r = ?,
+                move_speed = ?, default_term_type = ?, default_term_value = ?,
+                updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?",
+            rusqlite::params![
+                start_x, start_y, start_z,
+                start_w, start_p, start_r,
+                end_x, end_y, end_z,
+                end_w, end_p, end_r,
+                move_speed, default_term_type, default_term_value,
+                program_id
+            ],
+        )?;
         Ok(())
     }
 

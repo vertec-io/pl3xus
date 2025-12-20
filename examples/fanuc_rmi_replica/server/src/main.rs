@@ -25,7 +25,7 @@ mod driver_sync;
 mod plugins;
 
 use database::DatabaseResource;
-use plugins::{RobotConnectionPlugin, RobotSyncPlugin, RequestHandlerPlugin, RobotPollingPlugin};
+use plugins::{RobotConnectionPlugin, RobotSyncPlugin, RequestHandlerPlugin, RobotPollingPlugin, ProgramExecutionPlugin};
 use fanuc_replica_types::*;
 
 fn main() {
@@ -91,10 +91,11 @@ fn main() {
     // Application Plugins
     // ========================================================================
     app.add_plugins((
-        RobotConnectionPlugin,  // Connection state machine
-        RobotSyncPlugin,        // Driver polling and jogging
-        RequestHandlerPlugin,   // Database request handlers
-        RobotPollingPlugin,     // Periodic position/status polling
+        RobotConnectionPlugin,      // Connection state machine
+        RobotSyncPlugin,            // Driver polling and jogging
+        RequestHandlerPlugin,       // Database request handlers
+        RobotPollingPlugin,         // Periodic position/status polling
+        ProgramExecutionPlugin,     // Program execution with buffered streaming
     ));
 
     // ========================================================================

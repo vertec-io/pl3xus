@@ -29,10 +29,10 @@ impl Plugin for RobotSyncPlugin {
         app.register_network_message::<PauseProgram, WebSocketProvider>();
         app.register_network_message::<ResumeProgram, WebSocketProvider>();
         app.register_network_message::<StopProgram, WebSocketProvider>();
-        // Motion commands from Command Composer
-        app.register_network_message::<MoveLinear, WebSocketProvider>();
-        app.register_network_message::<MoveJoint, WebSocketProvider>();
-        app.register_network_message::<MoveRelative, WebSocketProvider>();
+
+        // Register fanuc_rmi::dto::SendPacket for direct motion commands
+        // This allows the client to send motion instructions directly using DTO types
+        app.register_network_message::<fanuc_rmi::dto::SendPacket, WebSocketProvider>();
 
         // Add sync systems
         app.add_systems(Update, (
@@ -43,6 +43,7 @@ impl Plugin for RobotSyncPlugin {
             jogging::handle_abort_motion,
             jogging::handle_reset_robot,
             jogging::handle_set_speed_override,
+            jogging::handle_send_packet,
         ));
     }
 }

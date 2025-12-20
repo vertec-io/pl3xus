@@ -14,8 +14,10 @@ use pl3xus_sync::control::EntityControl;
 use pl3xus_websockets::WebSocketProvider;
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use fanuc_rmi::drivers::{FanucDriver, FanucDriverConfig};
+use fanuc_rmi::drivers::{FanucDriver, FanucDriverConfig, LogLevel};
 use fanuc_replica_types::*;
+use crate::database::DatabaseResource;
+use super::execution::RmiSentInstructionChannel;
 
 // ============================================================================
 // Components
@@ -57,6 +59,13 @@ pub enum RobotConnectionState {
 #[derive(Component)]
 struct ConnectionInProgress;
 
+/// Marker to indicate that the default configuration needs to be loaded.
+/// Added when connection succeeds, removed after configuration is loaded.
+#[derive(Component)]
+struct NeedsDefaultConfigLoad {
+    connection_id: Option<i64>,
+}
+
 // ============================================================================
 // Plugin
 // ============================================================================
@@ -75,6 +84,7 @@ impl Plugin for RobotConnectionPlugin {
             handle_connect_requests,
             handle_connecting_state,
             handle_disconnect_requests,
+            load_default_configuration,
         ));
     }
 }
@@ -190,6 +200,7 @@ fn handle_connecting_state(
             addr: details.addr.clone(),
             port: details.port,
             max_messages: 30,
+            log_level: LogLevel::Info,
         };
 
         let robot_name = details.name.clone();
@@ -200,16 +211,22 @@ fn handle_connecting_state(
         tokio.spawn_background_task(move |mut ctx| async move {
             match FanucDriver::connect(config).await {
                 Ok(driver) => {
-                    driver.initialize();
+                    let _ = driver.initialize().await;
                     let driver_arc = Arc::new(driver);
                     let response_rx = driver_arc.response_tx.subscribe();
+                    let sent_instruction_rx = driver_arc.sent_instruction_tx.subscribe();
 
                     ctx.run_on_main_thread(move |ctx| {
                         if let Ok(mut entity_mut) = ctx.world.get_entity_mut(entity) {
                             entity_mut.remove::<ConnectionInProgress>();
                             entity_mut.insert(RmiDriver(driver_arc.clone()));
                             entity_mut.insert(RmiResponseChannel(response_rx));
+                            entity_mut.insert(RmiSentInstructionChannel(sent_instruction_rx));
                             entity_mut.insert(RobotConnectionState::Connected);
+
+                            // Get the connection_id before modifying conn_state
+                            let connection_id = entity_mut.get::<ConnectionState>()
+                                .and_then(|cs| cs.active_connection_id);
 
                             if let Some(mut conn_state) = entity_mut.get_mut::<ConnectionState>() {
                                 conn_state.robot_connected = true;
@@ -220,6 +237,9 @@ fn handle_connecting_state(
                                 conn_state.connection_name = Some(robot_name);
                                 conn_state.tp_initialized = true;
                             }
+
+                            // Add marker to load default configuration
+                            entity_mut.insert(NeedsDefaultConfigLoad { connection_id });
 
                             info!("✅ Robot {:?} connected successfully", entity);
                         }
@@ -235,6 +255,10 @@ fn handle_connecting_state(
                             if let Some(mut conn_state) = entity_mut.get_mut::<ConnectionState>() {
                                 conn_state.robot_connected = false;
                                 conn_state.robot_connecting = false;
+                                // Clear active connection on failure so UI shows "Connect" not "Disconnect"
+                                conn_state.active_connection_id = None;
+                                conn_state.robot_name = String::new();
+                                conn_state.connection_name = None;
                             }
                         }
                     }).await;
@@ -277,7 +301,56 @@ fn handle_disconnect_requests(
                 conn_state.active_connection_id = None;
                 commands.entity(entity).remove::<RmiDriver>();
                 commands.entity(entity).remove::<RmiResponseChannel>();
+                commands.entity(entity).remove::<RmiSentInstructionChannel>();
                 info!("🔌 Robot {:?} disconnected", entity);
+            }
+        }
+    }
+}
+
+/// Load the default configuration for a robot after connection.
+/// This system runs when a robot has the NeedsDefaultConfigLoad marker.
+fn load_default_configuration(
+    mut commands: Commands,
+    db: Option<Res<DatabaseResource>>,
+    mut robots: Query<(Entity, &NeedsDefaultConfigLoad, &mut ActiveConfigState), With<FanucRobot>>,
+) {
+    for (entity, needs_config, mut active_config) in robots.iter_mut() {
+        // Remove the marker first to prevent re-running
+        commands.entity(entity).remove::<NeedsDefaultConfigLoad>();
+
+        let Some(connection_id) = needs_config.connection_id else {
+            info!("No connection_id provided, skipping default config load");
+            continue;
+        };
+
+        let Some(ref db) = db else {
+            warn!("Database not available, cannot load default configuration");
+            continue;
+        };
+
+        // Try to load the default configuration for this robot connection
+        match db.get_default_configuration_for_robot(connection_id) {
+            Ok(Some(config)) => {
+                info!("📋 Loading default configuration '{}' for connection {}", config.name, connection_id);
+                active_config.loaded_from_id = Some(config.id);
+                active_config.loaded_from_name = Some(config.name);
+                active_config.u_frame_number = config.u_frame_number;
+                active_config.u_tool_number = config.u_tool_number;
+                active_config.front = config.front;
+                active_config.up = config.up;
+                active_config.left = config.left;
+                active_config.flip = config.flip;
+                active_config.turn4 = config.turn4;
+                active_config.turn5 = config.turn5;
+                active_config.turn6 = config.turn6;
+                active_config.changes_count = 0;
+            }
+            Ok(None) => {
+                info!("No default configuration found for connection {}", connection_id);
+            }
+            Err(e) => {
+                error!("Failed to load default configuration: {}", e);
             }
         }
     }

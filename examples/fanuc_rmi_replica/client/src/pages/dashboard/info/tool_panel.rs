@@ -1,17 +1,32 @@
 //! Tool Management Panel - Tool selector with Apply button.
+//!
+//! Reads active tool directly from the synced FrameToolDataState component.
+//! Server is the single source of truth for active frame/tool.
 
 use leptos::prelude::*;
 use pl3xus_client::{use_sync_component, use_request};
-use fanuc_replica_types::{ConnectionState, SetActiveFrameTool};
-use crate::pages::dashboard::context::WorkspaceContext;
+use fanuc_replica_types::{ConnectionState, FrameToolDataState, SetActiveFrameTool};
 
 /// Tool Management Panel - Tool selector with Apply button
+///
+/// Reads active tool from synced FrameToolDataState. The pending_tool
+/// is UI-local state for the selection before "Apply" is clicked.
 #[component]
 pub fn ToolManagementPanel() -> impl IntoView {
-    let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let connection_state = use_sync_component::<ConnectionState>();
-    let active_tool = ctx.active_tool;
-    let active_frame = ctx.active_frame;
+    let frame_tool_state = use_sync_component::<FrameToolDataState>();
+
+    // Derive active frame/tool from synced server state
+    let active_frame = Memo::new(move |_| {
+        frame_tool_state.get().values().next()
+            .map(|s| s.active_frame as usize)
+            .unwrap_or(0)
+    });
+    let active_tool = Memo::new(move |_| {
+        frame_tool_state.get().values().next()
+            .map(|s| s.active_tool as usize)
+            .unwrap_or(1)
+    });
 
     // Request hook for setting active frame/tool
     let (set_frame_tool, _set_frame_tool_state) = use_request::<SetActiveFrameTool>();
@@ -24,13 +39,13 @@ pub fn ToolManagementPanel() -> impl IntoView {
             .unwrap_or(false)
     });
 
-    // Local state for pending tool selection
+    // Local UI state for pending tool selection (before Apply is clicked)
     let (pending_tool, set_pending_tool) = signal::<Option<usize>>(None);
 
-    // View mode: "buttons" or "dropdown"
+    // View mode: "buttons" or "dropdown" - UI-local state
     let (view_mode, set_view_mode) = signal("buttons");
 
-    // Get effective tool (pending or current)
+    // Get effective tool (pending or current from server)
     let effective_tool = move || {
         pending_tool.get().unwrap_or_else(|| active_tool.get())
     };
@@ -95,11 +110,12 @@ pub fn ToolManagementPanel() -> impl IntoView {
                                     on:click=move |_| {
                                         if let Some(tool) = pending_tool.get() {
                                             let frame = active_frame.get();
+                                            // Send request to server - server updates FrameToolDataState
+                                            // which syncs back to all clients
                                             set_frame_tool.get_value()(SetActiveFrameTool {
                                                 uframe: frame as i32,
                                                 utool: tool as i32,
                                             });
-                                            ctx.active_tool.set(tool);
                                             set_pending_tool.set(None);
                                         }
                                     }
@@ -147,11 +163,12 @@ pub fn ToolManagementPanel() -> impl IntoView {
                                 on:click=move |_| {
                                     if let Some(tool) = pending_tool.get() {
                                         let frame = active_frame.get();
+                                        // Send request to server - server updates FrameToolDataState
+                                        // which syncs back to all clients
                                         set_frame_tool.get_value()(SetActiveFrameTool {
                                             uframe: frame as i32,
                                             utool: tool as i32,
                                         });
-                                        ctx.active_tool.set(tool);
                                         set_pending_tool.set(None);
                                     }
                                 }

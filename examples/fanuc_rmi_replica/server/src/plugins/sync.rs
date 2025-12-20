@@ -36,7 +36,6 @@ impl Plugin for RobotSyncPlugin {
 
         // Add sync systems
         app.add_systems(Update, (
-            crate::driver_sync::sync_robot_state,
             jogging::handle_jog_commands,
             jogging::handle_jog_robot_commands,
             jogging::handle_initialize_robot,

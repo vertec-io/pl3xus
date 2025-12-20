@@ -4,7 +4,6 @@ pub mod context;
 mod control;
 mod info;
 
-pub use context::WorkspaceContext;
 pub use control::ControlTab;
 pub use info::InfoTab;
 

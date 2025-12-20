@@ -5,7 +5,7 @@ mod left_navbar;
 mod right_panel;
 mod floating;
 
-pub use top_bar::{TopBar, ControlResponseHandler, ConnectionStateHandler, ExecutionStateHandler};
+pub use top_bar::{TopBar, ControlResponseHandler, ConnectionStateHandler, ProgramNotificationHandler, ConsoleLogHandler};
 pub use left_navbar::LeftNavbar;
 pub use right_panel::RightPanel;
 pub use floating::{FloatingJogControls, FloatingIOStatus};
@@ -82,9 +82,10 @@ pub fn DesktopLayout() -> impl IntoView {
             </div>
         </div>
 
-        // Headless component to sync ExecutionState to WorkspaceContext
-        // Must be rendered here (inside DesktopLayout) where WorkspaceContext is provided
-        <ExecutionStateHandler/>
+        // NOTE: ExecutionStateHandler has been REMOVED as part of the architecture refactor.
+        // UI components now read directly from the synced ExecutionState component using
+        // use_sync_component::<ExecutionState>(). This ensures all clients see the same state.
+        // See ARCHITECTURE_SPECIFICATION.md for details.
     }
 }
 

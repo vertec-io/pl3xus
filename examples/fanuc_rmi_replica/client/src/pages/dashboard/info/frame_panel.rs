@@ -1,17 +1,32 @@
 //! Frame Management Panel - Frame selector with Apply button.
+//!
+//! Reads active frame directly from the synced FrameToolDataState component.
+//! Server is the single source of truth for active frame/tool.
 
 use leptos::prelude::*;
 use pl3xus_client::{use_sync_component, use_request};
-use fanuc_replica_types::{ConnectionState, SetActiveFrameTool};
-use crate::pages::dashboard::context::WorkspaceContext;
+use fanuc_replica_types::{ConnectionState, FrameToolDataState, SetActiveFrameTool};
 
 /// Frame Management Panel - Frame selector with Apply button
+///
+/// Reads active frame from synced FrameToolDataState. The pending_frame
+/// is UI-local state for the selection before "Apply" is clicked.
 #[component]
 pub fn FrameManagementPanel() -> impl IntoView {
-    let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let connection_state = use_sync_component::<ConnectionState>();
-    let active_frame = ctx.active_frame;
-    let active_tool = ctx.active_tool;
+    let frame_tool_state = use_sync_component::<FrameToolDataState>();
+
+    // Derive active frame/tool from synced server state
+    let active_frame = Memo::new(move |_| {
+        frame_tool_state.get().values().next()
+            .map(|s| s.active_frame as usize)
+            .unwrap_or(0)
+    });
+    let active_tool = Memo::new(move |_| {
+        frame_tool_state.get().values().next()
+            .map(|s| s.active_tool as usize)
+            .unwrap_or(1)
+    });
 
     // Request hook for setting active frame/tool
     let (set_frame_tool, _set_frame_tool_state) = use_request::<SetActiveFrameTool>();
@@ -24,13 +39,13 @@ pub fn FrameManagementPanel() -> impl IntoView {
             .unwrap_or(false)
     });
 
-    // Local state for pending frame selection
+    // Local UI state for pending frame selection (before Apply is clicked)
     let (pending_frame, set_pending_frame) = signal::<Option<usize>>(None);
 
-    // View mode: "buttons" or "dropdown"
+    // View mode: "buttons" or "dropdown" - UI-local state
     let (view_mode, set_view_mode) = signal("buttons");
 
-    // Get effective frame (pending or current)
+    // Get effective frame (pending or current from server)
     let effective_frame = move || {
         pending_frame.get().unwrap_or_else(|| active_frame.get())
     };
@@ -94,11 +109,12 @@ pub fn FrameManagementPanel() -> impl IntoView {
                                     on:click=move |_| {
                                         if let Some(frame) = pending_frame.get() {
                                             let tool = active_tool.get();
+                                            // Send request to server - server updates FrameToolDataState
+                                            // which syncs back to all clients
                                             set_frame_tool.get_value()(SetActiveFrameTool {
                                                 uframe: frame as i32,
                                                 utool: tool as i32,
                                             });
-                                            ctx.active_frame.set(frame);
                                             set_pending_frame.set(None);
                                         }
                                     }
@@ -146,11 +162,12 @@ pub fn FrameManagementPanel() -> impl IntoView {
                                 on:click=move |_| {
                                     if let Some(frame) = pending_frame.get() {
                                         let tool = active_tool.get();
+                                        // Send request to server - server updates FrameToolDataState
+                                        // which syncs back to all clients
                                         set_frame_tool.get_value()(SetActiveFrameTool {
                                             uframe: frame as i32,
                                             utool: tool as i32,
                                         });
-                                        ctx.active_frame.set(frame);
                                         set_pending_frame.set(None);
                                     }
                                 }

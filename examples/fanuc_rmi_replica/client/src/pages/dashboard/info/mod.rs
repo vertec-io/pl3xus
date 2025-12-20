@@ -22,12 +22,13 @@ pub use number_input::NumberInput;
 use leptos::prelude::*;
 use pl3xus_client::{use_sync_component, use_request};
 use fanuc_replica_types::{ConnectionState, GetFrameData, GetToolData, GetActiveFrameTool};
-use crate::pages::dashboard::context::WorkspaceContext;
 
 /// Info tab showing frame, tool, and configuration data.
+///
+/// Frame/tool panels read directly from synced FrameToolDataState component.
+/// No need to copy server state to context - components use use_sync_component directly.
 #[component]
 pub fn InfoTab() -> impl IntoView {
-    let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let connection_state = use_sync_component::<ConnectionState>();
 
     // Request hooks for loading frame/tool data
@@ -70,20 +71,8 @@ pub fn InfoTab() -> impl IntoView {
         }
     });
 
-    // Sync active frame/tool from FrameToolDataState to context
-    let frame_tool_data = use_sync_component::<fanuc_replica_types::FrameToolDataState>();
-    Effect::new({
-        let active_frame = ctx.active_frame;
-        let active_tool = ctx.active_tool;
-        move |_| {
-            if let Some(ft_data) = frame_tool_data.get().values().next() {
-                if ft_data.active_frame > 0 || ft_data.active_tool > 0 {
-                    active_frame.set(ft_data.active_frame as usize);
-                    active_tool.set(ft_data.active_tool as usize);
-                }
-            }
-        }
-    });
+    // NOTE: Frame/tool panels now read directly from FrameToolDataState synced component.
+    // No Effect needed to copy server state to context - that was an anti-pattern.
 
     view! {
         <div class="h-full flex flex-col gap-2 overflow-y-auto">

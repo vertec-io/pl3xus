@@ -5,17 +5,59 @@
 //! - Sends instructions to robot via driver
 //! - Tracks progress and updates ExecutionState
 //! - Handles pause/resume/stop
+//! - Broadcasts ProgramNotification when program completes
 
 use bevy::prelude::*;
 use bevy_tokio_tasks::TokioTasksRuntime;
 use std::collections::{VecDeque, HashMap};
+use std::sync::atomic::{AtomicU64, Ordering};
 use fanuc_rmi::packets::{SendPacket, ResponsePacket, SentInstructionInfo};
 use fanuc_rmi::instructions::FrcLinearMotion;
 use fanuc_rmi::{TermType, SpeedType, Configuration, Position};
-use fanuc_replica_types::{ExecutionState, Instruction};
+use fanuc_replica_types::{
+    ExecutionState, Instruction, ProgramNotification, ProgramNotificationKind,
+    ConsoleLogEntry, ConsoleDirection, ConsoleMsgType,
+};
 use tokio::sync::broadcast;
+use pl3xus::Network;
+use pl3xus_websockets::WebSocketProvider;
 
 use super::connection::{FanucRobot, RmiDriver, RmiResponseChannel, RobotConnectionState};
+
+/// Global sequence counter for program notifications.
+/// Each notification gets a unique sequence number to ensure identical notifications
+/// are treated as distinct messages by clients.
+static NOTIFICATION_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+/// Create a new ProgramNotification with a unique sequence number.
+fn new_notification(kind: ProgramNotificationKind) -> ProgramNotification {
+    ProgramNotification {
+        sequence: NOTIFICATION_SEQUENCE.fetch_add(1, Ordering::Relaxed),
+        kind,
+    }
+}
+
+/// Create a console log entry with current timestamp.
+pub fn console_entry(content: impl Into<String>, direction: ConsoleDirection, msg_type: ConsoleMsgType) -> ConsoleLogEntry {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    let ms = now.as_millis() as u64;
+    let secs = now.as_secs();
+    let hours = (secs / 3600) % 24;
+    let minutes = (secs % 3600) / 60;
+    let seconds = secs % 60;
+    let millis = (ms % 1000) as u32;
+
+    ConsoleLogEntry {
+        timestamp: format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, seconds, millis),
+        timestamp_ms: ms,
+        direction,
+        msg_type,
+        content: content.into(),
+        sequence_id: None,
+    }
+}
 
 /// Maximum instructions to send ahead (conservative: use 5 of 8 available slots).
 pub const MAX_BUFFER: usize = 5;
@@ -24,6 +66,32 @@ pub const MAX_BUFFER: usize = 5;
 // Resources
 // ============================================================================
 
+/// Loaded program data - stores all information needed to execute a program.
+/// This is populated by LoadProgram and used by StartProgram.
+#[derive(Clone, Default)]
+pub struct LoadedProgramData {
+    /// Program instructions.
+    pub instructions: Vec<Instruction>,
+    /// Approach position (start_x, start_y, start_z, start_w, start_p, start_r).
+    pub approach: Option<(f64, f64, f64, f64, f64, f64)>,
+    /// Retreat position (end_x, end_y, end_z, end_w, end_p, end_r).
+    pub retreat: Option<(f64, f64, f64, f64, f64, f64)>,
+    /// Move speed for approach/retreat.
+    pub move_speed: f64,
+}
+
+/// Executor run state - prevents invalid state combinations.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ExecutorRunState {
+    /// No program running.
+    #[default]
+    Idle,
+    /// Program is actively executing.
+    Running,
+    /// Program is paused (can be resumed).
+    Paused,
+}
+
 /// Program executor state - manages buffered execution.
 #[derive(Resource, Default)]
 pub struct ProgramExecutor {
@@ -31,6 +99,9 @@ pub struct ProgramExecutor {
     pub loaded_program_id: Option<i64>,
     /// Program name for display.
     pub loaded_program_name: Option<String>,
+    /// Loaded program data (instructions, approach/retreat positions).
+    /// Populated by LoadProgram, used by StartProgram.
+    pub loaded_program_data: Option<LoadedProgramData>,
     /// Total instructions (including approach/retreat).
     pub total_instructions: usize,
     /// Instructions waiting to be sent (line_number, packet).
@@ -43,12 +114,27 @@ pub struct ProgramExecutor {
     pub in_flight_by_sequence: HashMap<u32, usize>,
     /// Highest completed line number.
     pub completed_line: usize,
-    /// Whether execution is running (not paused).
-    pub running: bool,
-    /// Whether execution is paused.
-    pub paused: bool,
+    /// Current run state.
+    pub run_state: ExecutorRunState,
     /// Program defaults for building packets.
     pub defaults: ProgramDefaults,
+}
+
+impl ProgramExecutor {
+    /// Check if the executor is currently running (not idle or paused).
+    pub fn is_running(&self) -> bool {
+        self.run_state == ExecutorRunState::Running
+    }
+
+    /// Check if the executor is paused.
+    pub fn is_paused(&self) -> bool {
+        self.run_state == ExecutorRunState::Paused
+    }
+
+    /// Check if a program is actively being executed (running or paused).
+    pub fn is_active(&self) -> bool {
+        self.run_state != ExecutorRunState::Idle
+    }
 }
 
 /// Component to receive SentInstructionInfo from the driver.
@@ -71,20 +157,31 @@ pub struct ProgramDefaults {
 }
 
 impl ProgramExecutor {
-    /// Reset the executor to idle state.
+    /// Reset the executor to idle state (clears everything including loaded program).
     pub fn reset(&mut self) {
         self.loaded_program_id = None;
         self.loaded_program_name = None;
+        self.loaded_program_data = None;
         self.total_instructions = 0;
         self.pending_queue.clear();
         self.in_flight_by_request.clear();
         self.in_flight_by_sequence.clear();
         self.completed_line = 0;
-        self.running = false;
-        self.paused = false;
+        self.run_state = ExecutorRunState::Idle;
+    }
+
+    /// Reset execution state but keep the loaded program.
+    /// Used when stopping execution - allows re-running the same program.
+    pub fn reset_execution(&mut self) {
+        self.pending_queue.clear();
+        self.in_flight_by_request.clear();
+        self.in_flight_by_sequence.clear();
+        self.completed_line = 0;
+        self.run_state = ExecutorRunState::Idle;
     }
 
     /// Check if there are more instructions to send.
+    #[allow(dead_code)]
     pub fn has_pending(&self) -> bool {
         !self.pending_queue.is_empty()
     }
@@ -134,9 +231,10 @@ impl ProgramExecutor {
         }
     }
 
-    /// Check if execution is complete.
+    /// Check if execution is complete (was running and all instructions done).
+    #[allow(dead_code)]
     pub fn is_complete(&self) -> bool {
-        self.running && self.pending_queue.is_empty() && self.in_flight_by_sequence.is_empty() && self.in_flight_by_request.is_empty()
+        self.is_running() && self.pending_queue.is_empty() && self.in_flight_by_sequence.is_empty() && self.in_flight_by_request.is_empty()
     }
 
     /// Build a motion instruction packet from a program instruction.
@@ -269,9 +367,29 @@ impl Plugin for ProgramExecutionPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ProgramExecutor>();
         app.add_systems(Update, (
+            reset_on_disconnect,
             process_instruction_responses,
             update_execution_state,
         ));
+    }
+}
+
+/// Reset the executor when the robot disconnects.
+/// This ensures we don't have stale execution state when reconnecting.
+fn reset_on_disconnect(
+    mut executor: ResMut<ProgramExecutor>,
+    robots: Query<&super::connection::RobotConnectionState, With<super::connection::FanucRobot>>,
+) {
+    // If executor is active but robot is not connected, reset
+    if executor.is_active() {
+        let any_connected = robots.iter().any(|state| {
+            *state == super::connection::RobotConnectionState::Connected
+        });
+
+        if !any_connected {
+            info!("🔌 Robot disconnected while executing - resetting executor");
+            executor.reset();
+        }
     }
 }
 
@@ -280,12 +398,14 @@ impl Plugin for ProgramExecutionPlugin {
 // ============================================================================
 
 /// Process instruction responses and update executor state.
+/// Broadcasts ProgramNotification to all clients when program completes.
 fn process_instruction_responses(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut executor: ResMut<ProgramExecutor>,
     mut robots: Query<(&RmiDriver, &mut RmiResponseChannel, Option<&mut RmiSentInstructionChannel>, &RobotConnectionState), With<FanucRobot>>,
+    net: Res<Network<WebSocketProvider>>,
 ) {
-    if !executor.running || executor.paused {
+    if !executor.is_running() {
         return;
     }
 
@@ -315,7 +435,27 @@ fn process_instruction_responses(
 
                         // Check for error
                         if instr_resp.get_error_id() != 0 {
+                            let program_name = executor.loaded_program_name.clone().unwrap_or_default();
+                            let error_msg = format!("Instruction error: {}", instr_resp.get_error_id());
                             error!("Instruction {} failed with error {}", line, instr_resp.get_error_id());
+
+                            // Broadcast error notification to all clients
+                            let notification = new_notification(ProgramNotificationKind::Error {
+                                program_name: program_name.clone(),
+                                at_line: line,
+                                error_message: error_msg.clone(),
+                            });
+                            info!("📢 Broadcasting program error notification");
+                            net.broadcast(notification);
+
+                            // Broadcast console entry for error
+                            let console_msg = console_entry(
+                                format!("Program '{}' error at line {}: {}", program_name, line, error_msg),
+                                ConsoleDirection::System,
+                                ConsoleMsgType::Error,
+                            );
+                            net.broadcast(console_msg);
+
                             executor.reset();
                             return;
                         }
@@ -348,8 +488,27 @@ fn process_instruction_responses(
 
         // Check if execution is complete
         if executor.pending_queue.is_empty() && executor.in_flight_count() == 0 {
-            info!("✅ Program execution complete: {} instructions", executor.total_instructions);
-            executor.running = false;
+            let program_name = executor.loaded_program_name.clone().unwrap_or_default();
+            let total = executor.total_instructions;
+
+            info!("✅ Program '{}' execution complete: {} instructions", program_name, total);
+            executor.run_state = ExecutorRunState::Idle;
+
+            // Broadcast completion notification to all connected clients
+            let notification = new_notification(ProgramNotificationKind::Completed {
+                program_name: program_name.clone(),
+                total_instructions: total,
+            });
+            info!("📢 Broadcasting program completion notification");
+            net.broadcast(notification);
+
+            // Broadcast console entry for program completion
+            let console_msg = console_entry(
+                format!("Program '{}' completed ({} instructions)", program_name, total),
+                ConsoleDirection::System,
+                ConsoleMsgType::Status,
+            );
+            net.broadcast(console_msg);
         }
     }
 }
@@ -363,10 +522,13 @@ fn update_execution_state(
     mut execution_states: Query<&mut ExecutionState>,
 ) {
     for mut state in execution_states.iter_mut() {
+        let is_running = executor.is_running();
+        let is_paused = executor.is_paused();
+
         // Only update if something changed to avoid unnecessary syncs
         let needs_update =
-            state.running != executor.running ||
-            state.paused != executor.paused ||
+            state.running != is_running ||
+            state.paused != is_paused ||
             state.current_line != executor.completed_line ||
             state.total_lines != executor.total_instructions ||
             state.loaded_program_id != executor.loaded_program_id;
@@ -374,11 +536,10 @@ fn update_execution_state(
         if needs_update {
             state.loaded_program_id = executor.loaded_program_id;
             state.loaded_program_name = executor.loaded_program_name.clone();
-            state.running = executor.running;
-            state.paused = executor.paused;
+            state.running = is_running;
+            state.paused = is_paused;
             state.current_line = executor.completed_line;
             state.total_lines = executor.total_instructions;
-            // NOTE: program_lines are only set by handle_load_program, not here
         }
     }
 }

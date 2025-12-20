@@ -5,13 +5,14 @@
 use bevy::prelude::*;
 use bevy::ecs::message::MessageReader;
 use pl3xus::managers::network_request::{AppNetworkRequestMessage, Request};
+use pl3xus::Network;
 use pl3xus_websockets::WebSocketProvider;
 use fanuc_replica_types::*;
 
 use bevy_tokio_tasks::TokioTasksRuntime;
 use crate::database::DatabaseResource;
 use crate::plugins::connection::{FanucRobot, RmiDriver, RobotConnectionState};
-use crate::plugins::execution::ProgramExecutor;
+use crate::plugins::execution::{ProgramExecutor, LoadedProgramData, ExecutorRunState, console_entry};
 use fanuc_rmi::packets::PacketPriority;
 
 pub struct RequestHandlerPlugin;
@@ -69,7 +70,6 @@ impl Plugin for RequestHandlerPlugin {
         app.listen_for_request_message::<ResetDatabase, WebSocketProvider>();
         app.listen_for_request_message::<GetConnectionStatus, WebSocketProvider>();
         app.listen_for_request_message::<GetExecutionState, WebSocketProvider>();
-        app.listen_for_request_message::<GetActiveJogSettings, WebSocketProvider>();
         app.listen_for_request_message::<UpdateJogSettings, WebSocketProvider>();
 
         // Add handler systems - Robot Connections & Configurations
@@ -132,7 +132,6 @@ impl Plugin for RequestHandlerPlugin {
             handle_reset_database,
             handle_get_connection_status,
             handle_get_execution_state,
-            handle_get_active_jog_settings,
             handle_update_jog_settings,
         ));
     }
@@ -882,7 +881,7 @@ fn handle_load_program(
 
         match db.get_program(program_id) {
             Ok(Some(program)) => {
-                // Convert ProgramDetail to ProgramWithLines
+                // Convert ProgramDetail to ProgramWithLines for client display
                 let lines: Vec<ProgramLineInfo> = program.instructions.iter()
                     .map(|inst| ProgramLineInfo {
                         x: inst.x,
@@ -898,13 +897,57 @@ fn handle_load_program(
                     })
                     .collect();
 
+                // Build LoadedProgramData for execution
+                let approach = if program.start_x.is_some() && program.start_y.is_some() && program.start_z.is_some() {
+                    Some((
+                        program.start_x.unwrap(),
+                        program.start_y.unwrap(),
+                        program.start_z.unwrap(),
+                        program.start_w.unwrap_or(0.0),
+                        program.start_p.unwrap_or(0.0),
+                        program.start_r.unwrap_or(0.0),
+                    ))
+                } else {
+                    None
+                };
+
+                let retreat = if program.end_x.is_some() && program.end_y.is_some() && program.end_z.is_some() {
+                    Some((
+                        program.end_x.unwrap(),
+                        program.end_y.unwrap(),
+                        program.end_z.unwrap(),
+                        program.end_w.unwrap_or(0.0),
+                        program.end_p.unwrap_or(0.0),
+                        program.end_r.unwrap_or(0.0),
+                    ))
+                } else {
+                    None
+                };
+
+                let loaded_data = LoadedProgramData {
+                    instructions: program.instructions.clone(),
+                    approach,
+                    retreat,
+                    move_speed: program.move_speed.unwrap_or(10.0),
+                };
+
                 // Update ProgramExecutor state (server-side)
                 executor.loaded_program_id = Some(program.id);
                 executor.loaded_program_name = Some(program.name.clone());
+                executor.loaded_program_data = Some(loaded_data);
                 executor.total_instructions = lines.len();
                 executor.completed_line = 0;
-                executor.running = false;
-                executor.paused = false;
+                executor.run_state = ExecutorRunState::Idle;
+
+                // Set defaults from program
+                executor.defaults.w = program.default_w;
+                executor.defaults.p = program.default_p;
+                executor.defaults.r = program.default_r;
+                executor.defaults.speed = program.default_speed.unwrap_or(100.0);
+                executor.defaults.term_type = program.default_term_type.clone();
+                executor.defaults.term_value = program.default_term_value;
+                executor.defaults.uframe = program.default_uframe;
+                executor.defaults.utool = program.default_utool;
 
                 // Update ExecutionState component (synced to all clients)
                 if let Some(entity) = robot_entity {
@@ -927,7 +970,7 @@ fn handle_load_program(
                     description: program.description.clone(),
                     lines,
                 };
-                info!("✅ Loaded program '{}' with {} lines", program.name, program_with_lines.lines.len());
+                info!("✅ Loaded program '{}' with {} instructions", program.name, program_with_lines.lines.len());
                 let response = LoadProgramResponse {
                     success: true,
                     program: Some(program_with_lines),
@@ -993,48 +1036,41 @@ fn handle_unload_program(
     }
 }
 
-/// Handle StartProgram request - starts executing a program.
+/// Handle StartProgram request - starts executing the currently loaded program.
+/// A program must be loaded first via LoadProgram.
 fn handle_start_program(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<Request<StartProgram>>,
-    db: Option<Res<DatabaseResource>>,
     mut executor: ResMut<ProgramExecutor>,
     robots: Query<(&RmiDriver, &RobotConnectionState), With<FanucRobot>>,
+    net: Res<Network<WebSocketProvider>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
     for request in requests.read() {
-        let inner = request.get_request();
-        info!("📋 Handling StartProgram for program_id={}", inner.program_id);
+        info!("📋 Handling StartProgram request");
 
-        // Get database
-        let db = match &db {
-            Some(db) => db,
+        // Check if a program is loaded
+        let program_data = match &executor.loaded_program_data {
+            Some(data) => data.clone(),
             None => {
-                let response = StartProgramResponse { success: false, error: Some("Database not available".to_string()) };
+                let response = StartProgramResponse {
+                    success: false,
+                    error: Some("No program loaded. Use LoadProgram first.".to_string()),
+                };
                 let _ = request.clone().respond(response);
                 continue;
             }
         };
 
-        // Get program from database
-        let program = match db.get_program(inner.program_id) {
-            Ok(Some(prog)) => prog,
-            Ok(None) => {
-                let response = StartProgramResponse { success: false, error: Some("Program not found".to_string()) };
-                let _ = request.clone().respond(response);
-                continue;
-            }
-            Err(e) => {
-                let response = StartProgramResponse { success: false, error: Some(format!("Database error: {}", e)) };
-                let _ = request.clone().respond(response);
-                continue;
-            }
-        };
+        let program_name = executor.loaded_program_name.clone().unwrap_or_else(|| "Unknown".to_string());
 
-        if program.instructions.is_empty() {
-            let response = StartProgramResponse { success: false, error: Some("Program has no instructions".to_string()) };
+        if program_data.instructions.is_empty() {
+            let response = StartProgramResponse {
+                success: false,
+                error: Some("Program has no instructions".to_string()),
+            };
             let _ = request.clone().respond(response);
             continue;
         }
@@ -1051,46 +1087,36 @@ fn handle_start_program(
         let driver = match robot_driver {
             Some(d) => d,
             None => {
-                let response = StartProgramResponse { success: false, error: Some("Robot not connected".to_string()) };
+                let response = StartProgramResponse {
+                    success: false,
+                    error: Some("Robot not connected".to_string()),
+                };
                 let _ = request.clone().respond(response);
                 continue;
             }
         };
 
-        // Reset executor and load program
-        executor.reset();
-        executor.loaded_program_id = Some(inner.program_id);
-        executor.loaded_program_name = Some(program.name.clone());
-
-        // Set defaults from program
-        executor.defaults.w = program.default_w;
-        executor.defaults.p = program.default_p;
-        executor.defaults.r = program.default_r;
-        executor.defaults.speed = program.default_speed.unwrap_or(100.0);
-        executor.defaults.term_type = program.default_term_type.clone();
-        executor.defaults.term_value = program.default_term_value;
-        executor.defaults.uframe = program.default_uframe;
-        executor.defaults.utool = program.default_utool;
+        // Reset execution state but keep the loaded program
+        executor.reset_execution();
 
         // Build pending queue with all instructions
-        let total = program.instructions.len();
-        let has_retreat = program.end_x.is_some() && program.end_y.is_some() && program.end_z.is_some();
-        let has_approach = program.start_x.is_some() && program.start_y.is_some() && program.start_z.is_some();
+        let total = program_data.instructions.len();
+        let has_approach = program_data.approach.is_some();
+        let has_retreat = program_data.retreat.is_some();
 
         // Add approach move if defined
-        if let (Some(start_x), Some(start_y), Some(start_z)) = (program.start_x, program.start_y, program.start_z) {
-            let speed = program.move_speed.unwrap_or(100.0);
+        if let Some((x, y, z, w, p, r)) = program_data.approach {
             let packet = executor.build_approach_retreat_packet(
-                start_x, start_y, start_z,
-                program.start_w, program.start_p, program.start_r,
-                0, speed, false,
+                x, y, z,
+                Some(w), Some(p), Some(r),
+                0, program_data.move_speed, false,
             );
             executor.pending_queue.push_back((0, packet));
-            info!("Added approach move to ({:.2}, {:.2}, {:.2})", start_x, start_y, start_z);
+            info!("Added approach move to ({:.2}, {:.2}, {:.2})", x, y, z);
         }
 
-        // Add program instructions
-        for (i, instr) in program.instructions.iter().enumerate() {
+        // Add program instructions (build packets on-the-fly)
+        for (i, instr) in program_data.instructions.iter().enumerate() {
             let line_number = i + 1;
             let is_last_overall = !has_retreat && (i == total - 1);
             let packet = executor.build_motion_packet(instr, is_last_overall);
@@ -1098,21 +1124,19 @@ fn handle_start_program(
         }
 
         // Add retreat move if defined
-        if let (Some(end_x), Some(end_y), Some(end_z)) = (program.end_x, program.end_y, program.end_z) {
-            let speed = program.move_speed.unwrap_or(100.0);
+        if let Some((x, y, z, w, p, r)) = program_data.retreat {
             let packet = executor.build_approach_retreat_packet(
-                end_x, end_y, end_z,
-                program.end_w, program.end_p, program.end_r,
-                total + 1, speed, true,
+                x, y, z,
+                Some(w), Some(p), Some(r),
+                total + 1, program_data.move_speed, true,
             );
             executor.pending_queue.push_back((total + 1, packet));
-            info!("Added retreat move to ({:.2}, {:.2}, {:.2})", end_x, end_y, end_z);
+            info!("Added retreat move to ({:.2}, {:.2}, {:.2})", x, y, z);
         }
 
         // Calculate total lines
         executor.total_instructions = total + (if has_approach { 1 } else { 0 }) + (if has_retreat { 1 } else { 0 });
-        executor.running = true;
-        executor.paused = false;
+        executor.run_state = ExecutorRunState::Running;
 
         // Send initial batch of instructions
         let initial_batch = executor.get_next_batch();
@@ -1125,15 +1149,27 @@ fn handle_start_program(
                 }
                 Err(e) => {
                     error!("Failed to send instruction {}: {}", line_number, e);
-                    executor.reset();
-                    let response = StartProgramResponse { success: false, error: Some(format!("Failed to send instruction: {}", e)) };
+                    executor.reset_execution();
+                    let response = StartProgramResponse {
+                        success: false,
+                        error: Some(format!("Failed to send instruction: {}", e)),
+                    };
                     let _ = request.clone().respond(response);
                     continue;
                 }
             }
         }
 
-        info!("Started program {} with {} instructions", program.name, executor.total_instructions);
+        info!("▶ Started program '{}' with {} instructions", program_name, executor.total_instructions);
+
+        // Broadcast console entry for program start
+        let console_msg = console_entry(
+            format!("Program '{}' started ({} instructions)", program_name, executor.total_instructions),
+            ConsoleDirection::System,
+            ConsoleMsgType::Status,
+        );
+        net.broadcast(console_msg);
+
         let response = StartProgramResponse { success: true, error: None };
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
@@ -1154,13 +1190,13 @@ fn handle_pause_program(
     for request in requests.read() {
         info!("📋 Handling PauseProgram request");
 
-        if !executor.running {
+        if !executor.is_running() {
             let response = PauseProgramResponse { success: false, error: Some("No program running".to_string()) };
             let _ = request.clone().respond(response);
             continue;
         }
 
-        if executor.paused {
+        if executor.is_paused() {
             let response = PauseProgramResponse { success: false, error: Some("Program already paused".to_string()) };
             let _ = request.clone().respond(response);
             continue;
@@ -1183,7 +1219,7 @@ fn handle_pause_program(
             }
         }
 
-        executor.paused = true;
+        executor.run_state = ExecutorRunState::Paused;
         info!("Program paused");
         let response = PauseProgramResponse { success: true, error: None };
         if let Err(e) = request.clone().respond(response) {
@@ -1205,13 +1241,13 @@ fn handle_resume_program(
     for request in requests.read() {
         info!("📋 Handling ResumeProgram request");
 
-        if !executor.running {
+        if !executor.is_active() {
             let response = ResumeProgramResponse { success: false, error: Some("No program running".to_string()) };
             let _ = request.clone().respond(response);
             continue;
         }
 
-        if !executor.paused {
+        if !executor.is_paused() {
             let response = ResumeProgramResponse { success: false, error: Some("Program not paused".to_string()) };
             let _ = request.clone().respond(response);
             continue;
@@ -1234,7 +1270,7 @@ fn handle_resume_program(
             }
         }
 
-        executor.paused = false;
+        executor.run_state = ExecutorRunState::Running;
         info!("Program resumed");
         let response = ResumeProgramResponse { success: true, error: None };
         if let Err(e) = request.clone().respond(response) {
@@ -1256,7 +1292,7 @@ fn handle_stop_program(
     for request in requests.read() {
         info!("📋 Handling StopProgram request");
 
-        if !executor.running {
+        if !executor.is_active() {
             let response = StopProgramResponse { success: false, error: Some("No program running".to_string()) };
             let _ = request.clone().respond(response);
             continue;
@@ -1278,8 +1314,9 @@ fn handle_stop_program(
         }
 
         let program_name = executor.loaded_program_name.clone().unwrap_or_default();
-        executor.reset();
-        info!("Program {} stopped", program_name);
+        // Use reset_execution to keep the program loaded for re-running
+        executor.reset_execution();
+        info!("⏹ Program '{}' stopped (still loaded)", program_name);
         let response = StopProgramResponse { success: true, error: None };
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
@@ -1530,9 +1567,9 @@ fn handle_read_din_batch(
 }
 
 /// Handle WriteDout request - writes digital output value.
+/// Waits for robot confirmation before updating IoStatus and responding.
 fn handle_write_dout(
     mut requests: MessageReader<Request<WriteDout>>,
-    mut io_query: Query<&mut IoStatus, With<FanucRobot>>,
     driver_query: Query<&RmiDriver, With<FanucRobot>>,
     runtime: Option<Res<bevy_tokio_tasks::TokioTasksRuntime>>,
 ) {
@@ -1542,52 +1579,133 @@ fn handle_write_dout(
         let value = inner.port_value;
         info!("📋 Handling WriteDout for port {} = {}", port, value);
 
-        // Update the IoStatus component (synced to all clients)
-        if let Ok(mut io_status) = io_query.single_mut() {
-            // Calculate word and bit index (1-based port numbers)
-            let word_index = (port as usize - 1) / 16;
-            let bit_index = (port as usize - 1) % 16;
-
-            // Ensure vector is large enough
-            while io_status.digital_outputs.len() <= word_index {
-                io_status.digital_outputs.push(0);
-            }
-
-            // Set or clear the bit
-            if value {
-                io_status.digital_outputs[word_index] |= 1 << bit_index;
-            } else {
-                io_status.digital_outputs[word_index] &= !(1 << bit_index);
-            }
-            info!("✅ Updated IoStatus DOUT[{}] = {}", port, value);
-        }
-
-        // Send command to robot driver (if connected)
-        if let (Ok(driver), Some(runtime)) = (driver_query.single(), runtime.as_ref()) {
-            let driver = driver.0.clone();
-            runtime.spawn_background_task(move |_ctx| async move {
-                use fanuc_rmi::packets::{SendPacket, Command};
-                use fanuc_rmi::commands::FrcWriteDOUT;
-                let packet = SendPacket::Command(Command::FrcWriteDOUT(FrcWriteDOUT {
+        // Get driver or respond with error
+        let driver = match driver_query.single() {
+            Ok(d) => d.0.clone(),
+            Err(_) => {
+                let response = DoutValueResponse {
                     port_number: port,
-                    port_value: if value { 1 } else { 0 },
-                }));
-                if let Err(e) = driver.send_packet(packet, PacketPriority::Standard) {
-                    bevy::log::error!("Failed to send WriteDout to robot: {}", e);
-                }
-            });
-        }
-
-        let response = DoutValueResponse {
-            port_number: port,
-            port_value: value,
-            success: true,
-            error: None,
+                    port_value: value,
+                    success: false,
+                    error: Some("No robot connected".to_string()),
+                };
+                let _ = request.clone().respond(response);
+                continue;
+            }
         };
 
-        if let Err(e) = request.clone().respond(response) {
-            error!("Failed to send response: {:?}", e);
-        }
+        let Some(runtime) = runtime.as_ref() else {
+            let response = DoutValueResponse {
+                port_number: port,
+                port_value: value,
+                success: false,
+                error: Some("Runtime not available".to_string()),
+            };
+            let _ = request.clone().respond(response);
+            continue;
+        };
+
+        // Clone request so we can respond from async task
+        let request = request.clone();
+
+        // Send command and wait for confirmation
+        runtime.spawn_background_task(move |mut ctx| async move {
+            use fanuc_rmi::packets::{SendPacket, Command, ResponsePacket, CommandResponse};
+            use fanuc_rmi::commands::FrcWriteDOUT;
+            use std::time::Duration;
+
+            let packet = SendPacket::Command(Command::FrcWriteDOUT(FrcWriteDOUT {
+                port_number: port,
+                port_value: if value { 1 } else { 0 },
+            }));
+
+            // Subscribe before sending to avoid race condition
+            let mut response_rx = driver.response_tx.subscribe();
+
+            if let Err(e) = driver.send_packet(packet, PacketPriority::Standard) {
+                bevy::log::error!("Failed to send WriteDout to robot: {}", e);
+                let response = DoutValueResponse {
+                    port_number: port,
+                    port_value: value,
+                    success: false,
+                    error: Some(format!("Failed to send command: {}", e)),
+                };
+                let _ = request.respond(response);
+                return;
+            }
+
+            // Wait for response with timeout
+            let result = tokio::time::timeout(Duration::from_secs(5), async {
+                while let Ok(response) = response_rx.recv().await {
+                    if let ResponsePacket::CommandResponse(CommandResponse::FrcWriteDOUT(resp)) = response {
+                        return Some(resp);
+                    }
+                }
+                None
+            }).await;
+
+            match result {
+                Ok(Some(resp)) => {
+                    if resp.error_id != 0 {
+                        bevy::log::error!("Robot error writing DOUT[{}]: error_id={}", port, resp.error_id);
+                        let response = DoutValueResponse {
+                            port_number: port,
+                            port_value: value,
+                            success: false,
+                            error: Some(format!("Robot error: {}", resp.error_id)),
+                        };
+                        let _ = request.respond(response);
+                    } else {
+                        bevy::log::info!("✅ DOUT[{}] set to {} confirmed by robot", port, value);
+
+                        // Update IoStatus on main thread (will be synced to clients)
+                        ctx.run_on_main_thread(move |ctx| {
+                            let mut io_query = ctx.world.query_filtered::<&mut IoStatus, With<FanucRobot>>();
+                            if let Ok(mut io_status) = io_query.single_mut(ctx.world) {
+                                let word_index = (port as usize - 1) / 16;
+                                let bit_index = (port as usize - 1) % 16;
+                                while io_status.digital_outputs.len() <= word_index {
+                                    io_status.digital_outputs.push(0);
+                                }
+                                if value {
+                                    io_status.digital_outputs[word_index] |= 1 << bit_index;
+                                } else {
+                                    io_status.digital_outputs[word_index] &= !(1 << bit_index);
+                                }
+                            }
+                        }).await;
+
+                        let response = DoutValueResponse {
+                            port_number: port,
+                            port_value: value,
+                            success: true,
+                            error: None,
+                        };
+                        let _ = request.respond(response);
+                    }
+                }
+                Ok(None) => {
+                    bevy::log::error!("No response received for DOUT[{}]", port);
+                    let response = DoutValueResponse {
+                        port_number: port,
+                        port_value: value,
+                        success: false,
+                        error: Some("No response received".to_string()),
+                    };
+                    let _ = request.respond(response);
+                }
+                Err(_) => {
+                    bevy::log::error!("Timeout waiting for DOUT[{}] response", port);
+                    let response = DoutValueResponse {
+                        port_number: port,
+                        port_value: value,
+                        success: false,
+                        error: Some("Timeout waiting for response".to_string()),
+                    };
+                    let _ = request.respond(response);
+                }
+            }
+        });
     }
 }
 
@@ -1891,24 +2009,6 @@ fn handle_get_execution_state(
             total_lines: None,
             error: None,
         };
-
-        if let Err(e) = request.clone().respond(response) {
-            error!("Failed to send response: {:?}", e);
-        }
-    }
-}
-
-/// Handle GetActiveJogSettings request.
-fn handle_get_active_jog_settings(
-    mut requests: MessageReader<Request<GetActiveJogSettings>>,
-    db: Option<Res<DatabaseResource>>,
-) {
-    for request in requests.read() {
-        info!("📋 Handling GetActiveJogSettings");
-
-        // TODO: Load from database when available
-        let _ = db;
-        let response = ActiveJogSettingsResponse::default();
 
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);

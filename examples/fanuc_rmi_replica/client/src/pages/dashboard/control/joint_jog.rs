@@ -1,6 +1,7 @@
 //! Joint Jog Panel - Individual joint jogging controls.
 //!
 //! Provides up/down buttons for each joint (J1-J6) with configurable step and speed.
+//! Syncs with server-owned JogSettingsState for default values.
 
 use leptos::prelude::*;
 use pl3xus_client::{use_sync_context, use_sync_component};
@@ -12,10 +13,24 @@ pub fn JointJogPanel() -> impl IntoView {
     let ctx = use_sync_context();
     let joint_angles = use_sync_component::<JointAngles>();
     let connection_state = use_sync_component::<ConnectionState>();
+    let jog_settings = use_sync_component::<JogSettingsState>();
 
-    // Local string state for inputs
-    let (speed_str, set_speed_str) = signal("10.0".to_string());
-    let (step_str, set_step_str) = signal("1.0".to_string());
+    // Local string state for inputs (initialized from server state)
+    let (speed_str, set_speed_str) = signal(String::new());
+    let (step_str, set_step_str) = signal(String::new());
+    let (initialized, set_initialized) = signal(false);
+
+    // Initialize from server state when it becomes available
+    Effect::new(move |_| {
+        if let Some(settings) = jog_settings.get().values().next() {
+            // Only initialize once, don't overwrite user edits
+            if !initialized.get_untracked() {
+                set_speed_str.set(format!("{:.1}", settings.joint_jog_speed));
+                set_step_str.set(format!("{:.1}", settings.joint_jog_step));
+                set_initialized.set(true);
+            }
+        }
+    });
 
     // Robot connected state
     let robot_connected = Memo::new(move |_| {

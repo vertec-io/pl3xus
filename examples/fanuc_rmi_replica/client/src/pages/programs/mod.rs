@@ -78,7 +78,6 @@ pub fn ProgramsView() -> impl IntoView {
     let list_programs_2 = list_programs.clone();
     let list_programs_3 = list_programs;
     let get_program_1 = get_program.clone();
-    let get_program_2 = get_program.clone();
     let get_program_3 = get_program;
 
     view! {

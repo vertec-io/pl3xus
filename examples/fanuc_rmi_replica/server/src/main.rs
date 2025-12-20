@@ -21,7 +21,6 @@ use bevy_tokio_tasks::TokioTasksPlugin;
 
 mod database;
 mod jogging;
-mod driver_sync;
 mod plugins;
 
 use database::DatabaseResource;

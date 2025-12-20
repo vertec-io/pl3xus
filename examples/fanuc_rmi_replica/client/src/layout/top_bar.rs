@@ -897,64 +897,7 @@ pub fn ControlResponseHandler() -> impl IntoView {
     view! {}
 }
 
-/// Component that watches ExecutionState changes and updates WorkspaceContext.
-///
-/// This is a "headless" component that syncs the server's ExecutionState
-/// to the client's WorkspaceContext for program execution UI updates.
-/// All program state (loaded program, lines, running, paused) comes from server.
-#[component]
-pub fn ExecutionStateHandler() -> impl IntoView {
-    use fanuc_replica_types::ExecutionState;
-    use crate::pages::dashboard::context::{WorkspaceContext, ProgramLine};
 
-    let execution_state = use_sync_component::<ExecutionState>();
-
-    // Only proceed if WorkspaceContext is available (on dashboard pages)
-    if let Some(ctx) = use_context::<WorkspaceContext>() {
-        Effect::new(move |_| {
-            let state_map = execution_state.get();
-
-            // Get the first (and only) execution state
-            if let Some(state) = state_map.values().next() {
-                // Update context from server state
-                ctx.program_running.set(state.running);
-                ctx.program_paused.set(state.paused);
-                ctx.executing_line.set(state.current_line as i32);
-
-                // Update loaded program info if it changed
-                let current_id = ctx.loaded_program_id.get_untracked();
-                if current_id != state.loaded_program_id {
-                    ctx.loaded_program_id.set(state.loaded_program_id);
-                    ctx.loaded_program_name.set(state.loaded_program_name.clone());
-                }
-
-                // Sync program lines from server state
-                // Convert ProgramLineInfo to ProgramLine for UI display
-                let current_lines_len = ctx.program_lines.get_untracked().len();
-                if current_lines_len != state.program_lines.len() || state.loaded_program_id != current_id {
-                    let lines: Vec<ProgramLine> = state.program_lines.iter().enumerate().map(|(i, line)| {
-                        ProgramLine {
-                            line_number: i + 1,
-                            x: line.x,
-                            y: line.y,
-                            z: line.z,
-                            w: line.w,
-                            p: line.p,
-                            r: line.r,
-                            speed: line.speed,
-                            term_type: line.term_type.clone(),
-                            uframe: line.uframe,
-                            utool: line.utool,
-                        }
-                    }).collect();
-                    ctx.program_lines.set(lines);
-                }
-            }
-        });
-    }
-
-    view! {}
-}
 
 /// Component that watches connection state changes and shows toast notifications.
 ///
@@ -997,6 +940,136 @@ pub fn ConnectionStateHandler() -> impl IntoView {
 
         // Update previous state
         prev_state.set_value((is_connecting, is_connected, robot_name));
+    });
+
+    view! {}
+}
+
+/// Component that listens for ProgramNotification messages from the server.
+///
+/// This is a "headless" component that handles server-broadcast notifications
+/// about program events (completion, errors, etc.) and shows appropriate toasts.
+/// All connected clients receive these notifications simultaneously.
+#[component]
+pub fn ProgramNotificationHandler() -> impl IntoView {
+    use fanuc_replica_types::{ProgramNotification, ProgramNotificationKind};
+
+    let toast = crate::components::use_toast();
+    let notification = use_sync_message::<ProgramNotification>();
+
+    // Track the last sequence number we processed to avoid duplicate toasts
+    let last_sequence = StoredValue::new(0u64);
+
+    Effect::new(move |_| {
+        let notif = notification.get();
+
+        // Skip if sequence is 0 (default state) or same as last processed
+        if notif.sequence == 0 {
+            return;
+        }
+
+        let last = last_sequence.get_value();
+        if notif.sequence == last {
+            return;
+        }
+
+        // Update last processed first to avoid duplicate processing
+        last_sequence.set_value(notif.sequence);
+
+        match &notif.kind {
+            ProgramNotificationKind::None => {}
+            ProgramNotificationKind::Completed { program_name, total_instructions } => {
+                toast.success(format!(
+                    "✅ Program '{}' completed ({} instructions)",
+                    program_name, total_instructions
+                ));
+            }
+            ProgramNotificationKind::Stopped { program_name, at_line } => {
+                toast.info(format!(
+                    "⏹️ Program '{}' stopped at line {}",
+                    program_name, at_line
+                ));
+            }
+            ProgramNotificationKind::Error { program_name, at_line, error_message } => {
+                toast.error(format!(
+                    "❌ Program '{}' error at line {}: {}",
+                    program_name, at_line, error_message
+                ));
+            }
+        }
+    });
+
+    view! {}
+}
+
+/// Component that listens for ConsoleLogEntry messages from the server.
+///
+/// This is a "headless" component that handles server-broadcast console messages
+/// and adds them to the local console display. All connected clients receive
+/// these messages simultaneously.
+#[component]
+pub fn ConsoleLogHandler() -> impl IntoView {
+    use fanuc_replica_types::{ConsoleLogEntry, ConsoleDirection, ConsoleMsgType};
+    use crate::pages::dashboard::context::{WorkspaceContext, MessageDirection, MessageType, ConsoleMessage};
+
+    let ctx = use_context::<WorkspaceContext>();
+    let console_entry = use_sync_message::<ConsoleLogEntry>();
+
+    // Track the last timestamp_ms we processed to avoid duplicate entries
+    let last_timestamp = StoredValue::new(0u64);
+
+    Effect::new(move |_| {
+        let entry = console_entry.get();
+
+        // Skip if this is the same entry we already processed
+        if entry.timestamp_ms == 0 || entry.timestamp_ms == last_timestamp.get_value() {
+            return;
+        }
+
+        // Update last processed first to avoid duplicate processing
+        last_timestamp.set_value(entry.timestamp_ms);
+
+        // Convert server types to client types
+        let direction = match entry.direction {
+            ConsoleDirection::Sent => MessageDirection::Sent,
+            ConsoleDirection::Received => MessageDirection::Received,
+            ConsoleDirection::System => MessageDirection::System,
+        };
+        let msg_type = match entry.msg_type {
+            ConsoleMsgType::Command => MessageType::Command,
+            ConsoleMsgType::Response => MessageType::Response,
+            ConsoleMsgType::Error => MessageType::Error,
+            ConsoleMsgType::Status => MessageType::Status,
+            ConsoleMsgType::Config => MessageType::Config,
+        };
+
+        // Add to console if context is available
+        if let Some(ctx) = &ctx {
+            ctx.console_messages.update(|msgs| {
+                msgs.push(ConsoleMessage {
+                    timestamp: entry.timestamp.clone(),
+                    timestamp_ms: entry.timestamp_ms,
+                    content: entry.content.clone(),
+                    direction,
+                    msg_type: msg_type.clone(),
+                    sequence_id: entry.sequence_id,
+                });
+                // Keep only last 500 messages
+                if msgs.len() > 500 {
+                    msgs.remove(0);
+                }
+            });
+
+            // Also add to error log if it's an error
+            if matches!(msg_type, MessageType::Error) {
+                ctx.error_log.update(|errors| {
+                    errors.push(entry.content.clone());
+                    if errors.len() > 100 {
+                        errors.remove(0);
+                    }
+                });
+            }
+        }
     });
 
     view! {}

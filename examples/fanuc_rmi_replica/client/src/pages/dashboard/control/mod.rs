@@ -25,11 +25,14 @@ use fanuc_replica_types::*;
 use crate::pages::dashboard::context::WorkspaceContext;
 
 /// Control tab content (command composer).
+///
+/// NOTE: Program completion notifications are handled by ProgramNotificationHandler
+/// in the layout module, which receives server-broadcast ProgramNotification messages.
 #[component]
 pub fn ControlTab() -> impl IntoView {
     let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let show_composer = ctx.show_composer;
-    
+
     let connection_state = use_sync_component::<ConnectionState>();
     let robot_connected = Memo::new(move |_| {
         connection_state.get().values().next()

@@ -1,22 +1,68 @@
 //! Program visual display - G-code style line-by-line view.
+//!
+//! This component reads directly from the synced ExecutionState component,
+//! following the server-authoritative architecture. The server is the single
+//! source of truth for all program execution state.
+//!
+//! NOTE: Program completion notifications are handled by ProgramNotificationHandler
+//! in the layout module, which receives server-broadcast ProgramNotification messages.
+//! This ensures all connected clients see the same notification simultaneously.
 
 use leptos::prelude::*;
-use pl3xus_client::use_request;
+use pl3xus_client::{use_request, use_sync_component};
 use fanuc_replica_types::*;
-use crate::pages::dashboard::context::{WorkspaceContext, ProgramLine};
 use super::LoadProgramModal;
 
 /// Program Visual Display - G-code style line-by-line view
+///
+/// Reads directly from the synced ExecutionState component. All program state
+/// (loaded program, lines, running, paused, current line) comes from the server.
 #[component]
 pub fn ProgramVisualDisplay() -> impl IntoView {
-    let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
-    let lines = ctx.program_lines;
-    let executing = ctx.executing_line;
-    let loaded_name = ctx.loaded_program_name;
-    let loaded_id = ctx.loaded_program_id;
-    let is_running = ctx.program_running;
-    let is_paused = ctx.program_paused;
+    // Read directly from synced ExecutionState - server is source of truth
+    let execution_state = use_sync_component::<ExecutionState>();
     let (show_load_modal, set_show_load_modal) = signal(false);
+
+    // Derive program state from synced ExecutionState
+    let loaded_name = Memo::new(move |_| {
+        execution_state.get().values().next()
+            .and_then(|s| s.loaded_program_name.clone())
+    });
+
+    let loaded_id = Memo::new(move |_| {
+        execution_state.get().values().next()
+            .and_then(|s| s.loaded_program_id)
+    });
+
+    let is_running = Memo::new(move |_| {
+        execution_state.get().values().next()
+            .map(|s| s.running)
+            .unwrap_or(false)
+    });
+
+    let is_paused = Memo::new(move |_| {
+        execution_state.get().values().next()
+            .map(|s| s.paused)
+            .unwrap_or(false)
+    });
+
+    let executing = Memo::new(move |_| {
+        execution_state.get().values().next()
+            .map(|s| s.current_line as i32)
+            .unwrap_or(-1)
+    });
+
+    let lines = Memo::new(move |_| {
+        execution_state.get().values().next()
+            .map(|s| s.program_lines.clone())
+            .unwrap_or_default()
+    });
+
+    let total_lines = Memo::new(move |_| {
+        execution_state.get().values().next()
+            .map(|s| s.total_lines)
+            .unwrap_or(0)
+    });
 
     // Request hooks for program control - store in StoredValue for use in multiple closures
     let (start_program_fn, _) = use_request::<StartProgram>();
@@ -61,9 +107,8 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             <button
                                 class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
                                 on:click=move |_| {
-                                    if let Some(id) = loaded_id.get() {
-                                        start_program.with_value(|f| f(StartProgram { program_id: id }));
-                                    }
+                                    // StartProgram no longer needs program_id - it uses the already loaded program
+                                    start_program.with_value(|f| f(StartProgram));
                                 }
                             >
                                 "▶ Run"
@@ -127,14 +172,17 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                 </div>
             </div>
             // Progress bar - show when program is running
-            <Show when=move || is_running.get() && !lines.get().is_empty()>
+            <Show when=move || is_running.get() && (total_lines.get() > 0)>
                 <ProgramProgressBar
                     current_line=Signal::derive(move || executing.get().max(0) as usize)
-                    total_lines=Signal::derive(move || lines.get().len())
+                    total_lines=Signal::derive(move || total_lines.get())
                     is_paused=Signal::derive(move || is_paused.get())
                 />
             </Show>
-            <ProgramTable lines=lines executing=executing/>
+            <ProgramTable
+                lines=Signal::derive(move || lines.get())
+                executing=Signal::derive(move || executing.get())
+            />
         </div>
 
         // Load Program Modal
@@ -145,10 +193,13 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
 }
 
 /// Program table component showing the program lines
+///
+/// Uses ProgramLineInfo from the shared types crate. Line numbers are derived
+/// from the index in the vector (1-based).
 #[component]
 fn ProgramTable(
-    lines: RwSignal<Vec<ProgramLine>>,
-    executing: RwSignal<i32>,
+    lines: Signal<Vec<ProgramLineInfo>>,
+    executing: Signal<i32>,
 ) -> impl IntoView {
     view! {
         <div class="flex-1 overflow-y-auto">
@@ -176,10 +227,11 @@ fn ProgramTable(
                     </thead>
                     <tbody>
                         <For
-                            each=move || lines.get()
-                            key=|line| line.line_number
-                            children=move |line| {
-                                let line_num = line.line_number;
+                            each=move || lines.get().into_iter().enumerate()
+                            key=|(i, _)| *i
+                            children=move |(i, line)| {
+                                // Line numbers are 1-based
+                                let line_num = i + 1;
                                 let term = line.term_type.clone();
                                 view! {
                                     <tr class=move || format!(

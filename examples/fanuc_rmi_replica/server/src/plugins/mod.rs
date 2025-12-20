@@ -17,4 +17,4 @@ pub use connection::RobotConnectionPlugin;
 pub use sync::RobotSyncPlugin;
 pub use requests::RequestHandlerPlugin;
 pub use polling::RobotPollingPlugin;
-pub use execution::{ProgramExecutionPlugin, ProgramExecutor};
+pub use execution::ProgramExecutionPlugin;

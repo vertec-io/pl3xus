@@ -1,66 +1,60 @@
 //! Workspace context and shared types.
 //!
-//! Contains the WorkspaceContext for sharing state between workspace views
-//! and common data structures used throughout the workspace.
+//! Contains the WorkspaceContext for sharing UI-LOCAL state between workspace views.
+//!
+//! IMPORTANT: This context should ONLY contain UI-local state like:
+//! - Modal visibility
+//! - Accordion expansion states
+//! - Dropdown selections
+//! - Console/log messages
+//!
+//! Server-owned state (program execution, robot position, connection status,
+//! active frame/tool, etc.) should be read directly from synced components
+//! using use_sync_component<T>(). See ARCHITECTURE_SPECIFICATION.md for details.
+//!
+//! Examples of server-owned state (DO NOT put in this context):
+//! - Active UFrame/UTool -> use_sync_component::<FrameToolDataState>()
+//! - Program execution -> use_sync_component::<ExecutionState>()
+//! - Robot position -> use_sync_component::<RobotPosition>()
+//! - Connection state -> use_sync_component::<ConnectionState>()
 
 use leptos::prelude::*;
 use std::collections::HashSet;
 use js_sys;
 
-/// Shared context for frame/tool data and program state
+/// Shared context for UI-LOCAL state only.
+///
+/// IMPORTANT: This context does NOT contain server-owned state.
+/// - Active frame/tool comes from FrameToolDataState synced component
+/// - Program execution state comes from ExecutionState synced component
+/// - Robot position comes from RobotPosition synced component
+/// - Connection status comes from ConnectionState synced component
 #[derive(Clone, Copy)]
 pub struct WorkspaceContext {
-    /// Active UFrame number
-    pub active_frame: RwSignal<usize>,
-    /// Active UTool number
-    pub active_tool: RwSignal<usize>,
-    /// Expanded frames in accordion (set of frame numbers)
+    /// Expanded frames in accordion (set of frame numbers) - UI-local
     pub expanded_frames: RwSignal<HashSet<i32>>,
-    /// Expanded tools in accordion (set of tool numbers)
+    /// Expanded tools in accordion (set of tool numbers) - UI-local
     pub expanded_tools: RwSignal<HashSet<i32>>,
-    /// Command log entries (legacy - kept for compatibility)
-    pub command_log: RwSignal<Vec<CommandLogEntry>>,
-    /// Recent commands that can be re-run
+    /// Recent commands that can be re-run - UI-local
     pub recent_commands: RwSignal<Vec<RecentCommand>>,
-    /// Currently selected command ID in the dropdown (None = no selection)
+    /// Currently selected command ID in the dropdown (None = no selection) - UI-local
     pub selected_command_id: RwSignal<Option<usize>>,
-    /// Current program lines
-    pub program_lines: RwSignal<Vec<ProgramLine>>,
-    /// Currently executing line (-1 = none)
-    pub executing_line: RwSignal<i32>,
-    /// Show command composer modal
+    /// Show command composer modal - UI-local
     pub show_composer: RwSignal<bool>,
-    /// Loaded program name (for display in Dashboard)
-    pub loaded_program_name: RwSignal<Option<String>>,
-    /// Loaded program ID (for execution)
-    pub loaded_program_id: RwSignal<Option<i64>>,
-    /// Program is currently running
-    pub program_running: RwSignal<bool>,
-    /// Program is paused
-    pub program_paused: RwSignal<bool>,
-    /// Console messages for the command log
+    /// Console messages for the command log - UI-local
     pub console_messages: RwSignal<Vec<ConsoleMessage>>,
-    /// Error log entries
+    /// Error log entries - UI-local
     pub error_log: RwSignal<Vec<String>>,
 }
 
 impl WorkspaceContext {
     pub fn new() -> Self {
         Self {
-            active_frame: RwSignal::new(0),
-            active_tool: RwSignal::new(0),
             expanded_frames: RwSignal::new(HashSet::new()),
             expanded_tools: RwSignal::new(HashSet::new()),
-            command_log: RwSignal::new(Vec::new()),
             recent_commands: RwSignal::new(Vec::new()),
             selected_command_id: RwSignal::new(None),
-            program_lines: RwSignal::new(Vec::new()),
-            executing_line: RwSignal::new(-1),
             show_composer: RwSignal::new(false),
-            loaded_program_name: RwSignal::new(None),
-            loaded_program_id: RwSignal::new(None),
-            program_running: RwSignal::new(false),
-            program_paused: RwSignal::new(false),
             console_messages: RwSignal::new(Vec::new()),
             error_log: RwSignal::new(Vec::new()),
         }
@@ -137,21 +131,8 @@ pub enum CommandStatus {
     Error(String),
 }
 
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub struct ProgramLine {
-    pub line_number: usize,
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-    pub w: f64,
-    pub p: f64,
-    pub r: f64,
-    pub speed: f64,
-    pub term_type: String,
-    pub uframe: Option<i32>,
-    pub utool: Option<i32>,
-}
+// NOTE: ProgramLine type has been removed. Use ProgramLineInfo from fanuc_replica_types instead.
+// Program execution state comes from the synced ExecutionState component.
 
 /// Console message for the command log
 #[derive(Clone, Debug)]

@@ -1,12 +1,19 @@
 //! Load Program Modal - Select and load a program for execution.
+//!
+//! This modal sends a LoadProgram request to the server. The server updates
+//! the ExecutionState component which is automatically synced to all clients.
+//! No client-side state updates are needed - the UI reads directly from the
+//! synced ExecutionState.
 
 use leptos::prelude::*;
 use pl3xus_client::use_request;
 use fanuc_replica_types::*;
-use crate::pages::dashboard::context::{WorkspaceContext, ProgramLine};
 use crate::components::{use_toast, ToastType};
 
 /// Load Program Modal - Select and load a program for execution.
+///
+/// Sends LoadProgram request to server. Server updates ExecutionState which
+/// is automatically synced to all clients. No client-side state updates needed.
 #[component]
 pub fn LoadProgramModal<F>(
     on_close: F,
@@ -14,7 +21,6 @@ pub fn LoadProgramModal<F>(
 where
     F: Fn() + Clone + 'static,
 {
-    let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let toast = use_toast();
     let (list_programs, programs_state) = use_request::<ListPrograms>();
     let (load_program_fn, load_state) = use_request::<LoadProgram>();
@@ -48,35 +54,15 @@ where
     let load_program_fn = StoredValue::new(load_program_fn);
 
     // Handle load response
+    // NOTE: We do NOT update client-side state here. The server updates
+    // ExecutionState which is automatically synced to all clients.
     Effect::new(move |_| {
         let state = load_state.get();
         if let Some(response) = state.data {
             set_loading.set(false);
             if response.success {
-                if let Some(program) = response.program {
-                    // Convert program lines to ProgramLine format
-                    let lines: Vec<ProgramLine> = program.lines.iter().enumerate().map(|(i, line)| {
-                        ProgramLine {
-                            line_number: i + 1,
-                            x: line.x,
-                            y: line.y,
-                            z: line.z,
-                            w: line.w,
-                            p: line.p,
-                            r: line.r,
-                            speed: line.speed,
-                            term_type: line.term_type.clone(),
-                            uframe: line.uframe,
-                            utool: line.utool,
-                        }
-                    }).collect();
-
-                    ctx.program_lines.set(lines);
-                    ctx.loaded_program_id.set(Some(program.id));
-                    ctx.loaded_program_name.set(Some(program.name.clone()));
-                    ctx.executing_line.set(-1);
-                    ctx.program_running.set(false);
-                    ctx.program_paused.set(false);
+                if let Some(program) = &response.program {
+                    // Just show toast and close - server has already updated ExecutionState
                     toast.show(&format!("Loaded program '{}'", program.name), ToastType::Success);
                     on_close_load();
                 }

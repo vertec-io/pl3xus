@@ -181,7 +181,7 @@ impl Default for JogSettingsState {
 }
 
 /// Console log entry (broadcast message for console display)
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct ConsoleLogEntry {
     pub timestamp: String,
     pub timestamp_ms: u64,
@@ -191,20 +191,58 @@ pub struct ConsoleLogEntry {
     pub sequence_id: Option<u32>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub enum ConsoleDirection {
+    #[default]
     Sent,
     Received,
     System,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub enum ConsoleMsgType {
+    #[default]
     Command,
     Response,
     Error,
     Status,
     Config,
+}
+
+/// Program notification (broadcast message from server to all clients).
+///
+/// Used for server-initiated notifications about program events like
+/// completion, errors, or other state changes. All connected clients
+/// receive this message and can display appropriate UI feedback.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct ProgramNotification {
+    /// Unique sequence number to distinguish identical notifications
+    pub sequence: u64,
+    /// The type of notification
+    pub kind: ProgramNotificationKind,
+}
+
+/// Kind of program notification
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+pub enum ProgramNotificationKind {
+    #[default]
+    None,
+    /// Program completed successfully
+    Completed {
+        program_name: String,
+        total_instructions: usize,
+    },
+    /// Program was stopped by user
+    Stopped {
+        program_name: String,
+        at_line: usize,
+    },
+    /// Program encountered an error
+    Error {
+        program_name: String,
+        at_line: usize,
+        error_message: String,
+    },
 }
 
 /// I/O Status - contains all I/O types
@@ -916,10 +954,10 @@ impl RequestMessage for LoadProgram {
     type ResponseMessage = LoadProgramResponse;
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct StartProgram {
-    pub program_id: i64,
-}
+/// Start executing the currently loaded program.
+/// A program must be loaded first via LoadProgram.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct StartProgram;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StartProgramResponse {
@@ -1558,25 +1596,8 @@ impl RequestMessage for GetExecutionState {
     type ResponseMessage = ExecutionStateResponse;
 }
 
-/// Get active jog settings.
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct GetActiveJogSettings;
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ActiveJogSettingsResponse {
-    pub cartesian_jog_speed: f64,
-    pub cartesian_jog_step: f64,
-    pub joint_jog_speed: f64,
-    pub joint_jog_step: f64,
-    pub rotation_jog_speed: f64,
-    pub rotation_jog_step: f64,
-}
-
-impl RequestMessage for GetActiveJogSettings {
-    type ResponseMessage = ActiveJogSettingsResponse;
-}
-
-// Note: UpdateJogSettings is already defined above, just add RequestMessage impl
+// Note: GetActiveJogSettings was removed - use JogSettingsState synced component instead.
+// UpdateJogSettings is used to persist settings to database.
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UpdateJogSettingsResponse {

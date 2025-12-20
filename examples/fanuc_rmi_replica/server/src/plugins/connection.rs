@@ -78,8 +78,10 @@ impl Plugin for RobotConnectionPlugin {
         app.register_network_message::<ConnectToRobot, WebSocketProvider>();
         app.register_network_message::<DisconnectRobot, WebSocketProvider>();
 
+        // Spawn apparatus entity at startup so clients can request control
+        app.add_systems(Startup, spawn_apparatus_entity);
+
         // Add connection systems
-        app.add_systems(Startup, spawn_robot_entity);
         app.add_systems(Update, (
             handle_connect_requests,
             handle_connecting_state,
@@ -89,24 +91,20 @@ impl Plugin for RobotConnectionPlugin {
     }
 }
 
-// ============================================================================
-// Systems
-// ============================================================================
-
-/// Spawn initial robot entity with all synced components.
-fn spawn_robot_entity(mut commands: Commands) {
-    let connection_details = RobotConnectionDetails {
-        addr: "127.0.0.1".to_string(),
-        port: 16001,
-        name: "CRX-10iA Simulator".to_string(),
-    };
-
-    commands.spawn((
-        Name::new("FANUC_Robot"),
+/// Spawn the apparatus entity at startup.
+/// This entity represents the overall system that clients can control.
+/// Robot connection is a transition within this entity, not a separate entity.
+fn spawn_apparatus_entity(mut commands: Commands) {
+    let entity = commands.spawn((
+        Name::new("Apparatus"),
         FanucRobot,
-        connection_details,
+        RobotConnectionDetails {
+            addr: String::new(),
+            port: 0,
+            name: "No Robot".to_string(),
+        },
         RobotConnectionState::Disconnected,
-        // Synced state components
+        // Synced state components - clients need these for UI even before connection
         RobotPosition::default(),
         JointAngles::default(),
         RobotStatus::default(),
@@ -117,16 +115,25 @@ fn spawn_robot_entity(mut commands: Commands) {
         ConnectionState::default(),
         ActiveConfigState::default(),
         JogSettingsState::default(),
-    ));
+    )).id();
 
-    info!("✅ Spawned FANUC_Robot entity (multi-robot ready)");
+    info!("🏗️ Spawned apparatus entity {:?} (ready for control requests)", entity);
 }
 
-/// Handle incoming connection requests - transition to Connecting state.
+// ============================================================================
+// Systems
+// ============================================================================
+
+/// Handle incoming connection requests - spawn robot entity if needed, then transition to Connecting state.
+///
+/// If a robot entity doesn't exist, spawn one with connection details from:
+/// 1. Database (if connection_id is provided)
+/// 2. Direct parameters (addr, port, name)
 ///
 /// IMPORTANT: Only the client who has control of the apparatus can connect.
-/// This enforces the "control = system ownership" model.
 fn handle_connect_requests(
+    mut commands: Commands,
+    db: Option<Res<DatabaseResource>>,
     mut connect_events: MessageReader<pl3xus::NetworkData<ConnectToRobot>>,
     mut robots: Query<(Entity, &mut RobotConnectionState, &mut RobotConnectionDetails, &mut ConnectionState, Option<&EntityControl>), With<FanucRobot>>,
 ) {
@@ -135,6 +142,89 @@ fn handle_connect_requests(
         let msg: &ConnectToRobot = &*event;
         info!("📡 Received ConnectToRobot: {:?}:{} (connection_id: {:?}) from {:?}", msg.addr, msg.port, msg.connection_id, client_id);
 
+        // Check if robot entity already exists
+        let robot_exists = robots.single().is_ok();
+
+        if !robot_exists {
+            // No robot entity - spawn one with connection details from database or message
+            let (connection_details, jog_settings) = if let Some(conn_id) = msg.connection_id {
+                // Load connection details from database
+                if let Some(ref db) = db {
+                    match db.get_robot_connection(conn_id) {
+                        Ok(Some(robot_conn)) => {
+                            info!("📋 Loading robot connection '{}' from database", robot_conn.name);
+                            let details = RobotConnectionDetails {
+                                addr: robot_conn.ip_address,
+                                port: robot_conn.port as u32,
+                                name: robot_conn.name,
+                            };
+                            let jog = JogSettingsState {
+                                cartesian_jog_speed: robot_conn.default_cartesian_jog_speed,
+                                rotation_jog_speed: robot_conn.default_rotation_jog_speed,
+                                cartesian_jog_step: robot_conn.default_cartesian_jog_step,
+                                rotation_jog_step: robot_conn.default_rotation_jog_step,
+                                joint_jog_speed: robot_conn.default_joint_jog_speed,
+                                joint_jog_step: robot_conn.default_joint_jog_step,
+                            };
+                            (details, jog)
+                        }
+                        Ok(None) => {
+                            warn!("Robot connection {} not found in database", conn_id);
+                            continue;
+                        }
+                        Err(e) => {
+                            error!("Failed to load robot connection {}: {}", conn_id, e);
+                            continue;
+                        }
+                    }
+                } else {
+                    warn!("Database not available, cannot load robot connection");
+                    continue;
+                }
+            } else {
+                // Use direct connection details from message
+                if msg.addr.is_empty() || msg.port == 0 {
+                    warn!("ConnectToRobot requires either connection_id or valid addr/port");
+                    continue;
+                }
+                let details = RobotConnectionDetails {
+                    addr: msg.addr.clone(),
+                    port: msg.port,
+                    name: msg.name.clone().unwrap_or_else(|| format!("{}:{}", msg.addr, msg.port)),
+                };
+                (details, JogSettingsState::default())
+            };
+
+            // Build initial ConnectionState
+            let mut initial_conn_state = ConnectionState::default();
+            initial_conn_state.active_connection_id = msg.connection_id;
+            initial_conn_state.robot_name = connection_details.name.clone();
+            initial_conn_state.robot_connecting = true;
+
+            // Spawn the robot entity with Connecting state
+            let entity = commands.spawn((
+                Name::new("FANUC_Robot"),
+                FanucRobot,
+                connection_details,
+                RobotConnectionState::Connecting,
+                // Synced state components
+                RobotPosition::default(),
+                JointAngles::default(),
+                RobotStatus::default(),
+                IoStatus::default(),
+                IoConfigState::default(),
+                FrameToolDataState::default(),
+                ExecutionState::default(),
+                initial_conn_state,
+                ActiveConfigState::default(),
+                jog_settings,
+            )).id();
+
+            info!("🔄 Spawned robot entity {:?} in Connecting state", entity);
+            continue;
+        }
+
+        // Robot entity exists - update it
         match robots.single_mut() {
             Ok((entity, mut state, mut details, mut conn_state, control)) => {
                 // Check if client has control of the apparatus
@@ -144,30 +234,35 @@ fn handle_connect_requests(
                         continue;
                     }
                 } else {
-                    // No control assigned yet - allow first connection attempt
-                    // This is development mode behavior; in production, control should be required
                     trace!("No EntityControl on apparatus {:?}, allowing connect", entity);
                 }
 
                 if *state == RobotConnectionState::Disconnected {
-                    // If connection_id is provided, use saved connection details
-                    if msg.connection_id.is_some() {
-                        conn_state.active_connection_id = msg.connection_id;
+                    // Load connection details from database if connection_id provided
+                    if let Some(conn_id) = msg.connection_id {
+                        conn_state.active_connection_id = Some(conn_id);
+                        if let Some(ref db) = db {
+                            if let Ok(Some(robot_conn)) = db.get_robot_connection(conn_id) {
+                                details.addr = robot_conn.ip_address;
+                                details.port = robot_conn.port as u32;
+                                details.name = robot_conn.name.clone();
+                                conn_state.robot_name = robot_conn.name;
+                            }
+                        }
+                    } else {
+                        // Use direct connection details
+                        if !msg.addr.is_empty() {
+                            details.addr = msg.addr.clone();
+                        }
+                        if msg.port > 0 {
+                            details.port = msg.port;
+                        }
+                        if let Some(ref name) = msg.name {
+                            details.name = name.clone();
+                            conn_state.robot_name = name.clone();
+                        }
                     }
 
-                    // Only update addr/port if provided (not empty)
-                    if !msg.addr.is_empty() {
-                        details.addr = msg.addr.clone();
-                    }
-                    if msg.port > 0 {
-                        details.port = msg.port;
-                    }
-                    if let Some(ref name) = msg.name {
-                        details.name = name.clone();
-                        conn_state.robot_name = name.clone();
-                    }
-
-                    // Set connecting state
                     *state = RobotConnectionState::Connecting;
                     conn_state.robot_connecting = true;
                     conn_state.robot_connected = false;
@@ -177,7 +272,7 @@ fn handle_connect_requests(
                     warn!("Robot already in state {:?}, ignoring connect request", *state);
                 }
             }
-            Err(e) => warn!("No single robot found: {:?}", e),
+            Err(e) => warn!("Failed to get robot entity: {:?}", e),
         }
     }
 }
@@ -271,16 +366,17 @@ fn handle_connecting_state(
 /// Handle disconnect requests.
 ///
 /// IMPORTANT: Only the client who has control of the apparatus can disconnect.
+/// This properly notifies the FANUC controller before disconnecting.
 fn handle_disconnect_requests(
-    mut commands: Commands,
+    tokio: Res<TokioTasksRuntime>,
     mut disconnect_events: MessageReader<pl3xus::NetworkData<DisconnectRobot>>,
-    mut robots: Query<(Entity, &mut RobotConnectionState, &mut ConnectionState, Option<&EntityControl>), With<FanucRobot>>,
+    mut robots: Query<(Entity, &RmiDriver, &mut RobotConnectionState, &mut ConnectionState, Option<&EntityControl>), With<FanucRobot>>,
 ) {
     for event in disconnect_events.read() {
         let client_id = *event.source();
         info!("📡 Received DisconnectRobot from {:?}", client_id);
 
-        if let Ok((entity, mut state, mut conn_state, control)) = robots.single_mut() {
+        if let Ok((entity, driver, mut state, mut conn_state, control)) = robots.single_mut() {
             // Check if client has control of the apparatus
             if let Some(entity_control) = control {
                 if entity_control.client_id != client_id {
@@ -292,17 +388,45 @@ fn handle_disconnect_requests(
             }
 
             if *state == RobotConnectionState::Connected {
-                *state = RobotConnectionState::Disconnected;
+                // Set state to Disconnecting while we clean up
+                *state = RobotConnectionState::Disconnecting;
                 conn_state.robot_connected = false;
                 conn_state.robot_connecting = false;
-                conn_state.robot_addr = String::new();
-                conn_state.robot_name = String::new();
-                conn_state.connection_name = None;
-                conn_state.active_connection_id = None;
-                commands.entity(entity).remove::<RmiDriver>();
-                commands.entity(entity).remove::<RmiResponseChannel>();
-                commands.entity(entity).remove::<RmiSentInstructionChannel>();
-                info!("🔌 Robot {:?} disconnected", entity);
+
+                // Clone driver for async task
+                let driver_arc = driver.0.clone();
+
+                // Spawn async task to properly disconnect from FANUC controller
+                tokio.spawn_background_task(move |mut ctx| async move {
+                    // Send disconnect command to FANUC controller
+                    match driver_arc.disconnect().await {
+                        Ok(response) => {
+                            info!("✅ FANUC controller acknowledged disconnect: {:?}", response);
+                        }
+                        Err(e) => {
+                            warn!("⚠️ Failed to send disconnect to FANUC controller: {} (continuing cleanup)", e);
+                        }
+                    }
+
+                    // Clean up entity on main thread
+                    ctx.run_on_main_thread(move |ctx| {
+                        if let Ok(mut entity_mut) = ctx.world.get_entity_mut(entity) {
+                            entity_mut.remove::<RmiDriver>();
+                            entity_mut.remove::<RmiResponseChannel>();
+                            entity_mut.remove::<RmiSentInstructionChannel>();
+                            entity_mut.insert(RobotConnectionState::Disconnected);
+
+                            if let Some(mut conn_state) = entity_mut.get_mut::<ConnectionState>() {
+                                conn_state.robot_addr = String::new();
+                                conn_state.robot_name = String::new();
+                                conn_state.connection_name = None;
+                                conn_state.active_connection_id = None;
+                            }
+
+                            info!("🔌 Robot {:?} disconnected and cleaned up", entity);
+                        }
+                    }).await;
+                });
             }
         }
     }

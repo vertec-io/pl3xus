@@ -1,4 +1,6 @@
 //! Jog controls component for manual robot movement.
+//!
+//! Syncs with server-owned JogSettingsState for default values.
 
 use leptos::prelude::*;
 
@@ -12,14 +14,32 @@ pub fn JogControls() -> impl IntoView {
     let ctx = use_sync_context();
     let toast = use_toast();
     let control_state = use_sync_component::<EntityControl>();
+    let jog_settings = use_sync_component::<JogSettingsState>();
 
-    // Speed and step as string signals for text input
-    let (speed_str, set_speed_str) = signal("50".to_string());
-    let (step_str, set_step_str) = signal("10".to_string());
+    // Speed and step as string signals for text input (initialized from server state)
+    let (speed_str, set_speed_str) = signal(String::new());
+    let (step_str, set_step_str) = signal(String::new());
 
     // Rotation speed and step
-    let (rot_speed_str, set_rot_speed_str) = signal("5".to_string());
-    let (rot_step_str, set_rot_step_str) = signal("1".to_string());
+    let (rot_speed_str, set_rot_speed_str) = signal(String::new());
+    let (rot_step_str, set_rot_step_str) = signal(String::new());
+
+    // Track if we've initialized from server state
+    let (initialized, set_initialized) = signal(false);
+
+    // Initialize from server state when it becomes available
+    Effect::new(move |_| {
+        if let Some(settings) = jog_settings.get().values().next() {
+            // Only initialize once, don't overwrite user edits
+            if !initialized.get_untracked() {
+                set_speed_str.set(format!("{:.1}", settings.cartesian_jog_speed));
+                set_step_str.set(format!("{:.1}", settings.cartesian_jog_step));
+                set_rot_speed_str.set(format!("{:.1}", settings.rotation_jog_speed));
+                set_rot_step_str.set(format!("{:.1}", settings.rotation_jog_step));
+                set_initialized.set(true);
+            }
+        }
+    });
 
     // Check if THIS client has control
     let has_control = move || {

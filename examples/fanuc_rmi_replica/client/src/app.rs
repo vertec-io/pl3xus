@@ -9,7 +9,7 @@ use pl3xus_client::{ClientTypeRegistry, SyncProvider, EntityControl, ControlResp
 use fanuc_replica_types::*;
 
 use crate::components::ToastProvider;
-use crate::layout::{DesktopLayout, FloatingJogControls, FloatingIOStatus, ControlResponseHandler, ConnectionStateHandler};
+use crate::layout::{DesktopLayout, FloatingJogControls, FloatingIOStatus, ControlResponseHandler, ConnectionStateHandler, ProgramNotificationHandler, ConsoleLogHandler};
 
 /// Build the client type registry with all synced components.
 fn build_registry() -> Arc<ClientTypeRegistry> {
@@ -24,6 +24,8 @@ fn build_registry() -> Arc<ClientTypeRegistry> {
         .register::<ActiveConfigState>()
         .register::<JogSettingsState>()
         .register::<ControlResponse>()
+        .register::<ProgramNotification>()
+        .register::<ConsoleLogEntry>()
         .build()
 }
 
@@ -45,6 +47,8 @@ pub fn App() -> impl IntoView {
                 // Headless components to handle server responses
                 <ControlResponseHandler/>
                 <ConnectionStateHandler/>
+                <ProgramNotificationHandler/>
+                <ConsoleLogHandler/>
             </SyncProvider>
         </ToastProvider>
     }

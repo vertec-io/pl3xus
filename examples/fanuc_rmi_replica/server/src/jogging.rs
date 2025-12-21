@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy::ecs::message::MessageReader;
 use bevy_tokio_tasks::TokioTasksRuntime;
 use pl3xus::NetworkData;
+use pl3xus_sync::AuthorizedMessage;
 use fanuc_replica_types::*;
 use fanuc_rmi::dto as raw_dto;
 use fanuc_rmi::{SpeedType, TermType};
@@ -9,6 +10,7 @@ use fanuc_rmi::packets::PacketPriority;
 use pl3xus_sync::control::EntityControl;
 use crate::plugins::connection::{FanucRobot, RmiDriver, RobotConnectionState};
 use crate::plugins::system::SystemMarker;
+use crate::WebSocketProvider;
 
 /// Handle jog commands from clients - entity-based, uses pl3xus EntityControl on System
 pub fn handle_jog_commands(
@@ -94,6 +96,92 @@ pub fn handle_jog_commands(
         match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
             Ok(seq) => {
                 info!("Sent Cartesian jog command with sequence {}", seq);
+            }
+            Err(e) => {
+                error!("Failed to send jog instruction: {:?}", e);
+            }
+        }
+    }
+}
+
+/// Handle authorized jog commands - uses the new AuthorizedMessage pattern.
+///
+/// This handler receives only messages that have passed authorization middleware.
+/// The middleware checks that the client has control of the target entity (System).
+/// No manual control check is needed here.
+pub fn handle_authorized_jog_commands(
+    tokio_runtime: Res<TokioTasksRuntime>,
+    mut events: MessageReader<AuthorizedMessage<JogCommand>>,
+    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
+) {
+    // Enter the Tokio runtime context so send_packet can use tokio::spawn
+    let _guard = tokio_runtime.runtime().enter();
+
+    for event in events.read() {
+        // Authorization already verified by middleware - no need to check EntityControl
+        let cmd = &event.message;
+        let target_entity = event.target_entity;
+
+        info!(
+            "Processing authorized JogCommand for entity {:?}: {:?} direction={:?} dist={} speed={}",
+            target_entity, cmd.axis, cmd.direction, cmd.distance, cmd.speed
+        );
+
+        // Find a connected robot (in future, match by target_entity)
+        let Some((entity, _, driver)) = robot_query.iter()
+            .find(|(_, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
+        else {
+            warn!("Authorized jog rejected: No connected robot");
+            continue;
+        };
+
+        let driver = driver.expect("Checked above");
+
+        // Build position delta (PositionDto uses f32)
+        let mut pos = raw_dto::Position {
+            x: 0.0, y: 0.0, z: 0.0,
+            w: 0.0, p: 0.0, r: 0.0,
+            ext1: 0.0, ext2: 0.0, ext3: 0.0,
+        };
+        let dist = if cmd.direction == JogDirection::Positive { cmd.distance as f64 } else { -(cmd.distance as f64) };
+
+        match cmd.axis {
+            JogAxis::X => pos.x = dist,
+            JogAxis::Y => pos.y = dist,
+            JogAxis::Z => pos.z = dist,
+            JogAxis::W => pos.w = dist,
+            JogAxis::P => pos.p = dist,
+            JogAxis::R => pos.r = dist,
+            JogAxis::J1 | JogAxis::J2 | JogAxis::J3 | JogAxis::J4 | JogAxis::J5 | JogAxis::J6 => {
+                // Joint jogs not supported by this simulator - need FrcJointRelativeJRep
+                warn!("Joint jogging not supported by this simulator");
+                continue;
+            }
+        }
+
+        // Build instruction - use FrcLinearRelative for Cartesian jogs
+        let instruction = raw_dto::Instruction::FrcLinearRelative(raw_dto::FrcLinearRelative {
+            sequence_id: 0,
+            configuration: raw_dto::Configuration {
+                u_frame_number: 0,
+                u_tool_number: 0,
+                turn4: 0, turn5: 0, turn6: 0,
+                front: 0, up: 0, left: 0, flip: 0,
+            },
+            position: pos,
+            speed_type: SpeedType::MMSec.into(),
+            speed: cmd.speed as f64,
+            term_type: TermType::FINE.into(), // Use FINE for step moves
+            term_value: 1,
+        });
+
+        // Send instruction via driver
+        let send_packet: fanuc_rmi::packets::SendPacket =
+            raw_dto::SendPacket::Instruction(instruction).into();
+
+        match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
+            Ok(seq) => {
+                info!("Sent authorized Cartesian jog command on {:?} with sequence {}", entity, seq);
             }
             Err(e) => {
                 error!("Failed to send jog instruction: {:?}", e);
@@ -414,7 +502,10 @@ pub fn handle_send_packet(
     mut events: MessageReader<NetworkData<raw_dto::SendPacket>>,
     system_query: Query<&EntityControl, With<SystemMarker>>,
     robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
+    net: Res<pl3xus::Network<WebSocketProvider>>,
 ) {
+    use pl3xus_common::ServerNotification;
+
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
@@ -425,11 +516,25 @@ pub fn handle_send_packet(
         // Check control on System entity
         let Ok(system_control) = system_query.single() else {
             warn!("SendPacket rejected: No System entity found");
+            let _ = net.send(
+                client_id,
+                ServerNotification::error("No system entity found").with_context("SendPacket"),
+            );
             continue;
         };
 
         if system_control.client_id != client_id {
+            let holder_msg = if system_control.client_id.id == 0 {
+                "No client has control"
+            } else {
+                "Another client has control"
+            };
             warn!("SendPacket rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
+            let _ = net.send(
+                client_id,
+                ServerNotification::warning(format!("Motion command rejected: {}", holder_msg))
+                    .with_context("SendPacket"),
+            );
             continue;
         }
 
@@ -438,6 +543,10 @@ pub fn handle_send_packet(
             .find(|(_, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("SendPacket rejected: No connected robot");
+            let _ = net.send(
+                client_id,
+                ServerNotification::error("No connected robot available").with_context("SendPacket"),
+            );
             continue;
         };
 
@@ -454,6 +563,11 @@ pub fn handle_send_packet(
             }
             Err(e) => {
                 error!("Failed to send packet: {:?}", e);
+                let _ = net.send(
+                    client_id,
+                    ServerNotification::error(format!("Failed to send packet: {:?}", e))
+                        .with_context("SendPacket"),
+                );
             }
         }
     }

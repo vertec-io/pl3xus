@@ -1068,3 +1068,55 @@ pub fn ConsoleLogHandler() -> impl IntoView {
 
     view! {}
 }
+
+/// Component that listens for ServerNotification messages and shows appropriate feedback.
+///
+/// This is a "headless" component that handles server-sent notifications
+/// (e.g., authorization denials) and displays them as toasts.
+#[component]
+pub fn ServerNotificationHandler() -> impl IntoView {
+    use pl3xus_client::{NotificationLevel, ServerNotification};
+    use crate::components::{use_toast, ToastType};
+
+    let toast = use_toast();
+    let notification = use_sync_message::<ServerNotification>();
+
+    // Track the last sequence number we processed to avoid duplicate toasts
+    let last_sequence = StoredValue::new(0u64);
+
+    Effect::new(move |_| {
+        let notif = notification.get();
+
+        // Skip if sequence is 0 (default state) or same as last processed
+        if notif.sequence == 0 {
+            return;
+        }
+
+        let last = last_sequence.get_value();
+        if notif.sequence == last {
+            return;
+        }
+
+        // Update last processed first to avoid duplicate processing
+        last_sequence.set_value(notif.sequence);
+
+        // Convert notification level to toast type
+        let toast_type = match notif.level {
+            NotificationLevel::Info => ToastType::Info,
+            NotificationLevel::Success => ToastType::Success,
+            NotificationLevel::Warning => ToastType::Warning,
+            NotificationLevel::Error => ToastType::Error,
+        };
+
+        // Format message with context if available
+        let message = if let Some(ctx) = &notif.context {
+            format!("{} ({})", notif.message, ctx)
+        } else {
+            notif.message.clone()
+        };
+
+        toast.show(message, toast_type);
+    });
+
+    view! {}
+}

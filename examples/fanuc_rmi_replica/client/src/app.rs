@@ -5,11 +5,11 @@ use std::sync::Arc;
 use leptos::prelude::*;
 use leptos_router::components::Router;
 
-use pl3xus_client::{ClientTypeRegistry, SyncProvider, EntityControl, ControlResponse};
+use pl3xus_client::{ClientTypeRegistry, SyncProvider, EntityControl, ControlResponse, ServerNotification};
 use fanuc_replica_types::*;
 
 use crate::components::ToastProvider;
-use crate::layout::{DesktopLayout, FloatingJogControls, FloatingIOStatus, ControlResponseHandler, ConnectionStateHandler, ProgramNotificationHandler, ConsoleLogHandler};
+use crate::layout::{DesktopLayout, FloatingJogControls, FloatingIOStatus, ControlResponseHandler, ConnectionStateHandler, ProgramNotificationHandler, ConsoleLogHandler, ServerNotificationHandler};
 
 /// Build the client type registry with all synced components.
 fn build_registry() -> Arc<ClientTypeRegistry> {
@@ -27,6 +27,7 @@ fn build_registry() -> Arc<ClientTypeRegistry> {
         .register::<ControlResponse>()
         .register::<ProgramNotification>()
         .register::<ConsoleLogEntry>()
+        .register::<ServerNotification>()
         .build()
 }
 
@@ -50,6 +51,7 @@ pub fn App() -> impl IntoView {
                 <ConnectionStateHandler/>
                 <ProgramNotificationHandler/>
                 <ConsoleLogHandler/>
+                <ServerNotificationHandler/>
             </SyncProvider>
         </ToastProvider>
     }

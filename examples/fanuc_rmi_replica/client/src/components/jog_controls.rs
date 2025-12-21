@@ -1,6 +1,7 @@
 //! Jog controls component for manual robot movement.
 //!
 //! Syncs with server-owned JogSettingsState for default values.
+//! Uses targeted messages with authorization for jog commands.
 
 use leptos::prelude::*;
 
@@ -9,6 +10,11 @@ use fanuc_replica_types::*;
 use crate::components::use_toast;
 
 /// Jog controls for robot manual movement.
+///
+/// Uses the new targeted message pattern - jog commands are sent with the
+/// System entity as the target. The server's authorization middleware
+/// verifies that this client has control of the System entity before
+/// processing the command.
 #[component]
 pub fn JogControls() -> impl IntoView {
     let ctx = use_sync_context();
@@ -41,6 +47,12 @@ pub fn JogControls() -> impl IntoView {
         }
     });
 
+    // Get the System entity bits (for targeted messages)
+    // The EntityControl component is synced with entity_id as the key
+    let system_entity_bits = move || {
+        control_state.get().keys().next().copied()
+    };
+
     // Check if THIS client has control
     let has_control = move || {
         let my_id = ctx.my_connection_id.get();
@@ -50,6 +62,14 @@ pub fn JogControls() -> impl IntoView {
     };
 
     let jog = move |axis: JogAxis, direction: JogDirection| {
+        // Get the target entity (System)
+        let Some(entity_bits) = system_entity_bits() else {
+            toast.error("Cannot jog: System entity not found.");
+            return;
+        };
+
+        // Note: We still check has_control() client-side for immediate UI feedback,
+        // but the server will also verify via authorization middleware.
         if !has_control() {
             toast.error("Cannot jog: you don't have control. Request control first.");
             return;
@@ -69,7 +89,8 @@ pub fn JogControls() -> impl IntoView {
             }
         };
 
-        ctx.send(JogCommand {
+        // Send targeted message - server will verify authorization
+        ctx.send_targeted(entity_bits, JogCommand {
             axis,
             direction,
             distance: step,

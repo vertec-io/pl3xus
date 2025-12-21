@@ -13,6 +13,8 @@
 //! - [`MutationAuthorizer`] / [`MutationAuthorizerResource`]: pluggable
 //!   authorization policies for client-driven mutations, plus a built-in
 //!   [`ServerOnlyMutationAuthorizer`] for "server-only" mutation deployments.
+//! - [`TargetedMessageAuthorizer`] / [`TargetedAuthorizerResource`]: pluggable
+//!   authorization policies for targeted messages (commands sent to specific entities).
 
 mod messages;
 #[cfg(feature = "runtime")]
@@ -21,6 +23,10 @@ mod registry;
 mod subscription;
 #[cfg(feature = "runtime")]
 mod systems;
+
+/// Pluggable authorization policies for targeted messages.
+#[cfg(feature = "runtime")]
+pub mod authorization;
 
 /// Optional utilities for exclusive control transfer patterns.
 #[cfg(feature = "runtime")]
@@ -48,6 +54,15 @@ pub use registry::{
 };
 #[cfg(feature = "runtime")]
 pub use subscription::*;
+#[cfg(feature = "runtime")]
+pub use authorization::{
+    TargetedAuthContext,
+    TargetedAuthResult,
+    TargetedMessageAuthorizer,
+    TargetedAuthorizerResource,
+    AuthorizedMessage,
+    AppAuthorizedMessageExt,
+};
 
 #[cfg(feature = "runtime")]
 use bevy::prelude::*;

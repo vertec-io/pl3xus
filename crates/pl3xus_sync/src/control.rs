@@ -119,8 +119,65 @@ impl Plugin for ExclusiveControlPlugin {
         app.add_message::<ControlRequest>();
         app.add_message::<ControlResponse>();
 
+        // Install the exclusive control authorization policy for targeted messages.
+        // This policy uses EntityControl to determine if a client can send commands
+        // to a specific entity.
+        let propagate = self.config.propagate_to_children;
+        app.insert_resource(crate::TargetedAuthorizerResource::from_fn(
+            move |world, source, entity| {
+                exclusive_control_authorization_check(world, source, entity, propagate)
+            },
+        ));
+
         // Note: The user must also register these messages with their network provider
         // and add the control systems. See `AppExclusiveControlExt` trait below.
+    }
+}
+
+/// Check if a client is authorized to send a targeted message to an entity.
+///
+/// Authorization is granted if:
+/// - The source is the server (always authorized)
+/// - The entity has no EntityControl component (uncontrolled = anyone can command)
+/// - The entity's EntityControl.client_id matches the source
+/// - The entity's EntityControl.client_id is 0 (default = no active controller)
+/// - If `check_hierarchy` is true: any ancestor has control matching the source
+fn exclusive_control_authorization_check(
+    world: &World,
+    source: ConnectionId,
+    entity: Entity,
+    check_hierarchy: bool,
+) -> Result<(), String> {
+    // Server is always authorized
+    if source.is_server() {
+        return Ok(());
+    }
+
+    let check_control = |control: &EntityControl| {
+        // client_id 0 means "no controller" - anyone can command
+        control.client_id == source || control.client_id.id == 0
+    };
+
+    let authorized = if check_hierarchy {
+        // Use hierarchical check - parent control grants child control
+        crate::has_control_hierarchical::<EntityControl, _>(world, entity, check_control)
+    } else {
+        // Just check this entity
+        match world.get_entity(entity) {
+            Ok(entity_ref) => {
+                match entity_ref.get::<EntityControl>() {
+                    Some(control) => check_control(control),
+                    None => true, // No control component = uncontrolled = allow
+                }
+            }
+            Err(_) => false, // Entity doesn't exist
+        }
+    };
+
+    if authorized {
+        Ok(())
+    } else {
+        Err("Entity controlled by another client".to_string())
     }
 }
 

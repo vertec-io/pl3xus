@@ -15,6 +15,8 @@ use pl3xus_common::{ConnectionId, NetworkPacket};
 pub mod network;
 /// Contains logic for making requests with expected responses
 pub mod network_request;
+/// Convenience registration functions for network messages
+pub mod registration;
 
 /// An instance of a Network that uses the provided [`NetworkProvider`] to drive itself.
 ///

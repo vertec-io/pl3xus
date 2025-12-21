@@ -251,6 +251,97 @@ impl SyncContext {
         }
     }
 
+    /// Send a targeted message to the server for a specific entity.
+    ///
+    /// This wraps the message in a `TargetedMessage<T>` with the entity's bits as the target_id.
+    /// On the server, this will be processed by the authorization middleware and converted
+    /// to an `AuthorizedMessage<T>` if the client has control of the target entity.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use pl3xus_client::use_sync_context;
+    ///
+    /// #[derive(Serialize, Deserialize, Clone)]
+    /// struct JogCommand {
+    ///     axis: u8,
+    ///     direction: i8,
+    /// }
+    ///
+    /// #[component]
+    /// fn JogControls(entity_bits: u64) -> impl IntoView {
+    ///     let ctx = use_sync_context();
+    ///
+    ///     let jog_x_plus = move |_| {
+    ///         ctx.send_targeted(entity_bits, JogCommand { axis: 0, direction: 1 });
+    ///     };
+    ///
+    ///     view! { <button on:click=jog_x_plus>"X+"</button> }
+    /// }
+    /// ```
+    pub fn send_targeted<T>(&self, entity_bits: u64, message: T)
+    where
+        T: serde::Serialize + pl3xus_common::Pl3xusMessage,
+    {
+        use pl3xus_common::{NetworkPacket, TargetedMessage};
+
+        // Wrap in TargetedMessage with entity bits as string
+        let targeted = TargetedMessage {
+            target_id: entity_bits.to_string(),
+            message,
+        };
+
+        // Serialize the targeted message to bincode
+        let data = match bincode::serde::encode_to_vec(&targeted, bincode::config::standard()) {
+            Ok(bytes) => bytes,
+            Err(_e) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::error!(
+                    "[SyncContext::send_targeted] Failed to serialize targeted message '{}': {:?}",
+                    T::type_name(),
+                    _e
+                );
+                return;
+            }
+        };
+
+        // Create NetworkPacket with TargetedMessage type info
+        let packet = NetworkPacket {
+            type_name: TargetedMessage::<T>::name().to_string(),
+            schema_hash: T::schema_hash(), // Use inner type's hash for matching
+            data,
+        };
+
+        #[cfg(target_arch = "wasm32")]
+        leptos::logging::log!(
+            "[SyncContext::send_targeted] Sending targeted message '{}' to entity {} (hash: 0x{:016x})",
+            T::type_name(),
+            entity_bits,
+            T::schema_hash()
+        );
+
+        // Serialize the packet and send
+        match bincode::serde::encode_to_vec(&packet, bincode::config::standard()) {
+            Ok(bytes) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::log!(
+                    "[SyncContext::send_targeted] Sending targeted '{}' ({} bytes)",
+                    T::short_name(),
+                    bytes.len()
+                );
+                (self.send)(&bytes);
+            }
+            Err(_e) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::error!(
+                    "[SyncContext::send_targeted] Failed to serialize packet for '{}': {:?}",
+                    T::type_name(),
+                    _e
+                );
+            }
+        }
+    }
+
     /// Handle an incoming message (non-sync message).
     ///
     /// This is called by the provider when it receives a NetworkPacket that is not

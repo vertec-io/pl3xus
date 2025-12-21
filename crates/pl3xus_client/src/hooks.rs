@@ -514,6 +514,61 @@ pub fn use_sync_context() -> SyncContext {
     expect_context::<SyncContext>()
 }
 
+/// Hook to get a callback for sending targeted messages to a specific entity.
+///
+/// This returns a callback that sends a message wrapped in `TargetedMessage<T>`.
+/// On the server, the message will be processed by the authorization middleware
+/// and converted to an `AuthorizedMessage<T>` if the client has control of the
+/// target entity.
+///
+/// # Type Parameters
+///
+/// - `T`: The message type (must implement `Pl3xusMessage`)
+///
+/// # Panics
+///
+/// Panics if called outside of a `SyncProvider` context.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_send_targeted;
+/// use serde::{Deserialize, Serialize};
+///
+/// #[derive(Clone, Serialize, Deserialize)]
+/// struct JogCommand {
+///     axis: u8,
+///     direction: i8,
+/// }
+///
+/// #[component]
+/// fn JogControls(entity_bits: u64) -> impl IntoView {
+///     let send_jog = use_send_targeted::<JogCommand>(entity_bits);
+///
+///     let jog_x_plus = move |_| {
+///         send_jog(JogCommand { axis: 0, direction: 1 });
+///     };
+///
+///     let jog_x_minus = move |_| {
+///         send_jog(JogCommand { axis: 0, direction: -1 });
+///     };
+///
+///     view! {
+///         <button on:click=jog_x_plus>"X+"</button>
+///         <button on:click=jog_x_minus>"X-"</button>
+///     }
+/// }
+/// ```
+pub fn use_send_targeted<T>(entity_bits: u64) -> impl Fn(T) + Clone
+where
+    T: serde::Serialize + pl3xus_common::Pl3xusMessage + Clone + 'static,
+{
+    let ctx = expect_context::<SyncContext>();
+    move |message: T| {
+        ctx.send_targeted(entity_bits, message);
+    }
+}
+
 /// Hook to access mutation state tracking.
 ///
 /// This returns a read-only signal containing all mutation states, allowing

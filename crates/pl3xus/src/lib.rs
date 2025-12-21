@@ -140,6 +140,7 @@ Currently, Bevy's [TaskPool](bevy::tasks::TaskPool) is the default runtime used 
 /// Contains all functionality for starting a server or client, sending, and recieving messages from clients.
 pub mod managers;
 pub use managers::{Network, network::AppNetworkMessage};
+pub use managers::registration::{register_message, register_message_unscheduled};
 mod runtime;
 use managers::NetworkProvider;
 pub use runtime::Pl3xusRuntime;

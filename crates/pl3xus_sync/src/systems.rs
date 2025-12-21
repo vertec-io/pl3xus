@@ -118,9 +118,12 @@ pub(crate) fn install<NP: NetworkProvider>(app: &mut App) {
 
 fn register_network_messages<NP: NetworkProvider>(app: &mut App) {
     use pl3xus::AppNetworkMessage;
+    use pl3xus_common::ServerNotification;
 
     app.register_network_message::<SyncClientMessage, NP>();
     app.register_network_message::<crate::messages::SyncServerMessage, NP>();
+    // Register ServerNotification for authorization rejection notifications
+    app.register_network_message::<ServerNotification, NP>();
 }
 
 /// Handle connection events: send Welcome to new connections and cleanup disconnected ones.

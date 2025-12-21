@@ -4,6 +4,7 @@
 
 use bevy::prelude::*;
 use pl3xus::AppNetworkMessage;
+use pl3xus_sync::AppAuthorizedMessageExt;
 use pl3xus_websockets::WebSocketProvider;
 use fanuc_replica_types::*;
 
@@ -14,7 +15,12 @@ pub struct RobotSyncPlugin;
 impl Plugin for RobotSyncPlugin {
     fn build(&self, app: &mut App) {
         // Register network messages for jogging
+        // JogCommand uses the new targeted authorization pattern
         app.register_network_message::<JogCommand, WebSocketProvider>();
+        app.register_targeted_message::<JogCommand, WebSocketProvider>();
+        app.add_authorized_message::<JogCommand, WebSocketProvider>();
+
+        // Other messages still use the old pattern (manual control check)
         app.register_network_message::<JogRobot, WebSocketProvider>();
         app.register_network_message::<InitializeRobot, WebSocketProvider>();
         app.register_network_message::<ResetRobot, WebSocketProvider>();
@@ -36,7 +42,9 @@ impl Plugin for RobotSyncPlugin {
 
         // Add sync systems
         app.add_systems(Update, (
-            jogging::handle_jog_commands,
+            // JogCommand now uses AuthorizedMessage (authorization handled by middleware)
+            jogging::handle_authorized_jog_commands,
+            // Other commands still use manual control check
             jogging::handle_jog_robot_commands,
             jogging::handle_initialize_robot,
             jogging::handle_abort_motion,

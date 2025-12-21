@@ -145,3 +145,96 @@ impl Default for EntityControl {
         }
     }
 }
+
+// ============================================================================
+// Server Notification Types (shared between server and client)
+// ============================================================================
+
+/// Severity level for server notifications.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub enum NotificationLevel {
+    /// Informational message.
+    #[default]
+    Info,
+    /// Success message.
+    Success,
+    /// Warning message.
+    Warning,
+    /// Error message.
+    Error,
+}
+
+/// Global sequence counter for server notifications.
+/// Starts at 1 so that 0 can be used as the "unset" default value.
+static NOTIFICATION_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// Get the next notification sequence number.
+fn next_notification_sequence() -> u64 {
+    NOTIFICATION_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// A notification from the server to be displayed to the user.
+///
+/// This is used to communicate authorization denials, errors, and other
+/// important messages that should be shown as toasts or in a console.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[cfg_attr(feature = "ecs", derive(bevy::prelude::Message))]
+pub struct ServerNotification {
+    /// Unique sequence number for deduplication.
+    /// Each notification gets a unique, monotonically increasing sequence number.
+    pub sequence: u64,
+    /// The notification message.
+    pub message: String,
+    /// The severity level.
+    pub level: NotificationLevel,
+    /// Optional context (e.g., the message type that was rejected).
+    pub context: Option<String>,
+}
+
+impl ServerNotification {
+    /// Create an info notification.
+    pub fn info(message: impl Into<String>) -> Self {
+        Self {
+            sequence: next_notification_sequence(),
+            message: message.into(),
+            level: NotificationLevel::Info,
+            context: None,
+        }
+    }
+
+    /// Create a success notification.
+    pub fn success(message: impl Into<String>) -> Self {
+        Self {
+            sequence: next_notification_sequence(),
+            message: message.into(),
+            level: NotificationLevel::Success,
+            context: None,
+        }
+    }
+
+    /// Create a warning notification.
+    pub fn warning(message: impl Into<String>) -> Self {
+        Self {
+            sequence: next_notification_sequence(),
+            message: message.into(),
+            level: NotificationLevel::Warning,
+            context: None,
+        }
+    }
+
+    /// Create an error notification.
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            sequence: next_notification_sequence(),
+            message: message.into(),
+            level: NotificationLevel::Error,
+            context: None,
+        }
+    }
+
+    /// Add context to the notification.
+    pub fn with_context(mut self, context: impl Into<String>) -> Self {
+        self.context = Some(context.into());
+        self
+    }
+}

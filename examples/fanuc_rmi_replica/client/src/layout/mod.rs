@@ -5,7 +5,7 @@ mod left_navbar;
 mod right_panel;
 mod floating;
 
-pub use top_bar::{TopBar, ControlResponseHandler, ConnectionStateHandler, ProgramNotificationHandler, ConsoleLogHandler};
+pub use top_bar::{TopBar, ControlResponseHandler, ConnectionStateHandler, ProgramNotificationHandler, ConsoleLogHandler, ServerNotificationHandler};
 pub use left_navbar::LeftNavbar;
 pub use right_panel::RightPanel;
 pub use floating::{FloatingJogControls, FloatingIOStatus};

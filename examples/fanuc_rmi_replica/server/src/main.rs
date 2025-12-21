@@ -61,6 +61,7 @@ fn main() {
     // ========================================================================
     // Synced Components (pl3xus handles all sync automatically)
     // ========================================================================
+    app.sync_component::<SystemMarker>(None);  // System entity marker (for client to identify system entity)
     app.sync_component::<RobotPosition>(None);
     app.sync_component::<JointAngles>(None);
     app.sync_component::<RobotStatus>(None);

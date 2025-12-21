@@ -673,12 +673,12 @@ fn SavedConnectionsList(
 #[component]
 fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
     let ctx = use_sync_context();
-    let control_state = use_sync_component::<EntityControl>();
+    let system_marker = use_sync_component::<SystemMarker>();
 
-    // Find the System entity by looking for EntityControl
-    // The System entity is 4294967295 (0xFFFFFFFF) - the highest entity ID
+    // Find the System entity by looking for the SystemMarker component
+    // This is the proper way to identify the system entity
     let system_entity_bits = move || -> Option<u64> {
-        control_state.get().keys().max().copied()
+        system_marker.get().keys().next().copied()
     };
 
     view! {
@@ -727,22 +727,22 @@ fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
 fn ControlButton() -> impl IntoView {
     let ctx = use_sync_context();
     let toast = crate::components::use_toast();
+    let system_marker = use_sync_component::<SystemMarker>();
     let control_state = use_sync_component::<EntityControl>();
 
-    // Find the System entity by looking for EntityControl
-    // The System entity is 4294967295 (0xFFFFFFFF) - the highest entity ID
-    // We need to find the max key since both System and Robot have EntityControl
+    // Find the System entity by looking for the SystemMarker component
+    // This is the proper way to identify the system entity
     let system_entity_bits = move || -> Option<u64> {
-        control_state.get().keys().max().copied()
+        system_marker.get().keys().next().copied()
     };
 
     // Check if THIS client has control by comparing EntityControl.client_id with our own connection ID
-    // Use the System entity (max key) to check control status
+    // Use the System entity (from SystemMarker) to check control status
     let has_control = move || {
         let my_id = ctx.my_connection_id.get();
         let state = control_state.get();
-        state.keys().max().copied()
-            .and_then(|max_key| state.get(&max_key))
+        system_entity_bits()
+            .and_then(|sys_entity| state.get(&sys_entity))
             .map(|s| Some(s.client_id) == my_id)
             .unwrap_or(false)
     };
@@ -751,8 +751,8 @@ fn ControlButton() -> impl IntoView {
     let other_has_control = move || {
         let my_id = ctx.my_connection_id.get();
         let state = control_state.get();
-        state.keys().max().copied()
-            .and_then(|max_key| state.get(&max_key))
+        system_entity_bits()
+            .and_then(|sys_entity| state.get(&sys_entity))
             .map(|s| {
                 // Someone has control and it's not us
                 s.client_id.id != 0 && Some(s.client_id) != my_id

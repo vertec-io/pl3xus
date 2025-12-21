@@ -45,14 +45,21 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
     // We subscribe to the full component signals and extract the first entity.
     // Using use_sync_component (returns ReadSignal) for reliable reactivity.
     let all_exec = use_sync_component::<ExecutionState>();
+    let system_marker = use_sync_component::<SystemMarker>();
     let all_control = use_sync_component::<EntityControl>();
 
     let (show_load_modal, set_show_load_modal) = signal(false);
 
-    // Check if THIS client has control
+    // Find the System entity via SystemMarker
+    let system_entity_bits = move || -> Option<u64> {
+        system_marker.get().keys().next().copied()
+    };
+
+    // Check if THIS client has control of the System entity
     let has_control = move || {
         let my_id = ctx.my_connection_id.get();
-        all_control.get().values().next()
+        system_entity_bits()
+            .and_then(|sys_entity| all_control.get().get(&sys_entity).cloned())
             .map(|c| Some(c.client_id) == my_id)
             .unwrap_or(false)
     };

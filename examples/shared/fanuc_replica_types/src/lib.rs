@@ -25,6 +25,17 @@ pub use pl3xus_common::RequestMessage;
 //                          SYNCED COMPONENTS (Wrapped DTOs)
 // ============================================================================
 
+/// Marker component for the root System/Apparatus entity.
+///
+/// This entity is the control root - clients request control of this entity
+/// to gain control over the entire apparatus including all child robots, sensors, controllers, etc.
+///
+/// On the server, query with `With<SystemMarker>` to find the system entity.
+/// On the client, use `use_sync_component::<SystemMarker>()` to get the system entity ID.
+#[cfg_attr(feature = "server", derive(Component))]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct SystemMarker;
+
 /// Robot cartesian position (Synced 1-way: Server -> Client)
 #[cfg_attr(feature = "server", derive(Component))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

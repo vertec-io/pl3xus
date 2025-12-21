@@ -12,16 +12,8 @@
 use bevy::prelude::*;
 use pl3xus_sync::control::EntityControl;
 
-// ============================================================================
-// Components
-// ============================================================================
-
-/// Marker component for the root System/Apparatus entity.
-///
-/// This entity is the control root - clients request control of this entity
-/// to gain control over the entire apparatus including all child robots, sensors, controllers, etc.
-#[derive(Component, Default)]
-pub struct SystemMarker;
+// Re-export SystemMarker from shared types for use throughout the server
+pub use fanuc_replica_types::SystemMarker;
 
 // ============================================================================
 // Plugin

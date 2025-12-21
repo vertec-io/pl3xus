@@ -1,0 +1,53 @@
+
+Now what about our research that we were doing on converting to the generalized coordinates to match meteorite's 
+
+Meteorite's Coordinate Abstraction:
+Uses Isometry3<f32> from nalgebra as the generalized coordinate type
+ToolpathPoint contains an Isometry3<f32> (position + rotation as quaternion)
+FanucConfig component on the robot entity stores  Configuration (utool, uframe, front, up, left, flip, turn values)
+convert_to_position() in utils.rs converts Isometry3 → fanuc_rmi::Position
+send_toolpath_point() uses fanuc_config.0.clone() to get the robot's configuration for the motion packet
+
+But before we begin this, we should do some technical research and think about this deeply. We're building a robotics orchestration system here. Do you think this is a good design? What do you think professionals in the robotics industry would think about this? Is there a better way?
+
+I want you to deep dive on this and create a new research folder for it. My plan is to begin a new agent session to tackle this. You need to give instructions for how it can find all the same resources as you and double check your reasoning and logic. Also include a "start_here.md" file that I can use to give to the agent so it knows everything it needs to know to jump in and help.
+
+-----------------------------------------------------------------------------------------
+Now we need to investigate changing the EntityControl system to allow us to target a specific entity for a specific message or mutation, and make the middleware handle checking whether the client has control of the target entity -- whether at the root or a child.
+
+This is similar to meteorite's "send_targeted" and "authorization" concepts. I don't think pl3xus has anything like this yet. Meteorite implements an "AuthorizedNetworkData" type that systems can use instead of "NetworkData" to check authorization, which reduces boilerplate. 
+
+Meteorite -- /home/apino/dev/meteorite/
+
+This will affect things like jogging the robot and sending motion commands.It will require some thought to apply at the library level to handle things correctly as a middleware.
+
+Currently we implement a hook use_request::<RequestType>() that returns a function and a signal. The function is used to send the request, and the signal is used to track the state of the request. But I think we need to extend this to support targeted requests where we can know a target entity ID at runtime. I'm not really sure what the right design and API should look like. We should do some research to understand what the use case is here and how it could be implemented, and how it fits into our architecture. I have a feeling this should be a separate hook from use_request, and it may be very important in the grand scheme of things because use_request doesn't support any params. I think it should probably be something line 
+
+pub fn use_request_targeted<R, E, F>(entity_id_fn: F) -> (impl Fn(R) + Clone, Signal<UseRequestState<R::ResponseMessage>>) where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+    E: Fn() -> Option<u64> + Clone + 'static,
+    {
+        // ... implementation details ...
+        // E: Is a closure that returns the entity ID to target
+        // R: The request type
+        // P: A closure that returns the params for the request
+        // The returned function should take the request and the entity ID as params?
+    }
+
+What I'm trying to do is determine whether it's possible, feasible, or practical to build a middleware to handle control authorization so that individual systems don't have to individually check control. If we can provide this at the framework level, that would be ideal. We currently provide the ExclusiveControlPlugin, but i'm sure if it currently provides the functionality we need for requests. I think it handles mutations, but not requests? 
+
+I'm also not sure what the idiomatic patterns are that we're trying to build. 
+
+I want you to deep dive on this and create a new research folder for it. My plan is to begin a new agent session to tackle this. You need to give instructions for how it can find all the same resources as you and double check your reasoning and logic. Also include a "start_here.md" file that I can use to give to the agent so it knows everything it needs to know to jump in and help. 
+
+-----------------------------------------------------------------------------------------
+
+
+I'm looking at all of the TODO's in the requests.rs plugin that are currently mocked out. I want to implement all of these. I think we should treat this as a temporary plugin until we have the robot driver fully implemented. I want you to help me plan out the best way to implement these. I think we should create a new research folder for this and begin a new agent session to tackle this. You need to give instructions for how it can find all the same resources as you and double check your reasoning and logic. Also include a "start_here.md" file that I can use to give to the agent so it knows everything it needs to know to jump in and help.
+
+The main thing we want to capture is the fact that many of these requests need to not only handle sending the request, but also awaiting the response to ensure that we can capture feedback and propagate errors correctly to the UI in either toasts, console messages, or both. This means that I think each of these handlers should use TokioTasksRuntime to spawn a task to handle the request and response and then use ctx.run_on_main_thread to update the world and so that the UI can sync to the latest state and receive the responses. we need to make this pattern clear and ergonomic.
+
+-----------------------------------------------------------------------------------------
+We've expanded the use_sync_.... hooks to include use_sync_entity_component and use_sync_entity_component_store. I feel like these names are getting unnecessarily long and may be confusing. I think we should consider renaming these to use_entity_component and use_entity_component_store. What do you think? We may also want to consider expanding the patterns we've developed with these two hooks to any of the other hooks that take an entity ID as a param (if they exist). It would be good to to make sure our hook naming conventions are consistent and intuitive and the framework provides clarity on the idiomatic patterns and anti-patterns.
+
+I want you to deep dive on this and create a new research folder for it. My plan is to begin a new agent session to tackle this. You need to give instructions for how it can find all the same resources as you and double check your reasoning and logic. Also include a "start_here.md" file that I can use to give to the agent so it knows everything it needs to know to jump in and help.

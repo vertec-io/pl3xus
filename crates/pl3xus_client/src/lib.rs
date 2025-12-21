@@ -124,12 +124,13 @@ pub use context::{MutationState, RequestState, RequestStatus, SyncConnection, Sy
 pub use error::SyncError;
 pub use hooks::{
     use_sync_component, use_sync_component_where, use_sync_connection, use_sync_context,
-    use_sync_entity, use_sync_field_editor, use_sync_message, use_sync_mutations,
-    use_sync_untracked, use_request, use_request_state, UseRequestState,
+    use_sync_entity, use_sync_entity_component, use_sync_entity_reactive,
+    use_sync_field_editor, use_sync_message, use_sync_mutations, use_sync_untracked,
+    use_request, use_request_state, UseRequestState,
 };
 
 #[cfg(feature = "stores")]
-pub use hooks::use_sync_message_store;
+pub use hooks::{use_sync_message_store, use_sync_component_store, use_sync_entity_component_store};
 pub use provider::SyncProvider;
 pub use traits::SyncComponent;
 
@@ -141,10 +142,6 @@ pub use pl3xus_common::{ControlRequest, ControlResponse, EntityControl, Connecti
 
 // Re-export ConnectionReadyState for convenience
 pub use leptos_use::core::ConnectionReadyState;
-
-// Conditional re-exports
-#[cfg(feature = "stores")]
-pub use hooks::use_sync_component_store;
 
 #[cfg(feature = "devtools")]
 pub mod devtools;

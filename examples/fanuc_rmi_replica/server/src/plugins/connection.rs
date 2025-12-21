@@ -18,6 +18,7 @@ use fanuc_rmi::drivers::{FanucDriver, FanucDriverConfig, LogLevel};
 use fanuc_replica_types::*;
 use crate::database::DatabaseResource;
 use super::execution::RmiSentInstructionChannel;
+use super::system::SystemMarker;
 
 // ============================================================================
 // Components
@@ -40,9 +41,13 @@ pub struct RobotConnectionDetails {
 #[allow(dead_code)]
 pub struct RmiDriver(pub Arc<FanucDriver>);
 
-/// Response channel for receiving driver responses.
+/// Response channel for receiving driver responses (for polling).
 #[derive(Component)]
 pub struct RmiResponseChannel(pub broadcast::Receiver<fanuc_rmi::packets::ResponsePacket>);
+
+/// Response channel for program execution (separate subscription to avoid contention).
+#[derive(Component)]
+pub struct RmiExecutionResponseChannel(pub broadcast::Receiver<fanuc_rmi::packets::ResponsePacket>);
 
 /// Robot connection state (entity-based state machine).
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -78,9 +83,6 @@ impl Plugin for RobotConnectionPlugin {
         app.register_network_message::<ConnectToRobot, WebSocketProvider>();
         app.register_network_message::<DisconnectRobot, WebSocketProvider>();
 
-        // Spawn apparatus entity at startup so clients can request control
-        app.add_systems(Startup, spawn_apparatus_entity);
-
         // Add connection systems
         app.add_systems(Update, (
             handle_connect_requests,
@@ -91,62 +93,46 @@ impl Plugin for RobotConnectionPlugin {
     }
 }
 
-/// Spawn the apparatus entity at startup.
-/// This entity represents the overall system that clients can control.
-/// Robot connection is a transition within this entity, not a separate entity.
-fn spawn_apparatus_entity(mut commands: Commands) {
-    let entity = commands.spawn((
-        Name::new("Apparatus"),
-        FanucRobot,
-        RobotConnectionDetails {
-            addr: String::new(),
-            port: 0,
-            name: "No Robot".to_string(),
-        },
-        RobotConnectionState::Disconnected,
-        // Synced state components - clients need these for UI even before connection
-        RobotPosition::default(),
-        JointAngles::default(),
-        RobotStatus::default(),
-        IoStatus::default(),
-        IoConfigState::default(),
-        FrameToolDataState::default(),
-        ExecutionState::default(),
-        ConnectionState::default(),
-        ActiveConfigState::default(),
-        JogSettingsState::default(),
-    )).id();
-
-    info!("🏗️ Spawned apparatus entity {:?} (ready for control requests)", entity);
-}
-
 // ============================================================================
 // Systems
 // ============================================================================
 
 /// Handle incoming connection requests - spawn robot entity if needed, then transition to Connecting state.
 ///
-/// If a robot entity doesn't exist, spawn one with connection details from:
+/// If a robot entity doesn't exist, spawn one as a child of the System entity with connection details from:
 /// 1. Database (if connection_id is provided)
 /// 2. Direct parameters (addr, port, name)
 ///
-/// IMPORTANT: Only the client who has control of the apparatus can connect.
+/// IMPORTANT: Only the client who has control of the System entity can connect.
 fn handle_connect_requests(
     mut commands: Commands,
     db: Option<Res<DatabaseResource>>,
     mut connect_events: MessageReader<pl3xus::NetworkData<ConnectToRobot>>,
-    mut robots: Query<(Entity, &mut RobotConnectionState, &mut RobotConnectionDetails, &mut ConnectionState, Option<&EntityControl>), With<FanucRobot>>,
+    system_query: Query<(Entity, &EntityControl), With<SystemMarker>>,
+    mut robots: Query<(Entity, &mut RobotConnectionState, &mut RobotConnectionDetails, &mut ConnectionState), With<FanucRobot>>,
 ) {
     for event in connect_events.read() {
         let client_id = *event.source();
         let msg: &ConnectToRobot = &*event;
         info!("📡 Received ConnectToRobot: {:?}:{} (connection_id: {:?}) from {:?}", msg.addr, msg.port, msg.connection_id, client_id);
 
+        // Get the System entity and check control
+        let Ok((system_entity, system_control)) = system_query.single() else {
+            error!("No System entity found - cannot process connection request");
+            continue;
+        };
+
+        // Check if client has control of the System
+        if system_control.client_id != client_id {
+            warn!("ConnectToRobot rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
+            continue;
+        }
+
         // Check if robot entity already exists
         let robot_exists = robots.single().is_ok();
 
         if !robot_exists {
-            // No robot entity - spawn one with connection details from database or message
+            // No robot entity - spawn one as child of System with connection details from database or message
             let (connection_details, jog_settings) = if let Some(conn_id) = msg.connection_id {
                 // Load connection details from database
                 if let Some(ref db) = db {
@@ -201,8 +187,8 @@ fn handle_connect_requests(
             initial_conn_state.robot_name = connection_details.name.clone();
             initial_conn_state.robot_connecting = true;
 
-            // Spawn the robot entity with Connecting state
-            let entity = commands.spawn((
+            // Spawn the robot entity as a child of the System entity
+            let robot_entity = commands.spawn((
                 Name::new("FANUC_Robot"),
                 FanucRobot,
                 connection_details,
@@ -220,23 +206,16 @@ fn handle_connect_requests(
                 jog_settings,
             )).id();
 
-            info!("🔄 Spawned robot entity {:?} in Connecting state", entity);
+            // Set the robot as a child of the System entity
+            commands.entity(system_entity).add_child(robot_entity);
+
+            info!("🔄 Spawned robot entity {:?} as child of System {:?} in Connecting state", robot_entity, system_entity);
             continue;
         }
 
         // Robot entity exists - update it
         match robots.single_mut() {
-            Ok((entity, mut state, mut details, mut conn_state, control)) => {
-                // Check if client has control of the apparatus
-                if let Some(entity_control) = control {
-                    if entity_control.client_id != client_id {
-                        warn!("ConnectToRobot rejected from {:?}: No control (held by {:?})", client_id, entity_control.client_id);
-                        continue;
-                    }
-                } else {
-                    trace!("No EntityControl on apparatus {:?}, allowing connect", entity);
-                }
-
+            Ok((entity, mut state, mut details, mut conn_state)) => {
                 if *state == RobotConnectionState::Disconnected {
                     // Load connection details from database if connection_id provided
                     if let Some(conn_id) = msg.connection_id {
@@ -306,16 +285,38 @@ fn handle_connecting_state(
         tokio.spawn_background_task(move |mut ctx| async move {
             match FanucDriver::connect(config).await {
                 Ok(driver) => {
-                    let _ = driver.initialize().await;
+                    // Use the smart startup sequence that checks status before initializing
+                    // Per FANUC B-84184EN_02 manual, this:
+                    // 1. Checks robot status (servo ready, AUTO mode)
+                    // 2. Aborts if RMI already running
+                    // 3. Initializes (which resets sequence counter to 1)
+                    if let Err(e) = driver.startup_sequence().await {
+                        error!("❌ Robot startup sequence failed: {}", e);
+                        ctx.run_on_main_thread(move |ctx| {
+                            if let Ok(mut entity_mut) = ctx.world.get_entity_mut(entity) {
+                                entity_mut.remove::<ConnectionInProgress>();
+                                entity_mut.insert(RobotConnectionState::Disconnected);
+                                if let Some(mut conn_state) = entity_mut.get_mut::<ConnectionState>() {
+                                    conn_state.robot_connecting = false;
+                                    conn_state.robot_connected = false;
+                                }
+                            }
+                        }).await;
+                        return;
+                    }
+
                     let driver_arc = Arc::new(driver);
-                    let response_rx = driver_arc.response_tx.subscribe();
+                    // Create separate subscriptions for polling and execution
+                    let polling_response_rx = driver_arc.response_tx.subscribe();
+                    let execution_response_rx = driver_arc.response_tx.subscribe();
                     let sent_instruction_rx = driver_arc.sent_instruction_tx.subscribe();
 
                     ctx.run_on_main_thread(move |ctx| {
                         if let Ok(mut entity_mut) = ctx.world.get_entity_mut(entity) {
                             entity_mut.remove::<ConnectionInProgress>();
                             entity_mut.insert(RmiDriver(driver_arc.clone()));
-                            entity_mut.insert(RmiResponseChannel(response_rx));
+                            entity_mut.insert(RmiResponseChannel(polling_response_rx));
+                            entity_mut.insert(RmiExecutionResponseChannel(execution_response_rx));
                             entity_mut.insert(RmiSentInstructionChannel(sent_instruction_rx));
                             entity_mut.insert(RobotConnectionState::Connected);
 
@@ -365,28 +366,30 @@ fn handle_connecting_state(
 
 /// Handle disconnect requests.
 ///
-/// IMPORTANT: Only the client who has control of the apparatus can disconnect.
+/// IMPORTANT: Only the client who has control of the System entity can disconnect.
 /// This properly notifies the FANUC controller before disconnecting.
 fn handle_disconnect_requests(
     tokio: Res<TokioTasksRuntime>,
     mut disconnect_events: MessageReader<pl3xus::NetworkData<DisconnectRobot>>,
-    mut robots: Query<(Entity, &RmiDriver, &mut RobotConnectionState, &mut ConnectionState, Option<&EntityControl>), With<FanucRobot>>,
+    system_query: Query<&EntityControl, With<SystemMarker>>,
+    mut robots: Query<(Entity, &RmiDriver, &mut RobotConnectionState, &mut ConnectionState), With<FanucRobot>>,
 ) {
     for event in disconnect_events.read() {
         let client_id = *event.source();
         info!("📡 Received DisconnectRobot from {:?}", client_id);
 
-        if let Ok((entity, driver, mut state, mut conn_state, control)) = robots.single_mut() {
-            // Check if client has control of the apparatus
-            if let Some(entity_control) = control {
-                if entity_control.client_id != client_id {
-                    warn!("DisconnectRobot rejected from {:?}: No control (held by {:?})", client_id, entity_control.client_id);
-                    continue;
-                }
-            } else {
-                trace!("No EntityControl on apparatus {:?}, allowing disconnect", entity);
-            }
+        // Check if client has control of the System
+        let Ok(system_control) = system_query.single() else {
+            error!("No System entity found - cannot process disconnect request");
+            continue;
+        };
 
+        if system_control.client_id != client_id {
+            warn!("DisconnectRobot rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
+            continue;
+        }
+
+        if let Ok((entity, driver, mut state, mut conn_state)) = robots.single_mut() {
             if *state == RobotConnectionState::Connected {
                 // Set state to Disconnecting while we clean up
                 *state = RobotConnectionState::Disconnecting;
@@ -413,6 +416,7 @@ fn handle_disconnect_requests(
                         if let Ok(mut entity_mut) = ctx.world.get_entity_mut(entity) {
                             entity_mut.remove::<RmiDriver>();
                             entity_mut.remove::<RmiResponseChannel>();
+                            entity_mut.remove::<RmiExecutionResponseChannel>();
                             entity_mut.remove::<RmiSentInstructionChannel>();
                             entity_mut.insert(RobotConnectionState::Disconnected);
 

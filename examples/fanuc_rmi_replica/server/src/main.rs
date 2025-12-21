@@ -24,7 +24,7 @@ mod jogging;
 mod plugins;
 
 use database::DatabaseResource;
-use plugins::{RobotConnectionPlugin, RobotSyncPlugin, RequestHandlerPlugin, RobotPollingPlugin, ProgramExecutionPlugin};
+use plugins::{SystemPlugin, RobotConnectionPlugin, RobotSyncPlugin, RequestHandlerPlugin, RobotPollingPlugin, ProgramExecutionPlugin, ProgramPlugin};
 use fanuc_replica_types::*;
 
 fn main() {
@@ -90,11 +90,13 @@ fn main() {
     // Application Plugins
     // ========================================================================
     app.add_plugins((
+        SystemPlugin,               // System/Apparatus entity (hierarchy root)
         RobotConnectionPlugin,      // Connection state machine
         RobotSyncPlugin,            // Driver polling and jogging
         RequestHandlerPlugin,       // Database request handlers
         RobotPollingPlugin,         // Periodic position/status polling
-        ProgramExecutionPlugin,     // Program execution with buffered streaming
+        ProgramExecutionPlugin,     // Program execution with buffered streaming (LEGACY)
+        ProgramPlugin,              // New orchestrator-based program execution
     ));
 
     // ========================================================================

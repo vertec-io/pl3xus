@@ -55,18 +55,22 @@ impl ToastContext {
             toast_type,
         };
 
-        self.toasts.update(|toasts| {
+        // Use try_update_untracked to avoid reactive graph issues when called from Effects
+        // (per research/LESSONS_LEARNED.md)
+        self.toasts.try_update_untracked(|toasts| {
             toasts.push_back(toast);
             // Keep max 5 toasts
             while toasts.len() > 5 {
                 toasts.pop_front();
             }
         });
+        self.toasts.notify();
 
         // Auto-dismiss after configured duration
         let toasts = self.toasts;
         set_timeout(
             move || {
+                // This runs outside any Effect, so regular update is fine
                 toasts.update(|t| {
                     t.retain(|toast| toast.id != id);
                 });

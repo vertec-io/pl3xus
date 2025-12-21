@@ -673,10 +673,12 @@ fn SavedConnectionsList(
 #[component]
 fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
     let ctx = use_sync_context();
-    let connection_state = use_sync_component::<ConnectionState>();
+    let control_state = use_sync_component::<EntityControl>();
 
-    let robot_entity_bits = move || -> Option<u64> {
-        connection_state.get().keys().next().copied()
+    // Find the System entity by looking for EntityControl
+    // The System entity is 4294967295 (0xFFFFFFFF) - the highest entity ID
+    let system_entity_bits = move || -> Option<u64> {
+        control_state.get().keys().max().copied()
     };
 
     view! {
@@ -688,7 +690,7 @@ fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
                         <button
                             class="w-full text-[9px] px-3 py-1.5 bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] rounded hover:bg-[#00d9ff30]"
                             on:click=move |_| {
-                                if let Some(entity_bits) = robot_entity_bits() {
+                                if let Some(entity_bits) = system_entity_bits() {
                                     ctx.send(ControlRequest::Take(entity_bits));
                                 }
                             }
@@ -703,7 +705,7 @@ fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
                         <button
                             class="w-full text-[9px] px-3 py-1.5 bg-[#ff444420] border border-[#ff444440] text-[#ff4444] rounded hover:bg-[#ff444430]"
                             on:click=move |_| {
-                                if let Some(entity_bits) = robot_entity_bits() {
+                                if let Some(entity_bits) = system_entity_bits() {
                                     ctx.send(ControlRequest::Release(entity_bits));
                                 }
                             }
@@ -717,44 +719,30 @@ fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
     }
 }
 
-/// Control button - Request/Release control (styled like QuickCommandsPanel)
+/// Control button - Request/Release control of the System entity
+///
+/// The System entity is the root of the hierarchy. Clients request control
+/// of the System to gain control over all child entities (robots, etc.).
 #[component]
 fn ControlButton() -> impl IntoView {
     let ctx = use_sync_context();
     let toast = crate::components::use_toast();
     let control_state = use_sync_component::<EntityControl>();
-    let connection_state = use_sync_component::<ConnectionState>();
-    let robot_position = use_sync_component::<RobotPosition>();
 
-    // Debug: show connection state count in console on render
-    Effect::new(move |_| {
-        let state = connection_state.get();
-        leptos::logging::log!("[ControlButton::Effect] ConnectionState has {} entries", state.len());
-        for (k, v) in state.iter() {
-            leptos::logging::log!("[ControlButton::Effect] Entity bits: {}, connected: {}", k, v.robot_connected);
-        }
-        let pos = robot_position.get();
-        leptos::logging::log!("[ControlButton::Effect] RobotPosition has {} entries", pos.len());
-        for (k, v) in pos.iter() {
-            leptos::logging::log!("[ControlButton::Effect] Entity bits: {}, x: {}", k, v.x);
-        }
-    });
-
-    let robot_entity_bits = move || -> Option<u64> {
-        // Try ConnectionState first, then fall back to RobotPosition
-        let state = connection_state.get();
-        if let Some(k) = state.keys().next() {
-            return Some(*k);
-        }
-        // Fallback: use RobotPosition keys
-        let pos = robot_position.get();
-        pos.keys().next().copied()
+    // Find the System entity by looking for EntityControl
+    // The System entity is 4294967295 (0xFFFFFFFF) - the highest entity ID
+    // We need to find the max key since both System and Robot have EntityControl
+    let system_entity_bits = move || -> Option<u64> {
+        control_state.get().keys().max().copied()
     };
 
     // Check if THIS client has control by comparing EntityControl.client_id with our own connection ID
+    // Use the System entity (max key) to check control status
     let has_control = move || {
         let my_id = ctx.my_connection_id.get();
-        control_state.get().values().next()
+        let state = control_state.get();
+        state.keys().max().copied()
+            .and_then(|max_key| state.get(&max_key))
             .map(|s| Some(s.client_id) == my_id)
             .unwrap_or(false)
     };
@@ -762,7 +750,9 @@ fn ControlButton() -> impl IntoView {
     // Check if another client has control
     let other_has_control = move || {
         let my_id = ctx.my_connection_id.get();
-        control_state.get().values().next()
+        let state = control_state.get();
+        state.keys().max().copied()
+            .and_then(|max_key| state.get(&max_key))
             .map(|s| {
                 // Someone has control and it's not us
                 s.client_id.id != 0 && Some(s.client_id) != my_id
@@ -785,12 +775,12 @@ fn ControlButton() -> impl IntoView {
                 let toast = toast.clone();
                 move |_| {
                     leptos::logging::log!("[ControlButton] Button clicked");
-                    let Some(entity_bits) = robot_entity_bits() else {
-                        leptos::logging::log!("[ControlButton] No robot entity bits found");
-                        toast.error("No robot connected to control");
+                    let Some(entity_bits) = system_entity_bits() else {
+                        leptos::logging::log!("[ControlButton] No System entity found");
+                        toast.error("System not ready - please wait");
                         return;
                     };
-                    leptos::logging::log!("[ControlButton] Entity bits: {}", entity_bits);
+                    leptos::logging::log!("[ControlButton] System entity bits: {}", entity_bits);
 
                     if has_control() {
                         leptos::logging::log!("[ControlButton] Releasing control");
@@ -808,7 +798,7 @@ fn ControlButton() -> impl IntoView {
             } else if other_has_control() {
                 "Another client has control. Click to request.".to_string()
             } else {
-                "Request control of the robot".to_string()
+                "Request control of the apparatus".to_string()
             }
         >
             {move || if has_control() {
@@ -1029,6 +1019,7 @@ pub fn ConsoleLogHandler() -> impl IntoView {
         // Update last processed first to avoid duplicate processing
         last_timestamp.set_value(entry.timestamp_ms);
 
+        // TODO: Remove the client types and just use the server types directly.
         // Convert server types to client types
         let direction = match entry.direction {
             ConsoleDirection::Sent => MessageDirection::Sent,
@@ -1044,8 +1035,10 @@ pub fn ConsoleLogHandler() -> impl IntoView {
         };
 
         // Add to console if context is available
+        // Use update_untracked to avoid reactive graph issues when updating
+        // signals inside Effects (per LESSONS_LEARNED.md)
         if let Some(ctx) = &ctx {
-            ctx.console_messages.update(|msgs| {
+            ctx.console_messages.try_update_untracked(|msgs| {
                 msgs.push(ConsoleMessage {
                     timestamp: entry.timestamp.clone(),
                     timestamp_ms: entry.timestamp_ms,
@@ -1059,15 +1052,17 @@ pub fn ConsoleLogHandler() -> impl IntoView {
                     msgs.remove(0);
                 }
             });
+            ctx.console_messages.notify();
 
             // Also add to error log if it's an error
             if matches!(msg_type, MessageType::Error) {
-                ctx.error_log.update(|errors| {
+                ctx.error_log.try_update_untracked(|errors| {
                     errors.push(entry.content.clone());
                     if errors.len() > 100 {
                         errors.remove(0);
                     }
                 });
+                ctx.error_log.notify();
             }
         }
     });

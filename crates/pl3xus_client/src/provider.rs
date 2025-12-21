@@ -236,15 +236,20 @@ fn handle_server_message(
     match msg {
         SyncServerMessage::Welcome(welcome) => {
             // Store our connection ID so we can compare with EntityControl
+            // Use try_update_untracked + notify to avoid reactive graph issues
+            // when updating signals inside Effects (per research/LESSONS_LEARNED.md)
             #[cfg(target_arch = "wasm32")]
             leptos::logging::log!("Received Welcome message with connection ID: {:?}", welcome.connection_id);
-            ctx.my_connection_id.set(Some(welcome.connection_id));
+            ctx.my_connection_id.try_update_untracked(|id| *id = Some(welcome.connection_id));
+            ctx.my_connection_id.notify();
         }
         SyncServerMessage::SyncBatch(batch) => {
             // Process each sync item in the batch
             for item in batch.items {
                 if let Err(e) = handle_sync_item(ctx, item) {
-                    last_error.set(Some(e));
+                    // Use try_update_untracked + notify to avoid reactive graph issues
+                    last_error.try_update_untracked(|err| *err = Some(e));
+                    last_error.notify();
                 }
             }
         }
@@ -296,9 +301,11 @@ fn handle_sync_item(
 
             // Update the component_data signal with raw bytes
             // The Effect in subscribe_component will deserialize and update typed signals
-            ctx.component_data.update(|data| {
+            // Use try_update_untracked + notify to avoid reactive graph issues
+            ctx.component_data.try_update_untracked(|data| {
                 data.insert((entity_id, component_type.clone()), value);
             });
+            ctx.component_data.notify();
 
             Ok(())
         }
@@ -319,9 +326,11 @@ fn handle_sync_item(
             }
 
             // Remove the component from component_data
-            ctx.component_data.update(|data| {
+            // Use try_update_untracked + notify to avoid reactive graph issues
+            ctx.component_data.try_update_untracked(|data| {
                 data.remove(&(entity_id, component_type.clone()));
             });
+            ctx.component_data.notify();
 
             Ok(())
         }
@@ -340,9 +349,11 @@ fn handle_sync_item(
             }
 
             // Remove all components for this entity
-            ctx.component_data.update(|data| {
+            // Use try_update_untracked + notify to avoid reactive graph issues
+            ctx.component_data.try_update_untracked(|data| {
                 data.retain(|(eid, _), _| *eid != entity_id);
             });
+            ctx.component_data.notify();
 
             Ok(())
         }

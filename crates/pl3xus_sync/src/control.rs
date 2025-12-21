@@ -211,8 +211,11 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
                 };
 
                 // Check if already controlled by another client
+                // client_id 0 means "no controller" (default state) so it's available for taking
                 if let Some(existing_control) = control {
-                    if existing_control.client_id != client_id {
+                    let has_active_controller = existing_control.client_id.id != 0;
+
+                    if has_active_controller && existing_control.client_id != client_id {
                         info!("[ExclusiveControl] Entity {:?} already controlled by {:?}, denying {:?}", entity, existing_control.client_id, client_id);
 
                         // Notify the requesting client that control is denied
@@ -232,12 +235,13 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
                             }),
                         );
                         continue;
-                    } else {
+                    } else if has_active_controller && existing_control.client_id == client_id {
                         // Already controlled by this client, just update activity
                         info!("[ExclusiveControl] Entity {:?} already controlled by {:?}, refreshing", entity, client_id);
                         let _ = net.send(client_id, new_response(ControlResponseKind::Taken));
                         continue;
                     }
+                    // If no active controller (client_id == 0), fall through to grant control
                 }
 
                 // Grant control
@@ -265,14 +269,15 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
                 let entity = Entity::from_bits(entity_bits);
 
                 // Try to get the entity
-                let Ok((entity, control, children)) = entities.get_mut(entity) else {
+                let Ok((_entity, mut control, children)) = entities.get_mut(entity) else {
                     let _ = net.send(client_id, new_response(ControlResponseKind::Error("Entity not found".to_string())));
                     continue;
                 };
 
                 // Check if controlled by this client
-                if let Some(existing_control) = control {
-                    if existing_control.client_id != client_id {
+                if let Some(ref mut existing_control) = control {
+                    // Check if there's an active controller and it's not this client
+                    if existing_control.client_id.id != 0 && existing_control.client_id != client_id {
                         let _ = net.send(
                             client_id,
                             new_response(ControlResponseKind::Error("Not controlled by you".to_string())),
@@ -280,14 +285,22 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
                         continue;
                     }
 
-                    // Release control
-                    commands.entity(entity).remove::<EntityControl>();
+                    // Check if already released (no active controller)
+                    if existing_control.client_id.id == 0 {
+                        let _ = net.send(client_id, new_response(ControlResponseKind::NotControlled));
+                        continue;
+                    }
+
+                    // Release control by resetting to default
+                    **existing_control = EntityControl::default();
 
                     // Propagate to children if configured
                     if config.propagate_to_children {
                         if let Some(children) = children {
                             for child in children.iter() {
-                                commands.entity(child).remove::<EntityControl>();
+                                // Note: Children might not have the component if they were spawned
+                                // without one - use commands to insert default
+                                commands.entity(child).insert(EntityControl::default());
                             }
                         }
                     }
@@ -303,10 +316,11 @@ fn handle_control_requests<NP: crate::NetworkProvider>(
 
 /// System that automatically releases control from inactive clients.
 ///
-/// This system checks all entities with `EntityControl` and removes control
-/// if the client has been inactive for longer than the configured timeout.
+/// This system checks all entities with `EntityControl` and resets control
+/// to default if the client has been inactive for longer than the configured timeout.
+/// Skips entities that are already in default state (no active controller).
 fn timeout_inactive_control(
-    entities: Query<(Entity, &EntityControl, Option<&Children>)>,
+    mut entities: Query<(Entity, &mut EntityControl, Option<&Children>)>,
     config: Res<ExclusiveControlConfig>,
     mut commands: Commands,
     time: Res<Time>,
@@ -317,7 +331,12 @@ fn timeout_inactive_control(
 
     let current_time = time.elapsed_secs();
 
-    for (entity, control, children) in entities.iter() {
+    for (entity, mut control, children) in entities.iter_mut() {
+        // Skip if no one is in control (client_id 0 is the default "no controller" state)
+        if control.client_id.id == 0 {
+            continue;
+        }
+
         let inactive_duration = current_time - control.last_activity;
 
         if inactive_duration > timeout_seconds {
@@ -326,14 +345,15 @@ fn timeout_inactive_control(
                 control.client_id, entity, inactive_duration
             );
 
-            // Release control
-            commands.entity(entity).remove::<EntityControl>();
+            // Reset control to default (no client)
+            *control = EntityControl::default();
 
             // Propagate to children if configured
             if config.propagate_to_children {
                 if let Some(children) = children {
                     for child in children.iter() {
-                        commands.entity(child).remove::<EntityControl>();
+                        // Use commands to insert default control on children
+                        commands.entity(child).insert(EntityControl::default());
                     }
                 }
             }
@@ -343,11 +363,12 @@ fn timeout_inactive_control(
 
 /// System that releases control from disconnected clients.
 ///
-/// This system listens for `NetworkEvent::Disconnected` events and removes
-/// `EntityControl` components from any entities controlled by that client.
+/// This system listens for `NetworkEvent::Disconnected` events and resets
+/// `EntityControl` components to the default (no client) state for any entities
+/// controlled by that client.
 fn cleanup_disconnected_control(
     mut events: MessageReader<pl3xus::NetworkEvent>,
-    entities: Query<(Entity, &EntityControl, Option<&Children>)>,
+    mut entities: Query<(Entity, &mut EntityControl, Option<&Children>)>,
     config: Res<ExclusiveControlConfig>,
     mut commands: Commands,
 ) {
@@ -358,21 +379,22 @@ fn cleanup_disconnected_control(
                 disconnected_id
             );
 
-            for (entity, control, children) in entities.iter() {
+            for (entity, mut control, children) in entities.iter_mut() {
                 if control.client_id == *disconnected_id {
                     info!(
                         "[ExclusiveControl] Releasing control from disconnected client {:?} on entity {:?}",
                         disconnected_id, entity
                     );
 
-                    // Release control
-                    commands.entity(entity).remove::<EntityControl>();
+                    // Reset control to default (no client)
+                    *control = EntityControl::default();
 
                     // Propagate to children if configured
                     if config.propagate_to_children {
                         if let Some(children) = children {
                             for child in children.iter() {
-                                commands.entity(child).remove::<EntityControl>();
+                                // Use commands to insert default control on children
+                                commands.entity(child).insert(EntityControl::default());
                             }
                         }
                     }

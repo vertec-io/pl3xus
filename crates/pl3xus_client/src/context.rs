@@ -88,7 +88,11 @@ pub struct SyncContext {
     /// Incoming message data storage: type_name -> raw bytes
     /// This stores arbitrary Pl3xusMessage types (not component sync)
     /// Effects in subscribe_message watch this and deserialize to typed signals
-    pub(crate) incoming_messages: RwSignal<HashMap<String, RwSignal<Vec<u8>>>>,
+    /// We use ArcRwSignal for the inner signals because they are created inside
+    /// the provider's Effect and need to outlive that Effect's execution scope.
+    /// (See Leptos docs: "Appendix: The Life Cycle of a Signal" - arena-allocated
+    /// signals are disposed when their owning Effect re-runs)
+    pub(crate) incoming_messages: RwSignal<HashMap<String, ArcRwSignal<Vec<u8>>>>,
     /// Request state tracking: request_id -> RequestState
     /// Tracks pending requests and their responses
     pub(crate) requests: RwSignal<HashMap<u64, RequestState>>,
@@ -268,23 +272,19 @@ impl SyncContext {
         // Check if we already have a signal for this short_name
         // Use get_untracked() to avoid reactive issues when called from Effects
         if let Some(signal) = self.incoming_messages.get_untracked().get(&short_name).cloned() {
-            // Update existing signal - use try_update_untracked to handle disposed signals
-            // If the signal was disposed (component unmounted), create a new one
-            if signal.try_update_untracked(|bytes| *bytes = data.clone()).is_some() {
-                signal.notify();
-            } else {
-                // Signal was disposed, remove it and create a new one
-                let new_signal = RwSignal::new(data);
-                self.incoming_messages.update(|map| {
-                    map.insert(short_name, new_signal);
-                });
-            }
+            // Update existing ArcRwSignal - these are reference-counted so they don't get disposed
+            signal.try_update_untracked(|bytes| *bytes = data.clone());
+            signal.notify();
         } else {
-            // Create new signal and insert into map
-            let new_signal = RwSignal::new(data);
-            self.incoming_messages.update(|map| {
+            // Create new ArcRwSignal and insert into map
+            // We use ArcRwSignal because this code runs inside the provider's Effect,
+            // and arena-allocated RwSignals would be disposed when the Effect re-runs.
+            // ArcRwSignal uses reference counting for lifecycle management instead.
+            let new_signal = ArcRwSignal::new(data);
+            self.incoming_messages.try_update_untracked(|map| {
                 map.insert(short_name, new_signal);
             });
+            self.incoming_messages.notify();
         }
     }
 
@@ -364,42 +364,31 @@ impl SyncContext {
 
         // Set up Effect to watch component_data and deserialize to typed signal
         // This is the Meteorite pattern: raw bytes -> Effect -> typed signal
+        //
+        // IMPORTANT: We track the previous raw bytes and only notify subscribers
+        // when this specific component type actually changes. This prevents
+        // cascading reactivity when unrelated components update.
         let component_data = self.component_data;
         let registry = self.registry.clone();
         let component_name_str = component_name.to_string();
         let signal_clone = signal;
 
+        // Track previous bytes for this component type to detect actual changes
+        let prev_bytes: StoredValue<HashMap<u64, Vec<u8>>> = StoredValue::new(HashMap::new());
+
         Effect::new(move |_| {
             let data_map = component_data.get();
             let mut typed_map = HashMap::new();
-
-            #[cfg(target_arch = "wasm32")]
-            leptos::logging::log!(
-                "[SyncContext] Effect triggered for component '{}', data_map has {} entries",
-                component_name_str,
-                data_map.len()
-            );
+            let mut current_bytes: HashMap<u64, Vec<u8>> = HashMap::new();
 
             // Iterate through all entities and deserialize components of type T
             for ((entity_id, comp_name), bytes) in data_map.iter() {
                 if comp_name == &component_name_str {
-                    #[cfg(target_arch = "wasm32")]
-                    leptos::logging::log!(
-                        "[SyncContext] Found matching component '{}' for entity {}, {} bytes",
-                        comp_name,
-                        entity_id,
-                        bytes.len()
-                    );
+                    current_bytes.insert(*entity_id, bytes.clone());
 
                     // Deserialize the component
                     match registry.deserialize::<T>(comp_name, bytes) {
                         Ok(component) => {
-                            #[cfg(target_arch = "wasm32")]
-                            leptos::logging::log!(
-                                "[SyncContext] Successfully deserialized {} for entity {}",
-                                comp_name,
-                                entity_id
-                            );
                             typed_map.insert(*entity_id, component);
                         }
                         Err(_err) => {
@@ -415,15 +404,17 @@ impl SyncContext {
                 }
             }
 
-            #[cfg(target_arch = "wasm32")]
-            leptos::logging::log!(
-                "[SyncContext] Setting signal for '{}' with {} entities",
-                component_name_str,
-                typed_map.len()
-            );
+            // Compare with previous bytes to detect if THIS component type actually changed
+            let changed = prev_bytes.with_value(|prev| *prev != current_bytes);
 
-            // Update the typed signal
-            signal_clone.set(typed_map);
+            if changed {
+                // Update stored bytes for next comparison
+                prev_bytes.set_value(current_bytes);
+
+                // Update the typed signal and notify subscribers
+                signal_clone.try_update_untracked(|val| *val = typed_map);
+                signal_clone.notify();
+            }
         });
 
         // Set up cleanup on unmount
@@ -539,16 +530,21 @@ impl SyncContext {
         }
 
         // Set up an Effect to watch component_data and update the store
+        // Track previous bytes to only update when this specific component changes
         let component_data = self.component_data;
         let registry = self.registry.clone();
         let component_name_str = component_name.to_string();
+        let prev_bytes: StoredValue<HashMap<u64, Vec<u8>>> = StoredValue::new(HashMap::new());
 
         Effect::new(move |_| {
             let data_map = component_data.get();
             let mut typed_map = HashMap::new();
+            let mut current_bytes: HashMap<u64, Vec<u8>> = HashMap::new();
 
             for ((entity_id, comp_name), bytes) in data_map.iter() {
                 if comp_name == &component_name_str {
+                    current_bytes.insert(*entity_id, bytes.clone());
+
                     match registry.deserialize::<T>(comp_name, bytes) {
                         Ok(component) => {
                             typed_map.insert(*entity_id, component);
@@ -566,8 +562,13 @@ impl SyncContext {
                 }
             }
 
-            // Update the store
-            store_clone.write().clone_from(&typed_map);
+            // Only update the store if this component type actually changed
+            let changed = prev_bytes.with_value(|prev| *prev != current_bytes);
+
+            if changed {
+                prev_bytes.set_value(current_bytes);
+                store_clone.write().clone_from(&typed_map);
+            }
         });
 
         // Set up cleanup on unmount
@@ -907,7 +908,10 @@ impl SyncContext {
                             "[SyncContext] Deserialized message of type {}",
                             type_name
                         );
-                        write.set(deserialized);
+                        // Use try_update_untracked + notify to avoid reactive graph issues
+                        // when updating signals inside Effects (per research/LESSONS_LEARNED.md)
+                        write.try_update_untracked(|val| *val = deserialized);
+                        write.notify();
                     }
                     Err(_e) => {
                         #[cfg(target_arch = "wasm32")]
@@ -1008,7 +1012,9 @@ impl SyncContext {
                             "[SyncContext] Deserialized message of type {} for store",
                             type_name
                         );
-                        store_clone.update(|value| *value = deserialized);
+                        // Use try_update_untracked + notify to avoid reactive graph issues
+                        store_clone.try_update_untracked(|value| *value = deserialized);
+                        store_clone.notify();
                     }
                     Err(_e) => {
                         #[cfg(target_arch = "wasm32")]
@@ -1199,6 +1205,178 @@ impl SyncContext {
                 None
             }
         }
+    }
+
+    // ============================================================================
+    // Entity-Specific Subscription Methods
+    // ============================================================================
+
+    /// Subscribe to a specific entity's component as a signal.
+    ///
+    /// Unlike `subscribe_component` which returns all entities, this returns
+    /// a signal for a single entity's component. The entity ID can be reactive
+    /// (a closure), allowing you to switch which entity you're tracking.
+    ///
+    /// Returns a tuple of:
+    /// - `ReadSignal<T>`: The component data (uses `T::default()` when entity doesn't exist)
+    /// - `ReadSignal<bool>`: Whether the entity currently exists
+    ///
+    /// # Type Parameters
+    ///
+    /// - `T`: The component type to subscribe to. Must implement `SyncComponent`.
+    ///
+    /// # Arguments
+    ///
+    /// - `entity_id_fn`: A reactive closure that returns `Option<u64>`. When `None`,
+    ///   the component will use default values and `exists` will be `false`.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use pl3xus_client::use_sync_entity_component;
+    ///
+    /// // Fixed entity ID (singleton pattern)
+    /// let (exec, exists) = use_sync_entity_component::<ExecutionState>(|| Some(SYSTEM_ENTITY_ID));
+    ///
+    /// // Reactive entity ID from signal
+    /// let selected_robot: RwSignal<Option<u64>> = ...;
+    /// let (position, exists) = use_sync_entity_component::<Position>(move || selected_robot.get());
+    ///
+    /// // First entity of a type
+    /// let entities = use_sync_component::<RobotState>();
+    /// let (state, exists) = use_sync_entity_component::<RobotState>(move || {
+    ///     entities.get().keys().next().copied()
+    /// });
+    /// ```
+    pub fn subscribe_entity_component<T, F>(
+        &self,
+        entity_id_fn: F,
+    ) -> (ReadSignal<T>, ReadSignal<bool>)
+    where
+        T: SyncComponent + Clone + Default + 'static,
+        F: Fn() -> Option<u64> + Clone + 'static,
+    {
+        // Subscribe to the underlying component type
+        let all_components = self.subscribe_component::<T>();
+
+        // Create signals for the entity-specific data
+        let (component_signal, set_component) = signal(T::default());
+        let (exists_signal, set_exists) = signal(false);
+
+        // Create an effect that watches both the entity_id and the component data
+        let entity_id_fn_clone = entity_id_fn.clone();
+        Effect::new(move |_| {
+            let maybe_entity_id = entity_id_fn_clone();
+            let components = all_components.get();
+
+            match maybe_entity_id {
+                Some(entity_id) => {
+                    if let Some(component) = components.get(&entity_id) {
+                        set_component.set(component.clone());
+                        set_exists.set(true);
+                    } else {
+                        set_component.set(T::default());
+                        set_exists.set(false);
+                    }
+                }
+                None => {
+                    set_component.set(T::default());
+                    set_exists.set(false);
+                }
+            }
+        });
+
+        (component_signal.into(), exists_signal.into())
+    }
+
+    /// Subscribe to a specific entity's component as a Store for fine-grained reactivity.
+    ///
+    /// Unlike `subscribe_component_store` which returns `Store<HashMap<u64, T>>`, this
+    /// returns `Store<T>` directly for a single entity, enabling fine-grained field-level
+    /// reactivity using the `reactive_stores` crate.
+    ///
+    /// Returns a tuple of:
+    /// - `Store<T>`: The component store (uses `T::default()` when entity doesn't exist)
+    /// - `ReadSignal<bool>`: Whether the entity currently exists
+    ///
+    /// # Type Parameters
+    ///
+    /// - `T`: The component type to subscribe to. Must implement `SyncComponent` and derive `Store`.
+    ///
+    /// # Arguments
+    ///
+    /// - `entity_id_fn`: A reactive closure that returns `Option<u64>`. When `None`,
+    ///   the store will contain default values and `exists` will be `false`.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use pl3xus_client::use_sync_entity_component_store;
+    /// use reactive_stores::Store;
+    ///
+    /// #[derive(Clone, Default, Serialize, Deserialize, Store)]
+    /// struct ExecutionState {
+    ///     state: ProgramExecutionState,
+    ///     can_start: bool,
+    ///     can_pause: bool,
+    ///     // ... other fields
+    /// }
+    ///
+    /// // Subscribe to the single ExecutionState entity
+    /// let entities = use_sync_component::<ExecutionState>();
+    /// let (exec, exists) = use_sync_entity_component_store::<ExecutionState>(move || {
+    ///     entities.get().keys().next().copied()
+    /// });
+    ///
+    /// // Fine-grained field access - only re-renders when specific field changes
+    /// let can_start = move || exec.can_start().get();
+    /// let can_pause = move || exec.can_pause().get();
+    /// ```
+    #[cfg(feature = "stores")]
+    pub fn subscribe_entity_component_store<T, F>(
+        &self,
+        entity_id_fn: F,
+    ) -> (Store<T>, ReadSignal<bool>)
+    where
+        T: SyncComponent + Clone + Default + 'static,
+        F: Fn() -> Option<u64> + Clone + 'static,
+    {
+        // Subscribe to the underlying component type
+        let all_components = self.subscribe_component::<T>();
+
+        // Create the store and exists signal
+        let store = Store::new(T::default());
+        let store_clone = store.clone();
+        let (exists_signal, set_exists) = signal(false);
+
+        // Create an effect that watches both the entity_id and the component data
+        let entity_id_fn_clone = entity_id_fn.clone();
+        Effect::new(move |_| {
+            let maybe_entity_id = entity_id_fn_clone();
+            let components = all_components.get();
+
+            match maybe_entity_id {
+                Some(entity_id) => {
+                    if let Some(component) = components.get(&entity_id) {
+                        // Update the store with the component data
+                        store_clone.try_update_untracked(|value| *value = component.clone());
+                        store_clone.notify();
+                        set_exists.set(true);
+                    } else {
+                        store_clone.try_update_untracked(|value| *value = T::default());
+                        store_clone.notify();
+                        set_exists.set(false);
+                    }
+                }
+                None => {
+                    store_clone.try_update_untracked(|value| *value = T::default());
+                    store_clone.notify();
+                    set_exists.set(false);
+                }
+            }
+        });
+
+        (store, exists_signal.into())
     }
 }
 

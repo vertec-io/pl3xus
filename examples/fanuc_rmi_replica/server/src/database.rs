@@ -17,18 +17,19 @@ impl DatabaseResource {
         let conn = self.0.lock().unwrap();
 
         // Programs table - complete schema matching Fanuc_RMI_API
+        // Required fields are NOT NULL - no silent defaults, values must be explicitly set
         conn.execute(
             "CREATE TABLE IF NOT EXISTS programs (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
                 description TEXT,
-                default_w REAL DEFAULT 0.0,
-                default_p REAL DEFAULT 0.0,
-                default_r REAL DEFAULT 0.0,
+                default_w REAL NOT NULL DEFAULT 0.0,
+                default_p REAL NOT NULL DEFAULT 0.0,
+                default_r REAL NOT NULL DEFAULT 0.0,
                 default_speed REAL,
-                default_speed_type TEXT DEFAULT 'mmSec',
-                default_term_type TEXT DEFAULT 'CNT',
-                default_term_value INTEGER DEFAULT 100,
+                default_speed_type TEXT NOT NULL DEFAULT 'mmSec',
+                default_term_type TEXT NOT NULL DEFAULT 'CNT',
+                default_term_value INTEGER NOT NULL DEFAULT 100,
                 default_uframe INTEGER,
                 default_utool INTEGER,
                 start_x REAL,
@@ -43,7 +44,7 @@ impl DatabaseResource {
                 end_w REAL,
                 end_p REAL,
                 end_r REAL,
-                move_speed REAL DEFAULT 100.0,
+                move_speed REAL NOT NULL DEFAULT 100.0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )",
@@ -626,10 +627,11 @@ impl DatabaseResource {
     pub fn get_program(&self, id: i64) -> anyhow::Result<Option<ProgramDetail>> {
         let conn = self.0.lock().unwrap();
 
+        // All required fields are NOT NULL in DB, so we read them directly
         let program = conn.query_row(
             "SELECT id, name, description,
-                    COALESCE(default_w, 0.0), COALESCE(default_p, 0.0), COALESCE(default_r, 0.0),
-                    default_speed, default_speed_type, COALESCE(default_term_type, 'CNT'), default_term_value,
+                    default_w, default_p, default_r,
+                    default_speed, default_speed_type, default_term_type, default_term_value,
                     default_uframe, default_utool,
                     start_x, start_y, start_z, start_w, start_p, start_r,
                     end_x, end_y, end_z, end_w, end_p, end_r, move_speed,
@@ -646,9 +648,9 @@ impl DatabaseResource {
                     default_p: row.get(4)?,
                     default_r: row.get(5)?,
                     default_speed: row.get(6)?,
-                    default_speed_type: row.get(7)?,
-                    default_term_type: row.get(8)?,
-                    default_term_value: row.get(9)?,
+                    default_speed_type: row.get(7)?,  // Required: NOT NULL in DB
+                    default_term_type: row.get(8)?,   // Required: NOT NULL in DB
+                    default_term_value: row.get(9)?,  // Required: NOT NULL in DB
                     default_uframe: row.get(10)?,
                     default_utool: row.get(11)?,
                     start_x: row.get(12)?,
@@ -663,7 +665,7 @@ impl DatabaseResource {
                     end_w: row.get(21)?,
                     end_p: row.get(22)?,
                     end_r: row.get(23)?,
-                    move_speed: row.get(24)?,
+                    move_speed: row.get(24)?,         // Required: NOT NULL in DB
                     created_at: row.get(25)?,
                     updated_at: row.get(26)?,
                 })
@@ -700,11 +702,29 @@ impl DatabaseResource {
         }
     }
 
+    /// Create a new program with explicit default values.
+    /// Required fields are set explicitly - we never rely on silent defaults.
     pub fn create_program(&self, name: &str, description: Option<&str>) -> anyhow::Result<i64> {
         let conn = self.0.lock().unwrap();
+        // Explicitly set all required default values - no hidden defaults
         conn.execute(
-            "INSERT INTO programs (name, description) VALUES (?, ?)",
-            [name, description.unwrap_or("")],
+            "INSERT INTO programs (
+                name, description,
+                default_w, default_p, default_r,
+                default_speed_type, default_term_type, default_term_value,
+                move_speed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rusqlite::params![
+                name,
+                description.unwrap_or(""),
+                0.0_f64,           // default_w
+                0.0_f64,           // default_p
+                0.0_f64,           // default_r
+                "mmSec",           // default_speed_type
+                "CNT",             // default_term_type
+                100_i32,           // default_term_value
+                100.0_f64,         // move_speed
+            ],
         )?;
         Ok(conn.last_insert_rowid())
     }
@@ -736,13 +756,17 @@ impl DatabaseResource {
         default_term_value: Option<u8>,
     ) -> anyhow::Result<()> {
         let conn = self.0.lock().unwrap();
+        // Use COALESCE to preserve existing values when None is passed
+        // This prevents accidental overwrites and maintains the "only update what changed" principle
         conn.execute(
             "UPDATE programs SET
-                start_x = ?, start_y = ?, start_z = ?,
-                start_w = ?, start_p = ?, start_r = ?,
-                end_x = ?, end_y = ?, end_z = ?,
-                end_w = ?, end_p = ?, end_r = ?,
-                move_speed = ?, default_term_type = ?, default_term_value = ?,
+                start_x = COALESCE(?, start_x), start_y = COALESCE(?, start_y), start_z = COALESCE(?, start_z),
+                start_w = COALESCE(?, start_w), start_p = COALESCE(?, start_p), start_r = COALESCE(?, start_r),
+                end_x = COALESCE(?, end_x), end_y = COALESCE(?, end_y), end_z = COALESCE(?, end_z),
+                end_w = COALESCE(?, end_w), end_p = COALESCE(?, end_p), end_r = COALESCE(?, end_r),
+                move_speed = COALESCE(?, move_speed),
+                default_term_type = COALESCE(?, default_term_type),
+                default_term_value = COALESCE(?, default_term_value),
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = ?",
             rusqlite::params![

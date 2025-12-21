@@ -69,6 +69,9 @@ pub fn use_sync_component<T: SyncComponent + Clone + Default + 'static>() -> Rea
 /// filtered by the provided predicate function. The filter runs on the client
 /// side whenever the component data updates.
 ///
+/// The filter receives both the entity ID and the component reference, allowing
+/// filtering by entity ID, component properties, or both.
+///
 /// This provides an ergonomic API without requiring server-side query parsing
 /// or DSL complexity. The filter is type-safe and can use any Rust expression.
 ///
@@ -99,7 +102,7 @@ pub fn use_sync_component<T: SyncComponent + Clone + Default + 'static>() -> Rea
 /// fn FilteredPositionList() -> impl IntoView {
 ///     // Only show positions where x > 100.0
 ///     let filtered_positions = use_sync_component_where::<Position, _>(
-///         |pos| pos.x > 100.0
+///         |_entity_id, pos| pos.x > 100.0
 ///     );
 ///
 ///     view! {
@@ -116,20 +119,32 @@ pub fn use_sync_component<T: SyncComponent + Clone + Default + 'static>() -> Rea
 ///         </ul>
 ///     }
 /// }
+///
+/// #[component]
+/// fn SpecificEntityPosition(target_id: u64) -> impl IntoView {
+///     // Filter by specific entity ID
+///     let position = use_sync_component_where::<Position, _>(
+///         move |entity_id, _| entity_id == target_id
+///     );
+///
+///     view! {
+///         {move || position.get().values().next().map(|p| format!("x: {}, y: {}", p.x, p.y))}
+///     }
+/// }
 /// ```
 pub fn use_sync_component_where<T, F>(
     filter: F,
 ) -> Signal<HashMap<u64, T>>
 where
     T: SyncComponent + Clone + Default + 'static,
-    F: Fn(&T) -> bool + Send + Sync + 'static,
+    F: Fn(u64, &T) -> bool + Send + Sync + 'static,
 {
     let all_components = use_sync_component::<T>();
 
     Signal::derive(move || {
         all_components.get()
             .into_iter()
-            .filter(|(_, component)| filter(component))
+            .filter(|(entity_id, component)| filter(*entity_id, component))
             .collect::<HashMap<u64, T>>()
     })
 }
@@ -192,6 +207,74 @@ pub fn use_sync_entity<T: SyncComponent + Clone + Default + 'static>(
 
     Signal::derive(move || {
         all_components.get().get(&entity_id).cloned()
+    })
+}
+
+/// Hook to subscribe to a single entity's component with a reactive entity ID.
+///
+/// This is similar to [`use_sync_entity`], but accepts a reactive getter for the
+/// entity ID instead of a static value. This is useful when the target entity
+/// can change at runtime (e.g., currently selected robot).
+///
+/// # Arguments
+///
+/// * `entity_id_fn` - A closure that returns `Option<u64>`. When `None`, the
+///   signal returns `None`. When `Some(id)`, returns the component for that entity.
+///
+/// # Panics
+///
+/// Panics if called outside of a `SyncProvider` context.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::{use_sync_entity_reactive, SyncComponent};
+/// use leptos::prelude::*;
+/// use serde::{Deserialize, Serialize};
+///
+/// #[derive(Clone, Default, Serialize, Deserialize)]
+/// struct RobotPosition {
+///     x: f32,
+///     y: f32,
+///     z: f32,
+/// }
+///
+/// #[component]
+/// fn RobotPositionDisplay() -> impl IntoView {
+///     // Stored in context or parent component
+///     let selected_robot_id = use_context::<RwSignal<Option<u64>>>()
+///         .expect("selected_robot_id in context");
+///
+///     // Reactively get position for the currently selected robot
+///     let position = use_sync_entity_reactive::<RobotPosition, _>(
+///         move || selected_robot_id.get()
+///     );
+///
+///     view! {
+///         {move || match position.get() {
+///             Some(pos) => view! {
+///                 <div>
+///                     <p>"X: " {pos.x}</p>
+///                     <p>"Y: " {pos.y}</p>
+///                     <p>"Z: " {pos.z}</p>
+///                 </div>
+///             }.into_any(),
+///             None => view! { <p>"No robot selected"</p> }.into_any(),
+///         }}
+///     }
+/// }
+/// ```
+pub fn use_sync_entity_reactive<T, F>(
+    entity_id_fn: F,
+) -> Signal<Option<T>>
+where
+    T: SyncComponent + Clone + Default + 'static,
+    F: Fn() -> Option<u64> + Send + Sync + 'static,
+{
+    let all_components = use_sync_component::<T>();
+
+    Signal::derive(move || {
+        entity_id_fn().and_then(|id| all_components.get().get(&id).cloned())
     })
 }
 
@@ -307,6 +390,95 @@ pub fn use_sync_connection() -> SyncConnection {
 pub fn use_sync_component_store<T: SyncComponent + Clone + Default + 'static>() -> Store<HashMap<u64, T>> {
     let ctx = expect_context::<SyncContext>();
     ctx.subscribe_component_store::<T>()
+}
+
+/// Hook to subscribe to a specific entity's component as a signal.
+///
+/// Unlike `use_sync_component` which returns all entities as a HashMap, this returns
+/// a signal for a single entity's component. The entity ID can be reactive (a closure),
+/// allowing you to switch which entity you're tracking.
+///
+/// Returns a tuple of:
+/// - `ReadSignal<T>`: The component data (uses `T::default()` when entity doesn't exist)
+/// - `ReadSignal<bool>`: Whether the entity currently exists
+///
+/// # Panics
+///
+/// Panics if called outside of a `SyncProvider` context.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_sync_entity_component;
+///
+/// // Fixed entity ID (singleton pattern)
+/// let (exec, exists) = use_sync_entity_component::<ExecutionState>(|| Some(SYSTEM_ENTITY_ID));
+///
+/// // Reactive entity ID from signal
+/// let selected_robot: RwSignal<Option<u64>> = ...;
+/// let (position, exists) = use_sync_entity_component::<Position>(move || selected_robot.get());
+///
+/// // First entity of a type (true singleton)
+/// let entities = use_sync_component::<ExecutionState>();
+/// let (exec, exists) = use_sync_entity_component::<ExecutionState>(move || {
+///     entities.get().keys().next().copied()
+/// });
+/// ```
+pub fn use_sync_entity_component<T, F>(entity_id_fn: F) -> (ReadSignal<T>, ReadSignal<bool>)
+where
+    T: SyncComponent + Clone + Default + 'static,
+    F: Fn() -> Option<u64> + Clone + 'static,
+{
+    let ctx = expect_context::<SyncContext>();
+    ctx.subscribe_entity_component::<T, F>(entity_id_fn)
+}
+
+/// Hook to subscribe to a specific entity's component as a Store for fine-grained reactivity.
+///
+/// Unlike `use_sync_component_store` which returns `Store<HashMap<u64, T>>`, this returns
+/// `Store<T>` directly for a single entity, enabling fine-grained field-level reactivity
+/// using the `reactive_stores` crate.
+///
+/// Returns a tuple of:
+/// - `Store<T>`: The component store (uses `T::default()` when entity doesn't exist)
+/// - `ReadSignal<bool>`: Whether the entity currently exists
+///
+/// # Panics
+///
+/// Panics if called outside of a `SyncProvider` context.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_sync_entity_component_store;
+/// use reactive_stores::Store;
+///
+/// #[derive(Clone, Default, Serialize, Deserialize, Store)]
+/// struct ExecutionState {
+///     state: ProgramExecutionState,
+///     can_start: bool,
+///     can_pause: bool,
+///     // ... other fields
+/// }
+///
+/// // Subscribe to the first (and only) ExecutionState entity
+/// let entities = use_sync_component::<ExecutionState>();
+/// let (exec, exists) = use_sync_entity_component_store::<ExecutionState, _>(move || {
+///     entities.get().keys().next().copied()
+/// });
+///
+/// // Fine-grained field access - only re-renders when specific field changes
+/// let can_start = move || exec.can_start().get();
+/// let can_pause = move || exec.can_pause().get();
+/// ```
+#[cfg(feature = "stores")]
+pub fn use_sync_entity_component_store<T, F>(entity_id_fn: F) -> (Store<T>, ReadSignal<bool>)
+where
+    T: SyncComponent + Clone + Default + 'static,
+    F: Fn() -> Option<u64> + Clone + 'static,
+{
+    let ctx = expect_context::<SyncContext>();
+    ctx.subscribe_entity_component_store::<T, F>(entity_id_fn)
 }
 
 /// Hook to access the SyncContext directly.

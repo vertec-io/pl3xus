@@ -22,6 +22,55 @@ use leptos::prelude::*;
 use std::collections::HashSet;
 use js_sys;
 
+// ============================================================================
+// System Entity Context
+// ============================================================================
+
+/// Context providing the System entity ID.
+///
+/// This is provided at the layout level by subscribing to `SystemMarker` components.
+/// Child components can use this to subscribe to entity-specific components without
+/// needing to look up the entity ID themselves.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// // At layout level (provided automatically by DesktopLayout)
+/// let systems = use_sync_component::<SystemMarker>();
+/// let system_entity_id = Signal::derive(move || systems.get().keys().next().copied());
+/// provide_context(SystemEntityContext { entity_id: system_entity_id });
+///
+/// // In child components
+/// let system_ctx = expect_context::<SystemEntityContext>();
+/// let (exec, exists) = use_sync_entity_component_store::<ExecutionState, _>(
+///     move || system_ctx.entity_id.get()
+/// );
+/// ```
+#[derive(Clone, Copy)]
+pub struct SystemEntityContext {
+    /// The reactive entity ID of the System. Returns `None` if no system exists yet.
+    pub entity_id: Signal<Option<u64>>,
+}
+
+impl SystemEntityContext {
+    /// Create a new SystemEntityContext with the given reactive entity ID.
+    pub fn new(entity_id: Signal<Option<u64>>) -> Self {
+        Self { entity_id }
+    }
+}
+
+/// Hook to get the SystemEntityContext.
+///
+/// Panics if called outside of a context that provides SystemEntityContext
+/// (i.e., must be a descendant of DesktopLayout).
+pub fn use_system_entity() -> SystemEntityContext {
+    expect_context::<SystemEntityContext>()
+}
+
+// ============================================================================
+// Workspace Context (UI-local state)
+// ============================================================================
+
 /// Shared context for UI-LOCAL state only.
 ///
 /// IMPORTANT: This context does NOT contain server-owned state.

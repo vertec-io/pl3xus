@@ -12,9 +12,11 @@ pub use floating::{FloatingJogControls, FloatingIOStatus};
 
 use leptos::prelude::*;
 use leptos_router::hooks::use_location;
+use pl3xus_client::{use_sync_component, EntityControl};
 
 use crate::pages::MainWorkspace;
 use crate::pages::dashboard::context::WorkspaceContext;
+use crate::pages::dashboard::SystemEntityContext;
 
 /// Desktop layout context - provides shared state across layout components.
 #[derive(Clone, Copy)]
@@ -54,6 +56,19 @@ pub fn DesktopLayout() -> impl IntoView {
     // Create and provide workspace context
     let workspace_ctx = WorkspaceContext::new();
     provide_context(workspace_ctx);
+
+    // Subscribe to EntityControl to get the System entity ID.
+    // The System entity is the only entity with EntityControl, so we can use this to find it.
+    // This provides child components with the entity ID for entity-specific subscriptions.
+    //
+    // IMPORTANT: We use Memo instead of Signal::derive because:
+    // - Signal::derive re-notifies subscribers whenever the source signal changes
+    // - Memo only notifies when the computed value actually changes
+    // - Without Memo, every EntityControl value update would trigger all downstream Effects,
+    //   even if the entity_id stayed the same, causing infinite reactivity loops
+    let control_entities = use_sync_component::<EntityControl>();
+    let system_entity_id = Memo::new(move |_| control_entities.get().keys().next().copied());
+    provide_context(SystemEntityContext::new(system_entity_id.into()));
 
     // Get current location to determine if we're on dashboard
     let location = use_location();

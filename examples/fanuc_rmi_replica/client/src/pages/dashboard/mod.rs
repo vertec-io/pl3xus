@@ -4,6 +4,7 @@ pub mod context;
 mod control;
 mod info;
 
+pub use context::{SystemEntityContext, use_system_entity};
 pub use control::ControlTab;
 pub use info::InfoTab;
 

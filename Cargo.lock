@@ -2881,6 +2881,7 @@ dependencies = [
  "log",
  "pl3xus_client",
  "pl3xus_common",
+ "reactive_stores 0.2.5",
  "serde",
  "wasm-bindgen",
 ]
@@ -2911,6 +2912,7 @@ dependencies = [
  "bevy",
  "fanuc_rmi 0.3.0",
  "pl3xus_common",
+ "reactive_stores 0.2.5",
  "serde",
 ]
 

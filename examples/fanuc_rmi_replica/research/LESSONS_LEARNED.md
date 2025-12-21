@@ -133,16 +133,65 @@ pub fn handle_incoming_message(&self, type_name: String, data: Vec<u8>) {
 }
 ```
 
+## WASM RefCell Already Borrowed Panic
+
+### The Problem
+
+When using WebSockets with rapid message delivery, you may see:
+```
+panicked at wasm-bindgen-futures-0.4.56/src/task/singlethread.rs:132:37:
+RefCell already borrowed
+```
+
+This happens when async tasks overlap - the WASM async task queue uses a RefCell internally,
+and nested operations can cause borrow conflicts.
+
+### The Chain That Causes It
+
+1. WebSocket receives message (inside leptos-use async machinery)
+2. Provider Effect triggers `handle_incoming_message()`
+3. That calls `signal.notify()` or `signal.set()`
+4. Downstream Effects run synchronously
+5. Those Effects also update signals or spawn async operations
+6. PANIC - RefCell already borrowed
+
+### The Fix
+
+In ALL places where Effects update signals (including pl3xus_client internals):
+
+```rust
+// ❌ BAD - causes RefCell panic with rapid updates
+Effect::new(move |_| {
+    let data = source_signal.get();
+    target_signal.set(data);  // Triggers downstream effects synchronously
+});
+
+// ✅ GOOD - avoids nested async conflicts
+Effect::new(move |_| {
+    let data = source_signal.get();
+    target_signal.try_update_untracked(|val| *val = data);
+    target_signal.notify();
+});
+```
+
+### Files That Required This Fix
+
+- `crates/pl3xus_client/src/context.rs` - `subscribe_message`, `subscribe_component`, `handle_incoming_message`
+- `crates/pl3xus_client/src/provider.rs` - `handle_server_message`, `handle_sync_item`
+- `examples/fanuc_rmi_replica/client/src/components/toast.rs` - `ToastContext::show()`
+- `examples/fanuc_rmi_replica/client/src/layout/top_bar.rs` - `ConsoleLogHandler`
+
 ## Debugging Tips
 
 1. **Check browser console** for `reactive_graph... RuntimeError: unreachable`
-2. **Add logging** before and after signal operations to trace the issue
-3. **Look for Effects** that both read and write signals
-4. **Search for `.get()` calls** inside Effect closures
+2. **Check for RefCell panics** - usually indicates nested async/reactive operations
+3. **Add logging** before and after signal operations to trace the issue
+4. **Look for Effects** that both read and write signals
+5. **Search for `.get()` calls** inside Effect closures
+6. **Search for `.set()` or `.update()` calls** inside Effects - should be `.try_update_untracked()` + `.notify()`
 
 ## References
 
 - Leptos Book: https://book.leptos.dev/
 - Leptos GitHub: https://github.com/leptos-rs/leptos
 - reactive_graph crate: Underlying reactive system
-

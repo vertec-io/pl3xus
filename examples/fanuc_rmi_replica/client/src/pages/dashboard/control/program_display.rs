@@ -4,65 +4,96 @@
 //! following the server-authoritative architecture. The server is the single
 //! source of truth for all program execution state.
 //!
+//! ## Server-Driven UI State Pattern
+//!
+//! This component demonstrates the idiomatic pl3xus pattern for server-driven UI:
+//! - The server provides `state` enum and `can_*` action flags in ExecutionState
+//! - The client simply reflects these values - **no client-side state machine logic**
+//! - Button visibility is driven by server-provided `can_*` flags
+//! - Actions are only allowed when the client has control
+//!
+//! ## Store-based Reactivity
+//!
+//! This component uses `use_sync_component_store` to get a `Store<HashMap<u64, ExecutionState>>`
+//! and extracts the first entity's data. This provides a stable reactive pattern
+//! without the complexity of entity-specific Effect chains.
+//!
 //! NOTE: Program completion notifications are handled by ProgramNotificationHandler
 //! in the layout module, which receives server-broadcast ProgramNotification messages.
 //! This ensures all connected clients see the same notification simultaneously.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_request, use_sync_component};
+use pl3xus_client::{use_request, use_sync_component, use_sync_context, EntityControl};
 use fanuc_replica_types::*;
 use super::LoadProgramModal;
+use crate::components::use_toast;
 
 /// Program Visual Display - G-code style line-by-line view
 ///
-/// Reads directly from the synced ExecutionState component. All program state
-/// (loaded program, lines, running, paused, current line) comes from the server.
+/// Demonstrates the **server-driven UI state pattern**:
+/// - The server's `ExecutionState` contains both current state and available actions
+/// - Button visibility is driven by server-provided `can_*` flags
+/// - Actions require control - clients without control see disabled buttons
+/// - Zero client-side state machine logic
 #[component]
 pub fn ProgramVisualDisplay() -> impl IntoView {
-    // Read directly from synced ExecutionState - server is source of truth
-    let execution_state = use_sync_component::<ExecutionState>();
+    let ctx = use_sync_context();
+    let _toast = use_toast();
+
+    // === Server-Driven State ===
+    //
+    // We subscribe to the full component signals and extract the first entity.
+    // Using use_sync_component (returns ReadSignal) for reliable reactivity.
+    let all_exec = use_sync_component::<ExecutionState>();
+    let all_control = use_sync_component::<EntityControl>();
+
     let (show_load_modal, set_show_load_modal) = signal(false);
 
-    // Derive program state from synced ExecutionState
-    let loaded_name = Memo::new(move |_| {
-        execution_state.get().values().next()
-            .and_then(|s| s.loaded_program_name.clone())
-    });
-
-    let loaded_id = Memo::new(move |_| {
-        execution_state.get().values().next()
-            .and_then(|s| s.loaded_program_id)
-    });
-
-    let is_running = Memo::new(move |_| {
-        execution_state.get().values().next()
-            .map(|s| s.running)
+    // Check if THIS client has control
+    let has_control = move || {
+        let my_id = ctx.my_connection_id.get();
+        all_control.get().values().next()
+            .map(|c| Some(c.client_id) == my_id)
             .unwrap_or(false)
-    });
+    };
 
-    let is_paused = Memo::new(move |_| {
-        execution_state.get().values().next()
-            .map(|s| s.paused)
-            .unwrap_or(false)
-    });
+    // Helper to get the first ExecutionState
+    let get_exec = move || {
+        all_exec.get().values().next().cloned().unwrap_or_default()
+    };
 
-    let executing = Memo::new(move |_| {
-        execution_state.get().values().next()
-            .map(|s| s.current_line as i32)
-            .unwrap_or(-1)
-    });
+    // === Derived State ===
+    let loaded_name = move || get_exec().loaded_program_name;
+    let exec_state = move || get_exec().state;
+    let is_paused = move || exec_state() == ProgramExecutionState::Paused;
+    let is_active = move || matches!(exec_state(), ProgramExecutionState::Running | ProgramExecutionState::Paused);
+    let executing = move || get_exec().current_line as i32;
+    let lines = move || get_exec().program_lines;
+    let total_lines = move || get_exec().total_lines;
 
-    let lines = Memo::new(move |_| {
-        execution_state.get().values().next()
-            .map(|s| s.program_lines.clone())
-            .unwrap_or_default()
-    });
-
-    let total_lines = Memo::new(move |_| {
-        execution_state.get().values().next()
-            .map(|s| s.total_lines)
-            .unwrap_or(0)
-    });
+    // === Available Actions (server-driven + control check) ===
+    // The server tells us what actions are valid, but we also require control.
+    let can_load = move || {
+        let exec = get_exec();
+        let result = has_control() && exec.can_load;
+        leptos::logging::log!("[ProgramDisplay] can_load={} (has_control={}, exec.can_load={})", result, has_control(), exec.can_load);
+        result
+    };
+    let can_start = move || {
+        let exec = get_exec();
+        let result = has_control() && exec.can_start;
+        leptos::logging::log!("[ProgramDisplay] can_start={} (has_control={}, exec.can_start={})", result, has_control(), exec.can_start);
+        result
+    };
+    let can_pause = move || has_control() && get_exec().can_pause;
+    let can_resume = move || has_control() && get_exec().can_resume;
+    let can_stop = move || has_control() && get_exec().can_stop;
+    let can_unload = move || {
+        let exec = get_exec();
+        let result = has_control() && exec.can_unload;
+        leptos::logging::log!("[ProgramDisplay] can_unload={} (has_control={}, exec.can_unload={})", result, has_control(), exec.can_unload);
+        result
+    };
 
     // Request hooks for program control - store in StoredValue for use in multiple closures
     let (start_program_fn, _) = use_request::<StartProgram>();
@@ -85,14 +116,17 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
-                    {move || loaded_name.get().unwrap_or_else(|| "Program".to_string())}
+                    {move || loaded_name().unwrap_or_else(|| "Program".to_string())}
                 </h3>
+                // === Server-Driven Action Buttons ===
+                // Button visibility is determined entirely by server's can_* flags.
+                // No client-side state machine logic - just reflect what server authorizes
                 <div class="flex items-center gap-1">
                     <span class="text-[8px] text-[#666666] mr-1">
-                        {move || format!("{} lines", lines.get().len())}
+                        {move || format!("{} lines", lines().len())}
                     </span>
-                    // Load button - show when no program is loaded
-                    <Show when=move || loaded_id.get().is_none()>
+                    // Load button - server tells us when loading is available
+                    <Show when=can_load>
                         <button
                             class="bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] text-[8px] px-2 py-0.5 rounded hover:bg-[#00d9ff30]"
                             on:click=move |_| set_show_load_modal.set(true)
@@ -100,62 +134,52 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             "📂 Load"
                         </button>
                     </Show>
-                    // Control buttons - only show when program is loaded
-                    <Show when=move || loaded_id.get().is_some()>
-                        // Run button - show when not running
-                        <Show when=move || !is_running.get()>
-                            <button
-                                class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
-                                on:click=move |_| {
-                                    // StartProgram no longer needs program_id - it uses the already loaded program
-                                    start_program.with_value(|f| f(StartProgram));
-                                }
-                            >
-                                "▶ Run"
-                            </button>
-                        </Show>
-                        // Pause/Resume button - show when running
-                        <Show when=move || is_running.get()>
-                            {move || {
-                                if is_paused.get() {
-                                    view! {
-                                        <button
-                                            class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
-                                            on:click=move |_| {
-                                                resume_program.with_value(|f| f(ResumeProgram));
-                                            }
-                                        >
-                                            "▶ Resume"
-                                        </button>
-                                    }.into_any()
-                                } else {
-                                    view! {
-                                        <button
-                                            class="bg-[#f59e0b20] border border-[#f59e0b40] text-[#f59e0b] text-[8px] px-2 py-0.5 rounded hover:bg-[#f59e0b30]"
-                                            on:click=move |_| {
-                                                pause_program.with_value(|f| f(PauseProgram));
-                                            }
-                                        >
-                                            "⏸ Pause"
-                                        </button>
-                                    }.into_any()
-                                }
-                            }}
-                        </Show>
-                        // Stop button - show when running
-                        <Show when=move || is_running.get()>
-                            <button
-                                class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430]"
-                                on:click=move |_| {
-                                    stop_program.with_value(|f| f(StopProgram));
-                                }
-                            >
-                                "■ Stop"
-                            </button>
-                        </Show>
+                    // Run button - server tells us when starting is available
+                    <Show when=move || can_start()>
+                        <button
+                            class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
+                            on:click=move |_| {
+                                start_program.with_value(|f| f(StartProgram));
+                            }
+                        >
+                            "▶ Run"
+                        </button>
                     </Show>
-                    // Unload button - only show when not running
-                    <Show when=move || loaded_id.get().is_some() && !is_running.get()>
+                    // Pause button - server tells us when pausing is available
+                    <Show when=move || can_pause()>
+                        <button
+                            class="bg-[#f59e0b20] border border-[#f59e0b40] text-[#f59e0b] text-[8px] px-2 py-0.5 rounded hover:bg-[#f59e0b30]"
+                            on:click=move |_| {
+                                pause_program.with_value(|f| f(PauseProgram));
+                            }
+                        >
+                            "⏸ Pause"
+                        </button>
+                    </Show>
+                    // Resume button - server tells us when resuming is available
+                    <Show when=move || can_resume()>
+                        <button
+                            class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
+                            on:click=move |_| {
+                                resume_program.with_value(|f| f(ResumeProgram));
+                            }
+                        >
+                            "▶ Resume"
+                        </button>
+                    </Show>
+                    // Stop button - server tells us when stopping is available
+                    <Show when=move || can_stop()>
+                        <button
+                            class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430]"
+                            on:click=move |_| {
+                                stop_program.with_value(|f| f(StopProgram));
+                            }
+                        >
+                            "■ Stop"
+                        </button>
+                    </Show>
+                    // Unload button - server tells us when unloading is available
+                    <Show when=move || can_unload()>
                         <button
                             class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430] flex items-center gap-1"
                             on:click=move |_| {
@@ -171,17 +195,17 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     </Show>
                 </div>
             </div>
-            // Progress bar - show when program is running
-            <Show when=move || is_running.get() && (total_lines.get() > 0)>
+            // Progress bar - show when program is active (running or paused)
+            <Show when=move || is_active() && (total_lines() > 0)>
                 <ProgramProgressBar
-                    current_line=Signal::derive(move || executing.get().max(0) as usize)
-                    total_lines=Signal::derive(move || total_lines.get())
-                    is_paused=Signal::derive(move || is_paused.get())
+                    current_line=Signal::derive(move || executing().max(0) as usize)
+                    total_lines=Signal::derive(move || total_lines())
+                    is_paused=Signal::derive(move || is_paused())
                 />
             </Show>
             <ProgramTable
-                lines=Signal::derive(move || lines.get())
-                executing=Signal::derive(move || executing.get())
+                lines=Signal::derive(move || lines())
+                executing=Signal::derive(move || executing())
             />
         </div>
 
@@ -201,6 +225,11 @@ fn ProgramTable(
     lines: Signal<Vec<ProgramLineInfo>>,
     executing: Signal<i32>,
 ) -> impl IntoView {
+    // Effect to log what the lines are:
+    // Effect::new(move |_| {
+    //     let lines = lines.get();
+    //     leptos::logging::log!("[ProgramTable::Effect] lines: {:?}", lines);
+    // });
     view! {
         <div class="flex-1 overflow-y-auto">
             <Show

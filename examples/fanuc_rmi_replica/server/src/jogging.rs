@@ -8,12 +8,14 @@ use fanuc_rmi::{SpeedType, TermType};
 use fanuc_rmi::packets::PacketPriority;
 use pl3xus_sync::control::EntityControl;
 use crate::plugins::connection::{FanucRobot, RmiDriver, RobotConnectionState};
+use crate::plugins::system::SystemMarker;
 
-/// Handle jog commands from clients - entity-based, uses pl3xus EntityControl
+/// Handle jog commands from clients - entity-based, uses pl3xus EntityControl on System
 pub fn handle_jog_commands(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut events: MessageReader<NetworkData<JogCommand>>,
-    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, Option<&EntityControl>), With<FanucRobot>>,
+    system_query: Query<&EntityControl, With<SystemMarker>>,
+    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
@@ -23,24 +25,24 @@ pub fn handle_jog_commands(
         // NetworkData<T> implements Deref<Target=T>, so we can access fields directly
         let cmd: &JogCommand = &*event;
 
+        // Check control on System entity
+        let Ok(system_control) = system_query.single() else {
+            warn!("Jog rejected: No System entity found");
+            continue;
+        };
+
+        if system_control.client_id != client_id {
+            warn!("Jog rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
+            continue;
+        }
+
         // Find a connected robot (in future, match by entity ID from command)
-        let Some((entity, _, driver, control)) = robot_query.iter()
-            .find(|(_, state, driver, _)| **state == RobotConnectionState::Connected && driver.is_some())
+        let Some((entity, _, driver)) = robot_query.iter()
+            .find(|(_, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("Jog rejected: No connected robot");
             continue;
         };
-
-        // Validate control using pl3xus EntityControl
-        if let Some(entity_control) = control {
-            if entity_control.client_id != client_id {
-                warn!("Jog rejected from {:?}: No control (held by {:?})", client_id, entity_control.client_id);
-                continue;
-            }
-        } else {
-            // No EntityControl component - allow for now (development mode)
-            trace!("No EntityControl on robot {:?}, allowing jog", entity);
-        }
 
         let driver = driver.expect("Checked above");
 
@@ -106,7 +108,8 @@ pub fn handle_jog_commands(
 pub fn handle_jog_robot_commands(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut events: MessageReader<NetworkData<JogRobot>>,
-    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, Option<&EntityControl>), With<FanucRobot>>,
+    system_query: Query<&EntityControl, With<SystemMarker>>,
+    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
@@ -115,23 +118,24 @@ pub fn handle_jog_robot_commands(
         let client_id = *event.source();
         let cmd: &JogRobot = &*event;
 
+        // Check control on System entity
+        let Ok(system_control) = system_query.single() else {
+            warn!("JogRobot rejected: No System entity found");
+            continue;
+        };
+
+        if system_control.client_id != client_id {
+            warn!("JogRobot rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
+            continue;
+        }
+
         // Find a connected robot
-        let Some((entity, _, driver, control)) = robot_query.iter()
-            .find(|(_, state, driver, _)| **state == RobotConnectionState::Connected && driver.is_some())
+        let Some((entity, _, driver)) = robot_query.iter()
+            .find(|(_, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("JogRobot rejected: No connected robot");
             continue;
         };
-
-        // Validate control using pl3xus EntityControl
-        if let Some(entity_control) = control {
-            if entity_control.client_id != client_id {
-                warn!("JogRobot rejected from {:?}: No control (held by {:?})", client_id, entity_control.client_id);
-                continue;
-            }
-        } else {
-            trace!("No EntityControl on robot {:?}, allowing jog", entity);
-        }
 
         let driver = driver.expect("Checked above");
 
@@ -225,7 +229,8 @@ pub fn handle_jog_robot_commands(
 pub fn handle_initialize_robot(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut events: MessageReader<NetworkData<InitializeRobot>>,
-    mut robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, Option<&EntityControl>, &mut RobotStatus), With<FanucRobot>>,
+    system_query: Query<&EntityControl, With<SystemMarker>>,
+    mut robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, &mut RobotStatus), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
@@ -234,41 +239,67 @@ pub fn handle_initialize_robot(
         let client_id = *event.source();
         let cmd: &InitializeRobot = &*event;
 
+        // Check control on System entity
+        let Ok(system_control) = system_query.single() else {
+            warn!("InitializeRobot rejected: No System entity found");
+            continue;
+        };
+
+        if system_control.client_id != client_id {
+            warn!("InitializeRobot rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
+            continue;
+        }
+
         // Find a connected robot
-        let Some((entity, _, driver, control, mut status)) = robot_query.iter_mut()
-            .find(|(_, state, driver, _, _)| **state == RobotConnectionState::Connected && driver.is_some())
+        let Some((entity, _, driver, _status)) = robot_query.iter_mut()
+            .find(|(_, state, driver, _)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("InitializeRobot rejected: No connected robot");
             continue;
         };
 
-        // Validate control
-        if let Some(entity_control) = control {
-            if entity_control.client_id != client_id {
-                warn!("InitializeRobot rejected from {:?}: No control (held by {:?})", client_id, entity_control.client_id);
-                continue;
-            }
-        }
-
         let driver = driver.expect("Checked above");
-        let group_mask = cmd.group_mask.unwrap_or(1);
+        let _group_mask = cmd.group_mask.unwrap_or(1);
 
-        info!("Processing InitializeRobot on {:?} with group_mask={}", entity, group_mask);
+        info!("Processing InitializeRobot on {:?}", entity);
 
-        // Send FrcInitialize command
-        let command = raw_dto::Command::FrcInitialize(raw_dto::FrcInitialize { group_mask });
-        let send_packet: fanuc_rmi::packets::SendPacket = raw_dto::SendPacket::Command(command).into();
-
-        match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
-            Ok(seq) => {
-                info!("Sent InitializeRobot command with sequence {}", seq);
-                // Mark TP program as initialized
-                status.tp_program_initialized = true;
+        // Use the async initialize() method which properly waits for response
+        // and resets the sequence counter after successful initialization.
+        let driver_clone = driver.0.clone();
+        tokio_runtime.spawn_background_task(move |mut ctx| async move {
+            match driver_clone.initialize().await {
+                Ok(response) => {
+                    if response.error_id == 0 {
+                        info!("✅ FRC_Initialize successful, group_mask: {}", response.group_mask);
+                        // Sequence counter is reset inside initialize() on success
+                        // Update RobotStatus on main thread
+                        ctx.run_on_main_thread(move |ctx| {
+                            let mut status_query = ctx.world.query_filtered::<&mut RobotStatus, With<FanucRobot>>();
+                            if let Ok(mut status) = status_query.single_mut(ctx.world) {
+                                status.tp_program_initialized = true;
+                            }
+                        }).await;
+                    } else {
+                        error!("❌ FRC_Initialize failed with error_id: {}", response.error_id);
+                        ctx.run_on_main_thread(move |ctx| {
+                            let mut status_query = ctx.world.query_filtered::<&mut RobotStatus, With<FanucRobot>>();
+                            if let Ok(mut status) = status_query.single_mut(ctx.world) {
+                                status.tp_program_initialized = false;
+                            }
+                        }).await;
+                    }
+                }
+                Err(e) => {
+                    error!("❌ Failed to initialize robot: {}", e);
+                    ctx.run_on_main_thread(move |ctx| {
+                        let mut status_query = ctx.world.query_filtered::<&mut RobotStatus, With<FanucRobot>>();
+                        if let Ok(mut status) = status_query.single_mut(ctx.world) {
+                            status.tp_program_initialized = false;
+                        }
+                    }).await;
+                }
             }
-            Err(e) => {
-                error!("Failed to send InitializeRobot command: {:?}", e);
-            }
-        }
+        });
     }
 }
 
@@ -276,7 +307,8 @@ pub fn handle_initialize_robot(
 pub fn handle_abort_motion(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut events: MessageReader<NetworkData<AbortMotion>>,
-    mut robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, Option<&EntityControl>, &mut RobotStatus), With<FanucRobot>>,
+    system_query: Query<&EntityControl, With<SystemMarker>>,
+    mut robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, &mut RobotStatus), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
@@ -284,21 +316,24 @@ pub fn handle_abort_motion(
     for event in events.read() {
         let client_id = *event.source();
 
+        // Check control on System entity
+        let Ok(system_control) = system_query.single() else {
+            warn!("AbortMotion rejected: No System entity found");
+            continue;
+        };
+
+        if system_control.client_id != client_id {
+            warn!("AbortMotion rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
+            continue;
+        }
+
         // Find a connected robot
-        let Some((entity, _, driver, control, mut status)) = robot_query.iter_mut()
-            .find(|(_, state, driver, _, _)| **state == RobotConnectionState::Connected && driver.is_some())
+        let Some((entity, _, driver, mut status)) = robot_query.iter_mut()
+            .find(|(_, state, driver, _)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("AbortMotion rejected: No connected robot");
             continue;
         };
-
-        // Validate control
-        if let Some(entity_control) = control {
-            if entity_control.client_id != client_id {
-                warn!("AbortMotion rejected from {:?}: No control (held by {:?})", client_id, entity_control.client_id);
-                continue;
-            }
-        }
 
         let driver = driver.expect("Checked above");
 
@@ -325,7 +360,8 @@ pub fn handle_abort_motion(
 pub fn handle_reset_robot(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut events: MessageReader<NetworkData<ResetRobot>>,
-    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, Option<&EntityControl>), With<FanucRobot>>,
+    system_query: Query<&EntityControl, With<SystemMarker>>,
+    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
@@ -333,21 +369,24 @@ pub fn handle_reset_robot(
     for event in events.read() {
         let client_id = *event.source();
 
+        // Check control on System entity
+        let Ok(system_control) = system_query.single() else {
+            warn!("ResetRobot rejected: No System entity found");
+            continue;
+        };
+
+        if system_control.client_id != client_id {
+            warn!("ResetRobot rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
+            continue;
+        }
+
         // Find a connected robot
-        let Some((entity, _, driver, control)) = robot_query.iter()
-            .find(|(_, state, driver, _)| **state == RobotConnectionState::Connected && driver.is_some())
+        let Some((entity, _, driver)) = robot_query.iter()
+            .find(|(_, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("ResetRobot rejected: No connected robot");
             continue;
         };
-
-        // Validate control
-        if let Some(entity_control) = control {
-            if entity_control.client_id != client_id {
-                warn!("ResetRobot rejected from {:?}: No control (held by {:?})", client_id, entity_control.client_id);
-                continue;
-            }
-        }
 
         let driver = driver.expect("Checked above");
 
@@ -373,7 +412,8 @@ pub fn handle_reset_robot(
 pub fn handle_send_packet(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut events: MessageReader<NetworkData<raw_dto::SendPacket>>,
-    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, Option<&EntityControl>), With<FanucRobot>>,
+    system_query: Query<&EntityControl, With<SystemMarker>>,
+    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
@@ -382,21 +422,24 @@ pub fn handle_send_packet(
         let client_id = *event.source();
         let dto_packet: &raw_dto::SendPacket = &*event;
 
+        // Check control on System entity
+        let Ok(system_control) = system_query.single() else {
+            warn!("SendPacket rejected: No System entity found");
+            continue;
+        };
+
+        if system_control.client_id != client_id {
+            warn!("SendPacket rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
+            continue;
+        }
+
         // Find a connected robot
-        let Some((entity, _, driver, control)) = robot_query.iter()
-            .find(|(_, state, driver, _)| **state == RobotConnectionState::Connected && driver.is_some())
+        let Some((entity, _, driver)) = robot_query.iter()
+            .find(|(_, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("SendPacket rejected: No connected robot");
             continue;
         };
-
-        // Validate control for non-read commands
-        if let Some(entity_control) = control {
-            if entity_control.client_id != client_id {
-                warn!("SendPacket rejected from {:?}: No control (held by {:?})", client_id, entity_control.client_id);
-                continue;
-            }
-        }
 
         let driver = driver.expect("Checked above");
 
@@ -420,7 +463,8 @@ pub fn handle_send_packet(
 pub fn handle_set_speed_override(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut events: MessageReader<NetworkData<SetSpeedOverride>>,
-    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, Option<&EntityControl>), With<FanucRobot>>,
+    system_query: Query<&EntityControl, With<SystemMarker>>,
+    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
@@ -429,21 +473,24 @@ pub fn handle_set_speed_override(
         let client_id = *event.source();
         let cmd: &SetSpeedOverride = &*event;
 
+        // Check control on System entity
+        let Ok(system_control) = system_query.single() else {
+            warn!("SetSpeedOverride rejected: No System entity found");
+            continue;
+        };
+
+        if system_control.client_id != client_id {
+            warn!("SetSpeedOverride rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
+            continue;
+        }
+
         // Find a connected robot
-        let Some((entity, _, driver, control)) = robot_query.iter()
-            .find(|(_, state, driver, _)| **state == RobotConnectionState::Connected && driver.is_some())
+        let Some((entity, _, driver)) = robot_query.iter()
+            .find(|(_, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("SetSpeedOverride rejected: No connected robot");
             continue;
         };
-
-        // Validate control
-        if let Some(entity_control) = control {
-            if entity_control.client_id != client_id {
-                warn!("SetSpeedOverride rejected from {:?}: No control (held by {:?})", client_id, entity_control.client_id);
-                continue;
-            }
-        }
 
         let driver = driver.expect("Checked above");
 

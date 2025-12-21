@@ -15,7 +15,7 @@ use fanuc_rmi::packets::{SendPacket, ResponsePacket, SentInstructionInfo};
 use fanuc_rmi::instructions::FrcLinearMotion;
 use fanuc_rmi::{TermType, SpeedType, Configuration, Position};
 use fanuc_replica_types::{
-    ExecutionState, Instruction, ProgramNotification, ProgramNotificationKind,
+    Instruction, ProgramNotification, ProgramNotificationKind,
     ConsoleLogEntry, ConsoleDirection, ConsoleMsgType,
 };
 use tokio::sync::broadcast;
@@ -143,6 +143,7 @@ impl ProgramExecutor {
 pub struct RmiSentInstructionChannel(pub broadcast::Receiver<SentInstructionInfo>);
 
 /// Program defaults for building motion packets.
+/// Required fields (term_type, term_value) are non-optional - they come from DB.
 #[derive(Default, Clone)]
 pub struct ProgramDefaults {
     pub w: f64,
@@ -151,7 +152,7 @@ pub struct ProgramDefaults {
     pub speed: f64,
     pub speed_type: String,
     pub term_type: String,
-    pub term_value: Option<u8>,
+    pub term_value: u8,  // Required: 0-100 for CNT, 0 for FINE
     pub uframe: Option<i32>,
     pub utool: Option<i32>,
 }
@@ -262,9 +263,8 @@ impl ProgramExecutor {
             }
         };
 
-        let term_value = instruction.term_value
-            .or(self.defaults.term_value)
-            .unwrap_or(if matches!(term_type, TermType::CNT) { 100 } else { 0 });
+        // Use instruction's term_value if set, otherwise use program default
+        let term_value = instruction.term_value.unwrap_or(self.defaults.term_value);
 
         let position = Position {
             x: instruction.x,
@@ -320,7 +320,7 @@ impl ProgramExecutor {
         let (term_type, term_value) = if is_last {
             (TermType::FINE, 0)
         } else {
-            (TermType::CNT, self.defaults.term_value.unwrap_or(100))
+            (TermType::CNT, self.defaults.term_value)
         };
 
         let position = Position {
@@ -366,10 +366,11 @@ pub struct ProgramExecutionPlugin;
 impl Plugin for ProgramExecutionPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ProgramExecutor>();
+        // NOTE: update_execution_state is handled by ProgramPlugin (the new orchestrator-based system)
+        // This legacy plugin only handles reset_on_disconnect and process_instruction_responses
         app.add_systems(Update, (
             reset_on_disconnect,
             process_instruction_responses,
-            update_execution_state,
         ));
     }
 }
@@ -513,34 +514,7 @@ fn process_instruction_responses(
     }
 }
 
-/// Update the ExecutionState synced component from executor state.
-/// NOTE: Only updates execution-related fields (running, paused, current_line, total_lines).
-/// Program loading (loaded_program_id, loaded_program_name, program_lines) is handled
-/// by handle_load_program to avoid overwriting the program lines on every frame.
-fn update_execution_state(
-    executor: Res<ProgramExecutor>,
-    mut execution_states: Query<&mut ExecutionState>,
-) {
-    for mut state in execution_states.iter_mut() {
-        let is_running = executor.is_running();
-        let is_paused = executor.is_paused();
-
-        // Only update if something changed to avoid unnecessary syncs
-        let needs_update =
-            state.running != is_running ||
-            state.paused != is_paused ||
-            state.current_line != executor.completed_line ||
-            state.total_lines != executor.total_instructions ||
-            state.loaded_program_id != executor.loaded_program_id;
-
-        if needs_update {
-            state.loaded_program_id = executor.loaded_program_id;
-            state.loaded_program_name = executor.loaded_program_name.clone();
-            state.running = is_running;
-            state.paused = is_paused;
-            state.current_line = executor.completed_line;
-            state.total_lines = executor.total_instructions;
-        }
-    }
-}
+// NOTE: update_execution_state is now handled by ProgramPlugin in program.rs
+// The new orchestrator-based system uses the Program component as source of truth,
+// not the ProgramExecutor resource.
 

@@ -4,6 +4,7 @@ use leptos::prelude::*;
 use leptos::either::Either;
 use pl3xus_client::use_request;
 use fanuc_replica_types::{ProgramDetail, UpdateProgramSettings};
+use crate::components::use_toast;
 
 /// Program details panel
 #[component]
@@ -30,9 +31,9 @@ pub fn ProgramDetails(
     let (end_p, set_end_p) = signal(String::new());
     let (end_r, set_end_r) = signal(String::new());
     let (move_speed, set_move_speed) = signal(String::new());
-    // Termination settings
-    let (term_type, set_term_type) = signal(String::from("CNT"));
-    let (term_value, set_term_value) = signal(String::from("100"));
+    // Termination settings - empty until loaded from server (never show fake defaults)
+    let (term_type, set_term_type) = signal(String::new());
+    let (term_value, set_term_value) = signal(String::new());
     let (settings_modified, set_settings_modified) = signal(false);
 
     // Track current program ID and instruction count to detect changes
@@ -41,6 +42,9 @@ pub fn ProgramDetails(
 
     // Request hook for updating settings
     let (update_settings, _update_state) = use_request::<UpdateProgramSettings>();
+
+    // Toast context for validation errors
+    let toast = use_toast();
 
     // Sync signals when program changes or is re-fetched with new data
     Effect::new(move |_| {
@@ -65,9 +69,10 @@ pub fn ProgramDetails(
                 set_end_w.set(prog.end_w.map(|v| format!("{:.2}", v)).unwrap_or_default());
                 set_end_p.set(prog.end_p.map(|v| format!("{:.2}", v)).unwrap_or_default());
                 set_end_r.set(prog.end_r.map(|v| format!("{:.2}", v)).unwrap_or_default());
-                set_move_speed.set(prog.move_speed.map(|v| format!("{:.0}", v)).unwrap_or_else(|| "100".to_string()));
+                // Required fields come directly from DB - no fallbacks, values are always present
+                set_move_speed.set(format!("{:.0}", prog.move_speed));
                 set_term_type.set(prog.default_term_type.clone());
-                set_term_value.set(prog.default_term_value.map(|v| v.to_string()).unwrap_or_else(|| "100".to_string()));
+                set_term_value.set(prog.default_term_value.to_string());
                 set_settings_modified.set(false);
             }
         }
@@ -202,6 +207,31 @@ pub fn ProgramDetails(
                                             <button
                                                 class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[9px] px-3 py-1 rounded hover:bg-[#22c55e30]"
                                                 on:click=move |_| {
+                                                    // Validate required fields before saving
+                                                    let move_speed_val = move_speed.get();
+                                                    let term_type_val = term_type.get();
+                                                    let term_value_val = term_value.get();
+
+                                                    // Validate move_speed (required, must be positive number)
+                                                    let parsed_move_speed: Option<f64> = move_speed_val.parse().ok();
+                                                    if parsed_move_speed.is_none() || parsed_move_speed.unwrap() <= 0.0 {
+                                                        toast.error("Move Speed is required and must be a positive number");
+                                                        return;
+                                                    }
+
+                                                    // Validate term_type (required, must be CNT or FINE)
+                                                    if term_type_val != "CNT" && term_type_val != "FINE" {
+                                                        toast.error("Term Type must be CNT or FINE");
+                                                        return;
+                                                    }
+
+                                                    // Validate term_value (required, must be 0-100)
+                                                    let parsed_term_value: Option<u8> = term_value_val.parse().ok();
+                                                    if parsed_term_value.is_none() || parsed_term_value.unwrap() > 100 {
+                                                        toast.error("Term Value is required and must be 0-100");
+                                                        return;
+                                                    }
+
                                                     update_settings(UpdateProgramSettings {
                                                         program_id: prog_id,
                                                         start_x: start_x.get().parse().ok(),
@@ -216,9 +246,9 @@ pub fn ProgramDetails(
                                                         end_w: end_w.get().parse().ok(),
                                                         end_p: end_p.get().parse().ok(),
                                                         end_r: end_r.get().parse().ok(),
-                                                        move_speed: move_speed.get().parse().ok(),
-                                                        default_term_type: Some(term_type.get()),
-                                                        default_term_value: term_value.get().parse().ok(),
+                                                        move_speed: parsed_move_speed,
+                                                        default_term_type: Some(term_type_val),
+                                                        default_term_value: parsed_term_value,
                                                     });
                                                     set_settings_modified.set(false);
                                                 }

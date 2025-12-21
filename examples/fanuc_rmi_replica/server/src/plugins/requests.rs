@@ -7,12 +7,15 @@ use bevy::ecs::message::MessageReader;
 use pl3xus::managers::network_request::{AppNetworkRequestMessage, Request};
 use pl3xus::Network;
 use pl3xus_websockets::WebSocketProvider;
+use pl3xus_sync::control::EntityControl;
 use fanuc_replica_types::*;
 
 use bevy_tokio_tasks::TokioTasksRuntime;
 use crate::database::DatabaseResource;
 use crate::plugins::connection::{FanucRobot, RmiDriver, RobotConnectionState};
-use crate::plugins::execution::{ProgramExecutor, LoadedProgramData, ExecutorRunState, console_entry};
+use crate::plugins::execution::{ProgramExecutor, LoadedProgramData, ExecutorRunState};
+use crate::plugins::program::{Program, ProgramState, ProgramDefaults, ApproachRetreat, ExecutionBuffer, console_entry as program_console_entry};
+use crate::plugins::system::SystemMarker;
 use fanuc_rmi::packets::PacketPriority;
 
 pub struct RequestHandlerPlugin;
@@ -643,7 +646,10 @@ fn handle_update_program_settings(
 ) {
     for request in requests.read() {
         let req = request.get_request();
-        info!("📋 Handling UpdateProgramSettings for program_id={}", req.program_id);
+        info!(
+            "📋 Handling UpdateProgramSettings for program_id={}, move_speed={:?}",
+            req.program_id, req.move_speed
+        );
 
         let result = db.as_ref()
             .ok_or_else(|| anyhow::anyhow!("Database not available"))
@@ -818,12 +824,15 @@ fn parse_and_insert_csv(
 
 /// Handle LoadProgram request - loads a program for execution.
 ///
-/// IMPORTANT: Requires robot connection AND client control.
+/// IMPORTANT: Requires robot connection AND client control of System.
+/// Creates a Program component on the System entity with all instructions.
 /// Updates the server-side ExecutionState so all clients see the loaded program.
 fn handle_load_program(
+    mut commands: Commands,
     mut requests: MessageReader<Request<LoadProgram>>,
     db: Option<Res<DatabaseResource>>,
-    robots: Query<(Entity, &RobotConnectionState, Option<&pl3xus_sync::control::EntityControl>), With<FanucRobot>>,
+    system_query: Query<(Entity, &EntityControl), With<SystemMarker>>,
+    robots: Query<(Entity, &RobotConnectionState), With<FanucRobot>>,
     mut execution_states: Query<&mut ExecutionState>,
     mut executor: ResMut<ProgramExecutor>,
 ) {
@@ -832,14 +841,26 @@ fn handle_load_program(
         let client_id = request.source();
         info!("📋 Handling LoadProgram request for program {} from {:?}", program_id, client_id);
 
-        // Check robot connection and control
-        let (robot_entity, is_connected, has_control) = match robots.single() {
-            Ok((entity, state, control)) => {
-                let connected = *state == RobotConnectionState::Connected;
-                let has_ctrl = control.map(|c| c.client_id == *client_id).unwrap_or(true);
-                (Some(entity), connected, has_ctrl)
+        // Check control on System entity
+        let (system_entity, has_control) = match system_query.single() {
+            Ok((entity, system_control)) => (entity, system_control.client_id == *client_id),
+            Err(_) => {
+                let response = LoadProgramResponse {
+                    success: false,
+                    program: None,
+                    error: Some("System not ready".to_string()),
+                };
+                if let Err(e) = request.clone().respond(response) {
+                    error!("Failed to send response: {:?}", e);
+                }
+                continue;
             }
-            Err(_) => (None, false, false),
+        };
+
+        // Check robot connection
+        let (robot_entity, is_connected) = match robots.single() {
+            Ok((entity, state)) => (Some(entity), *state == RobotConnectionState::Connected),
+            Err(_) => (None, false),
         };
 
         if !is_connected {
@@ -858,7 +879,7 @@ fn handle_load_program(
             let response = LoadProgramResponse {
                 success: false,
                 program: None,
-                error: Some("You do not have control of the robot".to_string()),
+                error: Some("You do not have control of the apparatus".to_string()),
             };
             if let Err(e) = request.clone().respond(response) {
                 error!("Failed to send response: {:?}", e);
@@ -880,9 +901,9 @@ fn handle_load_program(
         };
 
         match db.get_program(program_id) {
-            Ok(Some(program)) => {
+            Ok(Some(program_detail)) => {
                 // Convert ProgramDetail to ProgramWithLines for client display
-                let lines: Vec<ProgramLineInfo> = program.instructions.iter()
+                let lines: Vec<ProgramLineInfo> = program_detail.instructions.iter()
                     .map(|inst| ProgramLineInfo {
                         x: inst.x,
                         y: inst.y,
@@ -897,80 +918,149 @@ fn handle_load_program(
                     })
                     .collect();
 
-                // Build LoadedProgramData for execution
-                let approach = if program.start_x.is_some() && program.start_y.is_some() && program.start_z.is_some() {
-                    Some((
-                        program.start_x.unwrap(),
-                        program.start_y.unwrap(),
-                        program.start_z.unwrap(),
-                        program.start_w.unwrap_or(0.0),
-                        program.start_p.unwrap_or(0.0),
-                        program.start_r.unwrap_or(0.0),
-                    ))
+                // Build approach/retreat positions
+                let approach = if program_detail.start_x.is_some() && program_detail.start_y.is_some() && program_detail.start_z.is_some() {
+                    Some(ApproachRetreat {
+                        x: program_detail.start_x.unwrap(),
+                        y: program_detail.start_y.unwrap(),
+                        z: program_detail.start_z.unwrap(),
+                        w: program_detail.start_w,
+                        p: program_detail.start_p,
+                        r: program_detail.start_r,
+                    })
                 } else {
                     None
                 };
 
-                let retreat = if program.end_x.is_some() && program.end_y.is_some() && program.end_z.is_some() {
-                    Some((
-                        program.end_x.unwrap(),
-                        program.end_y.unwrap(),
-                        program.end_z.unwrap(),
-                        program.end_w.unwrap_or(0.0),
-                        program.end_p.unwrap_or(0.0),
-                        program.end_r.unwrap_or(0.0),
-                    ))
+                let retreat = if program_detail.end_x.is_some() && program_detail.end_y.is_some() && program_detail.end_z.is_some() {
+                    Some(ApproachRetreat {
+                        x: program_detail.end_x.unwrap(),
+                        y: program_detail.end_y.unwrap(),
+                        z: program_detail.end_z.unwrap(),
+                        w: program_detail.end_w,
+                        p: program_detail.end_p,
+                        r: program_detail.end_r,
+                    })
                 } else {
                     None
                 };
 
-                let loaded_data = LoadedProgramData {
-                    instructions: program.instructions.clone(),
+                // Build program defaults - all required fields come directly from DB
+                let defaults = ProgramDefaults {
+                    w: program_detail.default_w,
+                    p: program_detail.default_p,
+                    r: program_detail.default_r,
+                    speed: program_detail.default_speed.unwrap_or(100.0),  // default_speed is optional per-instruction override
+                    speed_type: program_detail.default_speed_type.clone(),
+                    term_type: program_detail.default_term_type.clone(),
+                    term_value: program_detail.default_term_value,
+                    uframe: program_detail.default_uframe,
+                    utool: program_detail.default_utool,
+                };
+
+                // Create Program component on System entity
+                info!(
+                    "📋 Program '{}' loaded with move_speed={}",
+                    &program_detail.name,
+                    program_detail.move_speed
+                );
+
+                let program_component = Program {
+                    id: program_detail.id,
+                    name: program_detail.name.clone(),
+                    instructions: program_detail.instructions.clone(),
+                    current_index: 0,
+                    completed_count: 0,
+                    state: ProgramState::Idle,
+                    defaults,
                     approach,
                     retreat,
-                    move_speed: program.move_speed.unwrap_or(10.0),
+                    move_speed: program_detail.move_speed,
                 };
 
-                // Update ProgramExecutor state (server-side)
-                executor.loaded_program_id = Some(program.id);
-                executor.loaded_program_name = Some(program.name.clone());
+                // Insert Program component on System entity
+                commands.entity(system_entity).insert(program_component);
+                info!("📦 Created Program component on System entity for '{}'", program_detail.name);
+
+                // Also add ExecutionBuffer to robot entity if not present
+                if let Some(robot_entity) = robot_entity {
+                    commands.entity(robot_entity).insert(ExecutionBuffer::new());
+                }
+
+                // LEGACY: Also update ProgramExecutor for backward compatibility
+                let loaded_data = LoadedProgramData {
+                    instructions: program_detail.instructions.clone(),
+                    approach: if program_detail.start_x.is_some() && program_detail.start_y.is_some() && program_detail.start_z.is_some() {
+                        Some((
+                            program_detail.start_x.unwrap(),
+                            program_detail.start_y.unwrap(),
+                            program_detail.start_z.unwrap(),
+                            program_detail.start_w.unwrap_or(0.0),
+                            program_detail.start_p.unwrap_or(0.0),
+                            program_detail.start_r.unwrap_or(0.0),
+                        ))
+                    } else {
+                        None
+                    },
+                    retreat: if program_detail.end_x.is_some() && program_detail.end_y.is_some() && program_detail.end_z.is_some() {
+                        Some((
+                            program_detail.end_x.unwrap(),
+                            program_detail.end_y.unwrap(),
+                            program_detail.end_z.unwrap(),
+                            program_detail.end_w.unwrap_or(0.0),
+                            program_detail.end_p.unwrap_or(0.0),
+                            program_detail.end_r.unwrap_or(0.0),
+                        ))
+                    } else {
+                        None
+                    },
+                    move_speed: program_detail.move_speed,
+                };
+
+                executor.loaded_program_id = Some(program_detail.id);
+                executor.loaded_program_name = Some(program_detail.name.clone());
                 executor.loaded_program_data = Some(loaded_data);
                 executor.total_instructions = lines.len();
                 executor.completed_line = 0;
                 executor.run_state = ExecutorRunState::Idle;
-
-                // Set defaults from program
-                executor.defaults.w = program.default_w;
-                executor.defaults.p = program.default_p;
-                executor.defaults.r = program.default_r;
-                executor.defaults.speed = program.default_speed.unwrap_or(100.0);
-                executor.defaults.term_type = program.default_term_type.clone();
-                executor.defaults.term_value = program.default_term_value;
-                executor.defaults.uframe = program.default_uframe;
-                executor.defaults.utool = program.default_utool;
+                executor.defaults.w = program_detail.default_w;
+                executor.defaults.p = program_detail.default_p;
+                executor.defaults.r = program_detail.default_r;
+                executor.defaults.speed = program_detail.default_speed.unwrap_or(100.0);  // default_speed is optional per-instruction override
+                executor.defaults.term_type = program_detail.default_term_type.clone();
+                executor.defaults.term_value = program_detail.default_term_value;
+                executor.defaults.uframe = program_detail.default_uframe;
+                executor.defaults.utool = program_detail.default_utool;
 
                 // Update ExecutionState component (synced to all clients)
                 if let Some(entity) = robot_entity {
                     if let Ok(mut exec_state) = execution_states.get_mut(entity) {
-                        exec_state.loaded_program_id = Some(program.id);
-                        exec_state.loaded_program_name = Some(program.name.clone());
-                        exec_state.running = false;
-                        exec_state.paused = false;
+                        exec_state.loaded_program_id = Some(program_detail.id);
+                        exec_state.loaded_program_name = Some(program_detail.name.clone());
+                        exec_state.state = ProgramExecutionState::Idle;
                         exec_state.current_line = 0;
                         exec_state.total_lines = lines.len();
                         exec_state.program_lines = lines.clone();
+                        // Set available actions for Idle state
+                        // can_load is false because a program is now loaded
+                        exec_state.can_load = false;
+                        exec_state.can_start = true;
+                        exec_state.can_pause = false;
+                        exec_state.can_resume = false;
+                        exec_state.can_stop = false;
+                        exec_state.can_unload = true;
                         info!("📡 Updated ExecutionState: program '{}' with {} lines synced to all clients",
-                            program.name, lines.len());
+                            program_detail.name, lines.len());
                     }
                 }
 
                 let program_with_lines = ProgramWithLines {
-                    id: program.id,
-                    name: program.name.clone(),
-                    description: program.description.clone(),
+                    id: program_detail.id,
+                    name: program_detail.name.clone(),
+                    description: program_detail.description.clone(),
                     lines,
                 };
-                info!("✅ Loaded program '{}' with {} instructions", program.name, program_with_lines.lines.len());
+                info!("✅ Loaded program '{}' with {} instructions", program_detail.name, program_with_lines.lines.len());
                 let response = LoadProgramResponse {
                     success: true,
                     program: Some(program_with_lines),
@@ -1005,26 +1095,83 @@ fn handle_load_program(
 }
 
 /// Handle UnloadProgram request - unloads the currently loaded program.
+///
+/// REQUIRES: Client must have control of the System entity.
 fn handle_unload_program(
+    mut commands: Commands,
     mut requests: MessageReader<Request<UnloadProgram>>,
+    system_query: Query<(Entity, &EntityControl), With<SystemMarker>>,
+    program_query: Query<&Program, With<SystemMarker>>,
     mut executor: ResMut<ProgramExecutor>,
     mut execution_states: Query<&mut ExecutionState>,
+    mut robots: Query<Option<&mut ExecutionBuffer>, With<FanucRobot>>,
 ) {
     for request in requests.read() {
-        info!("📋 Handling UnloadProgram request");
+        let client_id = request.source();
+        info!("📋 Handling UnloadProgram request from {:?}", client_id);
 
-        // Reset executor state
+        // Check control on System entity
+        let system_entity = match system_query.single() {
+            Ok((entity, system_control)) => {
+                if system_control.client_id != *client_id {
+                    warn!("UnloadProgram rejected: client {:?} does not have control", client_id);
+                    let response = UnloadProgramResponse {
+                        success: false,
+                        error: Some("You do not have control of the apparatus".to_string()),
+                    };
+                    let _ = request.clone().respond(response);
+                    continue;
+                }
+                entity
+            }
+            Err(_) => {
+                let response = UnloadProgramResponse {
+                    success: false,
+                    error: Some("System not ready".to_string()),
+                };
+                let _ = request.clone().respond(response);
+                continue;
+            }
+        };
+
+        // Remove Program component from System entity
+        if program_query.get(system_entity).is_ok() {
+            commands.entity(system_entity).remove::<Program>();
+            info!("📦 Removed Program component from System entity");
+        }
+
+        // Clear ExecutionBuffer on robot entities
+        for buffer_opt in robots.iter_mut() {
+            if let Some(mut buffer) = buffer_opt {
+                buffer.clear();
+                info!("🧹 Cleared ExecutionBuffer");
+            }
+        }
+
+        // LEGACY: Reset executor state for backward compatibility
         executor.reset();
 
         // Reset ExecutionState on all robot entities (synced to clients)
         for mut exec_state in execution_states.iter_mut() {
             exec_state.loaded_program_id = None;
             exec_state.loaded_program_name = None;
-            exec_state.running = false;
-            exec_state.paused = false;
+            exec_state.state = ProgramExecutionState::NoProgram;
             exec_state.current_line = 0;
             exec_state.total_lines = 0;
             exec_state.program_lines.clear();
+            // Set available actions for NoProgram state
+            exec_state.can_load = true;
+            exec_state.can_start = false;
+            exec_state.can_pause = false;
+            exec_state.can_resume = false;
+            exec_state.can_stop = false;
+            exec_state.can_unload = false;
+        }
+
+        // Debug: Log the actual values being set
+        for exec_state in execution_states.iter() {
+            info!("📡 Unloaded program - ExecutionState after unload: can_load={}, can_start={}, can_unload={}, state={:?}",
+                exec_state.can_load, exec_state.can_start, exec_state.can_unload, exec_state.state);
         }
 
         info!("📡 Unloaded program - ExecutionState cleared and synced to all clients");
@@ -1038,35 +1185,57 @@ fn handle_unload_program(
 
 /// Handle StartProgram request - starts executing the currently loaded program.
 /// A program must be loaded first via LoadProgram.
+///
+/// REQUIRES: Client must have control of the System entity.
+///
+/// NEW ARCHITECTURE: This handler just sets the Program state to Running.
+/// The orchestrator system (in program.rs) handles the actual instruction dispatch.
 fn handle_start_program(
-    tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<Request<StartProgram>>,
-    mut executor: ResMut<ProgramExecutor>,
-    robots: Query<(&RmiDriver, &RobotConnectionState), With<FanucRobot>>,
+    system_control_query: Query<&EntityControl, With<SystemMarker>>,
+    mut systems: Query<&mut Program, With<SystemMarker>>,
+    robots: Query<&RobotConnectionState, With<FanucRobot>>,
     net: Res<Network<WebSocketProvider>>,
 ) {
-    // Enter the Tokio runtime context so send_packet can use tokio::spawn
-    let _guard = tokio_runtime.runtime().enter();
-
     for request in requests.read() {
-        info!("📋 Handling StartProgram request");
+        let client_id = request.source();
+        info!("📋 Handling StartProgram request from {:?}", client_id);
 
-        // Check if a program is loaded
-        let program_data = match &executor.loaded_program_data {
-            Some(data) => data.clone(),
-            None => {
+        // Check control on System entity
+        match system_control_query.single() {
+            Ok(system_control) => {
+                if system_control.client_id != *client_id {
+                    warn!("StartProgram rejected: client {:?} does not have control", client_id);
+                    let response = StartProgramResponse {
+                        success: false,
+                        error: Some("You do not have control of the apparatus".to_string()),
+                    };
+                    let _ = request.clone().respond(response);
+                    continue;
+                }
+            }
+            Err(_) => {
                 let response = StartProgramResponse {
                     success: false,
-                    error: Some("No program loaded. Use LoadProgram first.".to_string()),
+                    error: Some("System not ready".to_string()),
                 };
                 let _ = request.clone().respond(response);
                 continue;
             }
         };
 
-        let program_name = executor.loaded_program_name.clone().unwrap_or_else(|| "Unknown".to_string());
+        // Check if a program is loaded (Program component exists on System)
+        let Ok(mut program) = systems.single_mut() else {
+            let response = StartProgramResponse {
+                success: false,
+                error: Some("No program loaded. Use LoadProgram first.".to_string()),
+            };
+            let _ = request.clone().respond(response);
+            continue;
+        };
 
-        if program_data.instructions.is_empty() {
+        // Check if program has instructions
+        if program.instructions.is_empty() {
             let response = StartProgramResponse {
                 success: false,
                 error: Some("Program has no instructions".to_string()),
@@ -1076,95 +1245,39 @@ fn handle_start_program(
         }
 
         // Check if robot is connected
-        let mut robot_driver = None;
-        for (driver, state) in robots.iter() {
-            if *state == RobotConnectionState::Connected {
-                robot_driver = Some(driver);
-                break;
-            }
+        let is_connected = robots.iter().any(|state| *state == RobotConnectionState::Connected);
+        if !is_connected {
+            let response = StartProgramResponse {
+                success: false,
+                error: Some("Robot not connected".to_string()),
+            };
+            let _ = request.clone().respond(response);
+            continue;
         }
 
-        let driver = match robot_driver {
-            Some(d) => d,
-            None => {
-                let response = StartProgramResponse {
-                    success: false,
-                    error: Some("Robot not connected".to_string()),
-                };
-                let _ = request.clone().respond(response);
-                continue;
-            }
-        };
-
-        // Reset execution state but keep the loaded program
-        executor.reset_execution();
-
-        // Build pending queue with all instructions
-        let total = program_data.instructions.len();
-        let has_approach = program_data.approach.is_some();
-        let has_retreat = program_data.retreat.is_some();
-
-        // Add approach move if defined
-        if let Some((x, y, z, w, p, r)) = program_data.approach {
-            let packet = executor.build_approach_retreat_packet(
-                x, y, z,
-                Some(w), Some(p), Some(r),
-                0, program_data.move_speed, false,
-            );
-            executor.pending_queue.push_back((0, packet));
-            info!("Added approach move to ({:.2}, {:.2}, {:.2})", x, y, z);
+        // Check if already running
+        if program.state == ProgramState::Running {
+            let response = StartProgramResponse {
+                success: false,
+                error: Some("Program is already running".to_string()),
+            };
+            let _ = request.clone().respond(response);
+            continue;
         }
 
-        // Add program instructions (build packets on-the-fly)
-        for (i, instr) in program_data.instructions.iter().enumerate() {
-            let line_number = i + 1;
-            let is_last_overall = !has_retreat && (i == total - 1);
-            let packet = executor.build_motion_packet(instr, is_last_overall);
-            executor.pending_queue.push_back((line_number, packet));
-        }
+        // Reset execution counters and set state to Running
+        program.current_index = 0;
+        program.completed_count = 0;
+        program.state = ProgramState::Running;
 
-        // Add retreat move if defined
-        if let Some((x, y, z, w, p, r)) = program_data.retreat {
-            let packet = executor.build_approach_retreat_packet(
-                x, y, z,
-                Some(w), Some(p), Some(r),
-                total + 1, program_data.move_speed, true,
-            );
-            executor.pending_queue.push_back((total + 1, packet));
-            info!("Added retreat move to ({:.2}, {:.2}, {:.2})", x, y, z);
-        }
+        let program_name = program.name.clone();
+        let total = program.total_instructions();
 
-        // Calculate total lines
-        executor.total_instructions = total + (if has_approach { 1 } else { 0 }) + (if has_retreat { 1 } else { 0 });
-        executor.run_state = ExecutorRunState::Running;
-
-        // Send initial batch of instructions
-        let initial_batch = executor.get_next_batch();
-        for (line_number, packet) in initial_batch {
-            match driver.0.send_packet(packet, PacketPriority::Standard) {
-                Ok(request_id) => {
-                    // Record by request_id - will be mapped to sequence_id when SentInstructionInfo arrives
-                    executor.record_sent(request_id, line_number);
-                    info!("📤 Sent instruction {} (request_id {})", line_number, request_id);
-                }
-                Err(e) => {
-                    error!("Failed to send instruction {}: {}", line_number, e);
-                    executor.reset_execution();
-                    let response = StartProgramResponse {
-                        success: false,
-                        error: Some(format!("Failed to send instruction: {}", e)),
-                    };
-                    let _ = request.clone().respond(response);
-                    continue;
-                }
-            }
-        }
-
-        info!("▶ Started program '{}' with {} instructions", program_name, executor.total_instructions);
+        info!("▶ Started program '{}' with {} instructions", program_name, total);
 
         // Broadcast console entry for program start
-        let console_msg = console_entry(
-            format!("Program '{}' started ({} instructions)", program_name, executor.total_instructions),
+        let console_msg = program_console_entry(
+            format!("Program '{}' started ({} instructions)", program_name, total),
             ConsoleDirection::System,
             ConsoleMsgType::Status,
         );
@@ -1178,49 +1291,84 @@ fn handle_start_program(
 }
 
 /// Handle PauseProgram request - pauses program execution.
+///
+/// REQUIRES: Client must have control of the System entity.
 fn handle_pause_program(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<Request<PauseProgram>>,
-    mut executor: ResMut<ProgramExecutor>,
+    system_control_query: Query<&EntityControl, With<SystemMarker>>,
+    mut systems: Query<&mut Program, With<SystemMarker>>,
     robots: Query<(&RmiDriver, &RobotConnectionState), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
     for request in requests.read() {
-        info!("📋 Handling PauseProgram request");
+        let client_id = request.source();
+        info!("📋 Handling PauseProgram request from {:?}", client_id);
 
-        if !executor.is_running() {
+        // Check control on System entity
+        match system_control_query.single() {
+            Ok(system_control) => {
+                if system_control.client_id != *client_id {
+                    warn!("PauseProgram rejected: client {:?} does not have control", client_id);
+                    let response = PauseProgramResponse {
+                        success: false,
+                        error: Some("You do not have control of the apparatus".to_string()),
+                    };
+                    let _ = request.clone().respond(response);
+                    continue;
+                }
+            }
+            Err(_) => {
+                let response = PauseProgramResponse {
+                    success: false,
+                    error: Some("System not ready".to_string()),
+                };
+                let _ = request.clone().respond(response);
+                continue;
+            }
+        };
+
+        let Ok(mut program) = systems.single_mut() else {
+            let response = PauseProgramResponse { success: false, error: Some("No program loaded".to_string()) };
+            let _ = request.clone().respond(response);
+            continue;
+        };
+
+        if program.state != ProgramState::Running {
             let response = PauseProgramResponse { success: false, error: Some("No program running".to_string()) };
             let _ = request.clone().respond(response);
             continue;
         }
 
-        if executor.is_paused() {
-            let response = PauseProgramResponse { success: false, error: Some("Program already paused".to_string()) };
-            let _ = request.clone().respond(response);
-            continue;
-        }
-
         // Send pause command to robot
+        let mut sent_pause = false;
         for (driver, state) in robots.iter() {
             if *state == RobotConnectionState::Connected {
                 // Send FRC_Pause packet (unit variant)
                 let pause_packet = fanuc_rmi::packets::SendPacket::Command(
                     fanuc_rmi::packets::Command::FrcPause
                 );
+                info!("📤 Sending FRC_Pause to robot");
                 if let Err(e) = driver.0.send_packet(pause_packet, PacketPriority::High) {
-                    error!("Failed to send pause command: {}", e);
+                    error!("❌ Failed to send pause command: {}", e);
                     let response = PauseProgramResponse { success: false, error: Some(format!("Failed to pause: {}", e)) };
                     let _ = request.clone().respond(response);
                     continue;
                 }
+                info!("✅ FRC_Pause sent successfully");
+                sent_pause = true;
                 break;
             }
         }
 
-        executor.run_state = ExecutorRunState::Paused;
-        info!("Program paused");
+        if !sent_pause {
+            warn!("⚠️ No connected robot found to send FRC_Pause");
+        }
+
+        program.state = ProgramState::Paused;
+        info!("⏸ Program '{}' paused", program.name);
         let response = PauseProgramResponse { success: true, error: None };
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
@@ -1229,49 +1377,84 @@ fn handle_pause_program(
 }
 
 /// Handle ResumeProgram request - resumes program execution.
+///
+/// REQUIRES: Client must have control of the System entity.
 fn handle_resume_program(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<Request<ResumeProgram>>,
-    mut executor: ResMut<ProgramExecutor>,
+    system_control_query: Query<&EntityControl, With<SystemMarker>>,
+    mut systems: Query<&mut Program, With<SystemMarker>>,
     robots: Query<(&RmiDriver, &RobotConnectionState), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
     for request in requests.read() {
-        info!("📋 Handling ResumeProgram request");
+        let client_id = request.source();
+        info!("📋 Handling ResumeProgram request from {:?}", client_id);
 
-        if !executor.is_active() {
-            let response = ResumeProgramResponse { success: false, error: Some("No program running".to_string()) };
+        // Check control on System entity
+        match system_control_query.single() {
+            Ok(system_control) => {
+                if system_control.client_id != *client_id {
+                    warn!("ResumeProgram rejected: client {:?} does not have control", client_id);
+                    let response = ResumeProgramResponse {
+                        success: false,
+                        error: Some("You do not have control of the apparatus".to_string()),
+                    };
+                    let _ = request.clone().respond(response);
+                    continue;
+                }
+            }
+            Err(_) => {
+                let response = ResumeProgramResponse {
+                    success: false,
+                    error: Some("System not ready".to_string()),
+                };
+                let _ = request.clone().respond(response);
+                continue;
+            }
+        };
+
+        let Ok(mut program) = systems.single_mut() else {
+            let response = ResumeProgramResponse { success: false, error: Some("No program loaded".to_string()) };
             let _ = request.clone().respond(response);
             continue;
-        }
+        };
 
-        if !executor.is_paused() {
+        if program.state != ProgramState::Paused {
             let response = ResumeProgramResponse { success: false, error: Some("Program not paused".to_string()) };
             let _ = request.clone().respond(response);
             continue;
         }
 
         // Send continue command to robot
+        let mut sent_continue = false;
         for (driver, state) in robots.iter() {
             if *state == RobotConnectionState::Connected {
                 // Send FRC_Continue packet (unit variant)
                 let continue_packet = fanuc_rmi::packets::SendPacket::Command(
                     fanuc_rmi::packets::Command::FrcContinue
                 );
+                info!("📤 Sending FRC_Continue to robot");
                 if let Err(e) = driver.0.send_packet(continue_packet, PacketPriority::High) {
-                    error!("Failed to send continue command: {}", e);
+                    error!("❌ Failed to send continue command: {}", e);
                     let response = ResumeProgramResponse { success: false, error: Some(format!("Failed to resume: {}", e)) };
                     let _ = request.clone().respond(response);
                     continue;
                 }
+                info!("✅ FRC_Continue sent successfully");
+                sent_continue = true;
                 break;
             }
         }
 
-        executor.run_state = ExecutorRunState::Running;
-        info!("Program resumed");
+        if !sent_continue {
+            warn!("⚠️ No connected robot found to send FRC_Continue");
+        }
+
+        program.state = ProgramState::Running;
+        info!("▶ Program '{}' resumed", program.name);
         let response = ResumeProgramResponse { success: true, error: None };
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
@@ -1280,42 +1463,91 @@ fn handle_resume_program(
 }
 
 /// Handle StopProgram request - stops program execution.
+///
+/// REQUIRES: Client must have control of the System entity.
 fn handle_stop_program(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<Request<StopProgram>>,
-    mut executor: ResMut<ProgramExecutor>,
-    robots: Query<(&RmiDriver, &RobotConnectionState), With<FanucRobot>>,
+    system_control_query: Query<&EntityControl, With<SystemMarker>>,
+    mut systems: Query<&mut Program, With<SystemMarker>>,
+    mut robots: Query<(&RmiDriver, &RobotConnectionState, Option<&mut ExecutionBuffer>), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
     for request in requests.read() {
-        info!("📋 Handling StopProgram request");
+        let client_id = request.source();
+        info!("📋 Handling StopProgram request from {:?}", client_id);
 
-        if !executor.is_active() {
+        // Check control on System entity
+        match system_control_query.single() {
+            Ok(system_control) => {
+                if system_control.client_id != *client_id {
+                    warn!("StopProgram rejected: client {:?} does not have control", client_id);
+                    let response = StopProgramResponse {
+                        success: false,
+                        error: Some("You do not have control of the apparatus".to_string()),
+                    };
+                    let _ = request.clone().respond(response);
+                    continue;
+                }
+            }
+            Err(_) => {
+                let response = StopProgramResponse {
+                    success: false,
+                    error: Some("System not ready".to_string()),
+                };
+                let _ = request.clone().respond(response);
+                continue;
+            }
+        };
+
+        let Ok(mut program) = systems.single_mut() else {
+            let response = StopProgramResponse { success: false, error: Some("No program loaded".to_string()) };
+            let _ = request.clone().respond(response);
+            continue;
+        };
+
+        if program.state == ProgramState::Idle {
             let response = StopProgramResponse { success: false, error: Some("No program running".to_string()) };
             let _ = request.clone().respond(response);
             continue;
         }
 
-        // Send abort command to robot
-        for (driver, state) in robots.iter() {
+        // Send abort command to robot and clear execution buffer
+        let mut sent_abort = false;
+        for (driver, state, buffer_opt) in robots.iter_mut() {
             if *state == RobotConnectionState::Connected {
                 // Send FRC_Abort packet (unit variant)
                 let abort_packet = fanuc_rmi::packets::SendPacket::Command(
                     fanuc_rmi::packets::Command::FrcAbort
                 );
+                info!("📤 Sending FRC_Abort to robot");
                 if let Err(e) = driver.0.send_packet(abort_packet, PacketPriority::High) {
-                    error!("Failed to send abort command: {}", e);
-                    // Continue anyway to reset executor
+                    error!("❌ Failed to send abort command: {}", e);
+                    // Continue anyway to reset state
+                } else {
+                    info!("✅ FRC_Abort sent successfully");
+                    sent_abort = true;
+                }
+                // Clear execution buffer to remove in-flight packet tracking
+                if let Some(mut buffer) = buffer_opt {
+                    buffer.clear();
+                    info!("🧹 Cleared ExecutionBuffer");
                 }
                 break;
             }
         }
 
-        let program_name = executor.loaded_program_name.clone().unwrap_or_default();
-        // Use reset_execution to keep the program loaded for re-running
-        executor.reset_execution();
+        if !sent_abort {
+            warn!("⚠️ No connected robot found to send FRC_Abort");
+        }
+
+        let program_name = program.name.clone();
+        // Reset to Idle state (program stays loaded for re-running)
+        program.state = ProgramState::Idle;
+        program.current_index = 0;
+        program.completed_count = 0;
         info!("⏹ Program '{}' stopped (still loaded)", program_name);
         let response = StopProgramResponse { success: true, error: None };
         if let Err(e) = request.clone().respond(response) {

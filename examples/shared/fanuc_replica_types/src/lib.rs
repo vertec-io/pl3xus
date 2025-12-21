@@ -12,6 +12,9 @@ use std::ops::{Deref, DerefMut};
 #[cfg(feature = "server")]
 use bevy::prelude::*;
 
+#[cfg(feature = "stores")]
+use reactive_stores::Store;
+
 // Re-export FANUC DTO types for easy access
 pub use fanuc_rmi::dto;
 
@@ -102,17 +105,92 @@ impl Default for RobotStatus {
 }
 
 /// Execution state for program running (Synced 1-way: Server -> Client)
+/// Program execution state - server-authoritative state machine.
+/// The server determines the current state and what actions are available.
+/// The client simply reflects this state and enables/disables actions accordingly.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ProgramExecutionState {
+    /// No program loaded.
+    #[default]
+    NoProgram,
+    /// Program is loaded but not running (ready to start).
+    Idle,
+    /// Program is actively executing.
+    Running,
+    /// Program execution is paused (can resume or stop).
+    Paused,
+    /// Program completed successfully.
+    Completed,
+    /// Program encountered an error.
+    Error,
+}
+
+/// Execution state (Synced 1-way: Server -> Client).
+///
+/// This component follows the **server-driven UI state pattern**:
+/// - The server determines the current `state` and what actions are available via `can_*` flags
+/// - The client simply reflects these values without any client-side state machine logic
+/// - Button visibility is driven directly by the `can_*` flags
+///
+/// # Example (client)
+/// ```rust,ignore
+/// let exec = use_sync_component_store::<ExecutionState>();
+/// // Access fields with fine-grained reactivity:
+/// let can_start = move || exec.can_start().get();
+/// let state = move || exec.state().get();
+/// ```
 #[cfg_attr(feature = "server", derive(Component))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[cfg_attr(feature = "stores", derive(Store))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ExecutionState {
     pub loaded_program_id: Option<i64>,
     pub loaded_program_name: Option<String>,
-    pub running: bool,
-    pub paused: bool,
+    /// Current execution state (server-authoritative state machine)
+    pub state: ProgramExecutionState,
+    /// Current line being executed (1-based, 0 = not started)
     pub current_line: usize,
+    /// Total lines in the program
     pub total_lines: usize,
     /// The program lines for the loaded program (synced to all clients)
     pub program_lines: Vec<ProgramLineInfo>,
+
+    // === Available Actions (server-driven) ===
+    // The server determines what actions are valid based on the current state.
+    // The client simply enables/disables buttons based on these flags.
+
+    /// Can load a new program (only when no program is loaded or idle)
+    pub can_load: bool,
+    /// Can start/run the program
+    pub can_start: bool,
+    /// Can pause the running program
+    pub can_pause: bool,
+    /// Can resume a paused program
+    pub can_resume: bool,
+    /// Can stop the running/paused program
+    pub can_stop: bool,
+    /// Can unload the current program
+    pub can_unload: bool,
+}
+
+impl Default for ExecutionState {
+    fn default() -> Self {
+        // Default state is NoProgram - only load action is available
+        Self {
+            loaded_program_id: None,
+            loaded_program_name: None,
+            state: ProgramExecutionState::NoProgram,
+            current_line: 0,
+            total_lines: 0,
+            program_lines: Vec::new(),
+            // In NoProgram state, only loading is available
+            can_load: true,
+            can_start: false,
+            can_pause: false,
+            can_resume: false,
+            can_stop: false,
+            can_unload: false,
+        }
+    }
 }
 
 /// Connection state (Synced 1-way: Server -> Client)
@@ -418,17 +496,17 @@ pub struct ProgramDetail {
     pub name: String,
     pub description: Option<String>,
     pub instructions: Vec<Instruction>,
-    // Program defaults for motion
+    // Program defaults for motion - these are required, non-optional fields
     pub default_w: f64,
     pub default_p: f64,
     pub default_r: f64,
     pub default_speed: Option<f64>,
-    pub default_speed_type: Option<String>,
-    pub default_term_type: String,
-    pub default_term_value: Option<u8>,
+    pub default_speed_type: String,        // Required: "mmSec" or "percent"
+    pub default_term_type: String,         // Required: "CNT" or "FINE"
+    pub default_term_value: u8,            // Required: 0-100 for CNT, 0 for FINE
     pub default_uframe: Option<i32>,
     pub default_utool: Option<i32>,
-    // Approach/retreat positions
+    // Approach/retreat positions (optional - not all programs have approach/retreat)
     pub start_x: Option<f64>,
     pub start_y: Option<f64>,
     pub start_z: Option<f64>,
@@ -441,7 +519,7 @@ pub struct ProgramDetail {
     pub end_w: Option<f64>,
     pub end_p: Option<f64>,
     pub end_r: Option<f64>,
-    pub move_speed: Option<f64>,
+    pub move_speed: f64,                   // Required: speed for approach/retreat moves
     pub created_at: String,
     pub updated_at: String,
 }

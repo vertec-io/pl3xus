@@ -71,7 +71,6 @@ fn poll_robot_status(
 /// Process responses from polling commands.
 fn process_poll_responses(
     mut robots: Query<(
-        &RmiDriver,
         &mut RmiResponseChannel,
         &mut RobotPosition,
         &mut JointAngles,
@@ -79,7 +78,7 @@ fn process_poll_responses(
         &RobotConnectionState,
     ), With<FanucRobot>>,
 ) {
-    for (driver, mut response_channel, mut position, mut joints, mut status, state) in robots.iter_mut() {
+    for (mut response_channel, mut position, mut joints, mut status, state) in robots.iter_mut() {
         if *state != RobotConnectionState::Connected {
             continue;
         }
@@ -127,10 +126,13 @@ fn process_poll_responses(
                     status.active_uframe = status_resp.number_uframe as u8;
                     status.active_utool = status_resp.number_utool as u8;
 
-                    // Sync the driver's sequence counter with the robot's expected next sequence ID.
-                    // This is critical for motion instructions to work correctly after FRC_Initialize
-                    // resets the sequence counter on the robot side.
-                    driver.0.sync_sequence_counter(status_resp.next_sequence_id);
+                    // NOTE: We intentionally do NOT sync the driver's sequence counter here.
+                    // The driver's counter is authoritative - it knows what sequence IDs it has
+                    // assigned to packets. The robot's next_sequence_id is what it expects to
+                    // receive next, which may lag behind what the driver has sent due to in-flight
+                    // packets. Syncing here would cause duplicate sequence IDs to be sent.
+                    // The driver already initializes its counter to 1 on connect, matching the
+                    // robot's expectation after FRC_Initialize.
                 }
                 _ => {
                     // Ignore other response types (instruction responses, etc.)

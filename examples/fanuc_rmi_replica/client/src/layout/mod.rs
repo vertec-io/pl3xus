@@ -12,7 +12,8 @@ pub use floating::{FloatingJogControls, FloatingIOStatus};
 
 use leptos::prelude::*;
 use leptos_router::hooks::use_location;
-use pl3xus_client::{use_sync_component, EntityControl};
+use pl3xus_client::use_sync_component;
+use fanuc_replica_types::SystemMarker;
 
 use crate::pages::MainWorkspace;
 use crate::pages::dashboard::context::WorkspaceContext;
@@ -57,17 +58,17 @@ pub fn DesktopLayout() -> impl IntoView {
     let workspace_ctx = WorkspaceContext::new();
     provide_context(workspace_ctx);
 
-    // Subscribe to EntityControl to get the System entity ID.
-    // The System entity is the only entity with EntityControl, so we can use this to find it.
+    // Subscribe to SystemMarker to get the System entity ID.
+    // The SystemMarker is synced from the server and only exists on the System entity.
     // This provides child components with the entity ID for entity-specific subscriptions.
     //
     // IMPORTANT: We use Memo instead of Signal::derive because:
     // - Signal::derive re-notifies subscribers whenever the source signal changes
     // - Memo only notifies when the computed value actually changes
-    // - Without Memo, every EntityControl value update would trigger all downstream Effects,
+    // - Without Memo, updates would trigger all downstream Effects,
     //   even if the entity_id stayed the same, causing infinite reactivity loops
-    let control_entities = use_sync_component::<EntityControl>();
-    let system_entity_id = Memo::new(move |_| control_entities.get().keys().next().copied());
+    let system_markers = use_sync_component::<SystemMarker>();
+    let system_entity_id = Memo::new(move |_| system_markers.get().keys().next().copied());
     provide_context(SystemEntityContext::new(system_entity_id.into()));
 
     // Get current location to determine if we're on dashboard

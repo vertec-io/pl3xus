@@ -7,6 +7,7 @@ use leptos_router::hooks::use_navigate;
 
 use pl3xus_client::{use_sync_component, use_sync_context, use_sync_connection, use_request, use_sync_message, ControlRequest, ControlResponse, EntityControl, ConnectionReadyState};
 use fanuc_replica_types::*;
+use crate::pages::dashboard::use_system_entity;
 
 /// Top bar with connection status, robot info, and settings.
 #[component]
@@ -673,12 +674,11 @@ fn SavedConnectionsList(
 #[component]
 fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
     let ctx = use_sync_context();
-    let system_marker = use_sync_component::<SystemMarker>();
+    let system_ctx = use_system_entity();
 
-    // Find the System entity by looking for the SystemMarker component
-    // This is the proper way to identify the system entity
+    // Get the System entity ID from the context (provided by DesktopLayout)
     let system_entity_bits = move || -> Option<u64> {
-        system_marker.get().keys().next().copied()
+        system_ctx.entity_id.get()
     };
 
     view! {
@@ -727,17 +727,16 @@ fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
 fn ControlButton() -> impl IntoView {
     let ctx = use_sync_context();
     let toast = crate::components::use_toast();
-    let system_marker = use_sync_component::<SystemMarker>();
+    let system_ctx = use_system_entity();
     let control_state = use_sync_component::<EntityControl>();
 
-    // Find the System entity by looking for the SystemMarker component
-    // This is the proper way to identify the system entity
+    // Get the System entity ID from the context (provided by DesktopLayout)
     let system_entity_bits = move || -> Option<u64> {
-        system_marker.get().keys().next().copied()
+        system_ctx.entity_id.get()
     };
 
     // Check if THIS client has control by comparing EntityControl.client_id with our own connection ID
-    // Use the System entity (from SystemMarker) to check control status
+    // Use the System entity (from context) to check control status
     let has_control = move || {
         let my_id = ctx.my_connection_id.get();
         let state = control_state.get();

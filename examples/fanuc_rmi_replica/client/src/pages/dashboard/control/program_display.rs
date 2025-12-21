@@ -27,6 +27,7 @@ use pl3xus_client::{use_request, use_sync_component, use_sync_context, EntityCon
 use fanuc_replica_types::*;
 use super::LoadProgramModal;
 use crate::components::use_toast;
+use crate::pages::dashboard::use_system_entity;
 
 /// Program Visual Display - G-code style line-by-line view
 ///
@@ -39,20 +40,20 @@ use crate::components::use_toast;
 pub fn ProgramVisualDisplay() -> impl IntoView {
     let ctx = use_sync_context();
     let _toast = use_toast();
+    let system_ctx = use_system_entity();
 
     // === Server-Driven State ===
     //
     // We subscribe to the full component signals and extract the first entity.
     // Using use_sync_component (returns ReadSignal) for reliable reactivity.
     let all_exec = use_sync_component::<ExecutionState>();
-    let system_marker = use_sync_component::<SystemMarker>();
     let all_control = use_sync_component::<EntityControl>();
 
     let (show_load_modal, set_show_load_modal) = signal(false);
 
-    // Find the System entity via SystemMarker
+    // Get the System entity ID from the context (provided by DesktopLayout)
     let system_entity_bits = move || -> Option<u64> {
-        system_marker.get().keys().next().copied()
+        system_ctx.entity_id.get()
     };
 
     // Check if THIS client has control of the System entity

@@ -14,6 +14,7 @@ use crate::layout::{DesktopLayout, FloatingJogControls, FloatingIOStatus, Contro
 /// Build the client type registry with all synced components.
 fn build_registry() -> Arc<ClientTypeRegistry> {
     ClientTypeRegistry::builder()
+        .register::<SystemMarker>()
         .register::<RobotPosition>()
         .register::<JointAngles>()
         .register::<RobotStatus>()

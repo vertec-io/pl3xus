@@ -12,12 +12,15 @@ But before we begin this, we should do some technical research and think about t
 
 I want you to deep dive on this and create a new research folder for it. My plan is to begin a new agent session to tackle this. You need to give instructions for how it can find all the same resources as you and double check your reasoning and logic. Also include a "start_here.md" file that I can use to give to the agent so it knows everything it needs to know to jump in and help.
 
+-- PROMPT --
+Read examples/fanuc_rmi_replica/research/active/coordinate-abstraction/start_here.md to understand the coordinate abstraction research. The preliminary research is complete - your task is to validate the findings and begin implementing Phase 1.
+
 -----------------------------------------------------------------------------------------
-Now we need to investigate changing the EntityControl system to allow us to target a specific entity for a specific message or mutation, and make the middleware handle checking whether the client has control of the target entity -- whether at the root or a child.
+As an extension of this topic, we should also investigate changing or expanding the EntityControl system to allow us to target a specific entity for a specific message or mutation, and make the middleware handle checking whether the client has control of the target entity -- whether at the root or a child.
 
 This is similar to meteorite's "send_targeted" and "authorization" concepts. I don't think pl3xus has anything like this yet. Meteorite implements an "AuthorizedNetworkData" type that systems can use instead of "NetworkData" to check authorization, which reduces boilerplate. 
 
-Meteorite -- /home/apino/dev/meteorite/
+Meteorite -- /home/apino/dev/meteorite/ and available in context, particularly in the "core" plugin.
 
 This will affect things like jogging the robot and sending motion commands.It will require some thought to apply at the library level to handle things correctly as a middleware.
 

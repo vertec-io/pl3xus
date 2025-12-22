@@ -2494,25 +2494,39 @@ where
     });
 
     // Watch for request completion
-    Effect::new(move |_| {
-        let req_state = request_state.get();
+    Effect::new({
+        let query_type = query_type.clone();
+        move |_| {
+            let req_state = request_state.get();
 
-        if req_state.is_idle() || req_state.is_loading() {
-            return;
-        }
+            if req_state.is_idle() || req_state.is_loading() {
+                return;
+            }
 
-        if let Some(ref error) = req_state.error {
-            state.update(|s| {
-                s.is_fetching = false;
-                s.error = Some(error.clone());
-            });
-        } else if let Some(ref data) = req_state.data {
-            state.update(|s| {
-                s.data = Some(data.clone());
-                s.error = None;
-                s.is_fetching = false;
-                s.is_stale = false;
-            });
+            if let Some(ref error) = req_state.error {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::log!(
+                    "[use_query_keyed] Query '{}' error: {}",
+                    query_type,
+                    error
+                );
+                state.update(|s| {
+                    s.is_fetching = false;
+                    s.error = Some(error.clone());
+                });
+            } else if let Some(ref data) = req_state.data {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::log!(
+                    "[use_query_keyed] Query '{}' received data, updating state",
+                    query_type
+                );
+                state.update(|s| {
+                    s.data = Some(data.clone());
+                    s.error = None;
+                    s.is_fetching = false;
+                    s.is_stale = false;
+                });
+            }
         }
     });
 

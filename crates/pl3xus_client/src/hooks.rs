@@ -2536,8 +2536,22 @@ where
         let do_fetch = do_fetch.clone();
         move |_| {
             let invalidations = ctx.query_invalidations.get();
+            #[cfg(target_arch = "wasm32")]
+            leptos::logging::log!(
+                "[use_query_keyed] Checking invalidations for '{}', map has {} entries: {:?}",
+                query_type,
+                invalidations.len(),
+                invalidations.keys().collect::<Vec<_>>()
+            );
             if let Some(&counter) = invalidations.get(&query_type) {
                 let last = last_invalidation.get_untracked();
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::log!(
+                    "[use_query_keyed] Query '{}' counter={}, last={}",
+                    query_type,
+                    counter,
+                    last
+                );
                 if counter > last {
                     last_invalidation.set(counter);
                     // Server invalidated this query, refetch

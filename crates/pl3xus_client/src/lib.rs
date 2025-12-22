@@ -135,7 +135,9 @@ pub use hooks::{
     use_mutation, use_mutation_targeted,
     MutationHandle, TargetedMutationHandle,
     // TanStack Query-inspired query API with server-side invalidation
-    use_query, use_query_keyed, QueryHandle, QueryState,
+    use_query, use_query_keyed, use_query_targeted, QueryHandle, QueryState,
+    // Query client for global query management
+    use_query_client, QueryClient,
 };
 
 // Deprecated hook names (for backwards compatibility)

@@ -2064,6 +2064,112 @@ where
     }
 }
 
+/// Query client for global query management.
+///
+/// Provides access to query cache operations from anywhere in the app.
+/// Use `use_query_client()` to get an instance.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_query_client;
+///
+/// let query_client = use_query_client();
+///
+/// // Invalidate all queries of a specific type
+/// query_client.invalidate::<GetRobotConfigurations>();
+///
+/// // Invalidate all queries
+/// query_client.invalidate_all();
+/// ```
+#[derive(Clone)]
+pub struct QueryClient {
+    ctx: crate::context::SyncContext,
+}
+
+impl QueryClient {
+    /// Invalidate all queries of a specific type.
+    ///
+    /// This triggers a refetch for all active queries of this type.
+    pub fn invalidate<R: pl3xus_common::RequestMessage>(&self) {
+        let query_type = std::any::type_name::<R>().to_string();
+        self.ctx.query_invalidations.update(|map| {
+            let counter = map.entry(query_type.clone()).or_insert(0);
+            *counter += 1;
+        });
+        #[cfg(target_arch = "wasm32")]
+        leptos::logging::log!(
+            "[QueryClient] Invalidated query type '{}'",
+            std::any::type_name::<R>()
+        );
+    }
+
+    /// Invalidate all queries.
+    ///
+    /// This triggers a refetch for all active queries.
+    pub fn invalidate_all(&self) {
+        self.ctx.query_invalidations.update(|map| {
+            for counter in map.values_mut() {
+                *counter += 1;
+            }
+        });
+        #[cfg(target_arch = "wasm32")]
+        leptos::logging::log!("[QueryClient] Invalidated all queries");
+    }
+
+    /// Check if a query type has any cached data.
+    pub fn has_cached_data<R: pl3xus_common::RequestMessage>(&self) -> bool {
+        let query_type = std::any::type_name::<R>().to_string();
+        let cache = self.ctx.query_cache.lock().unwrap();
+        cache.iter().any(|((qt, _), entry)| {
+            qt == &query_type && entry.state.get_untracked().data.is_some()
+        })
+    }
+
+    /// Clear all cached query data.
+    ///
+    /// This removes all cached data but does not trigger refetches.
+    /// Use `invalidate_all()` to also trigger refetches.
+    pub fn clear_cache(&self) {
+        let mut cache = self.ctx.query_cache.lock().unwrap();
+        for (_, entry) in cache.iter_mut() {
+            entry.state.update(|s| {
+                s.data = None;
+                s.error = None;
+                s.is_fetching = false;
+                s.is_stale = false;
+            });
+        }
+        #[cfg(target_arch = "wasm32")]
+        leptos::logging::log!("[QueryClient] Cleared all query cache");
+    }
+}
+
+/// Hook to get the query client for global query management.
+///
+/// The query client provides methods to invalidate queries, clear cache,
+/// and check cache status from anywhere in the app.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_query_client;
+///
+/// let query_client = use_query_client();
+///
+/// // After a mutation, invalidate related queries
+/// let create_config = use_mutation::<CreateConfiguration>(move |result| {
+///     if result.is_ok() {
+///         // Manually invalidate (though server-side invalidation is preferred)
+///         query_client.invalidate::<GetRobotConfigurations>();
+///     }
+/// });
+/// ```
+pub fn use_query_client() -> QueryClient {
+    let ctx = use_sync_context();
+    QueryClient { ctx }
+}
+
 /// Hook for fetching data from the server with automatic caching and server-side invalidation.
 ///
 /// This is a TanStack Query-inspired API for read operations. Unlike mutations, queries:
@@ -2397,6 +2503,202 @@ where
                     do_fetch();
                 }
             }
+        }
+    });
+
+    QueryHandle {
+        refetch_fn,
+        state: state.into(),
+    }
+}
+
+/// Hook for fetching entity-specific data from the server.
+///
+/// Similar to `use_query`, but for queries that target a specific entity.
+/// The query is sent to a specific entity ID and the response is cached
+/// per entity.
+///
+/// # Server-Side Invalidation
+///
+/// When the server sends a `QueryInvalidation` message for this query type,
+/// the query automatically refetches. This ensures the client always reflects
+/// the true server state.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_query_targeted;
+///
+/// #[component]
+/// fn RobotDetails(robot_id: u64) -> impl IntoView {
+///     // Fetch robot-specific configuration
+///     let config = use_query_targeted(robot_id, GetRobotConfig);
+///
+///     view! {
+///         <Show when=move || config.is_loading() fallback=|| ()>
+///             <span>"Loading..."</span>
+///         </Show>
+///         <Show when=move || config.is_success() fallback=|| ()>
+///             <div>{config.data().map(|c| c.name.clone())}</div>
+///         </Show>
+///     }
+/// }
+/// ```
+pub fn use_query_targeted<R>(entity_id: u64, request: R) -> QueryHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+    R::ResponseMessage: serde::de::DeserializeOwned,
+{
+    let ctx = use_sync_context();
+    let query_type = std::any::type_name::<R>().to_string();
+
+    // Generate a query key that includes the entity ID
+    let query_key = format!(
+        "entity:{}:{}",
+        entity_id,
+        bincode::serde::encode_to_vec(&request, bincode::config::standard())
+            .map(|bytes| bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>())
+            .unwrap_or_else(|_| "default".to_string())
+    );
+
+    // Get or create the shared cache entry
+    let cache_state = ctx.get_or_create_query_cache(&query_type, &query_key);
+
+    // The typed query state - derived from the cache
+    let state = RwSignal::new(QueryState::<R::ResponseMessage>::default());
+
+    // Use the underlying targeted request hook for actual fetching
+    let (send, request_state) = use_targeted_request::<R>();
+
+    // Clone request for use in closures
+    let request_clone = request.clone();
+
+    // Refetch function - updates both cache and local state
+    let do_fetch = {
+        let cache_state = cache_state.clone();
+        move || {
+            // Update cache state
+            cache_state.update(|s| {
+                s.is_fetching = true;
+                if s.data.is_some() {
+                    s.is_stale = true;
+                }
+            });
+            // Update local typed state
+            state.update(|s| {
+                s.is_fetching = true;
+                if s.data.is_some() {
+                    s.is_stale = true;
+                }
+            });
+            send(entity_id, request_clone.clone());
+        }
+    };
+
+    // Store refetch function
+    let refetch_fn = StoredValue::new(Box::new(do_fetch.clone()) as Box<dyn Fn() + Send + Sync>);
+
+    // Initial fetch or restore from cache
+    Effect::new({
+        let do_fetch = do_fetch.clone();
+        let cache_state = cache_state.clone();
+        move |_| {
+            let cached = cache_state.get_untracked();
+            // If cache has data, restore it to local state
+            if let Some(ref bytes) = cached.data {
+                if let Ok((data, _)) = bincode::serde::decode_from_slice::<R::ResponseMessage, _>(
+                    bytes,
+                    bincode::config::standard(),
+                ) {
+                    state.update(|s| {
+                        s.data = Some(data);
+                        s.error = cached.error.clone();
+                        s.is_fetching = cached.is_fetching;
+                        s.is_stale = cached.is_stale;
+                    });
+                    #[cfg(target_arch = "wasm32")]
+                    leptos::logging::log!(
+                        "[use_query_targeted] Restored '{}' for entity {} from cache",
+                        std::any::type_name::<R>(),
+                        entity_id
+                    );
+                    return;
+                }
+            }
+            // No cached data, fetch if not already fetching
+            if !cached.is_fetching {
+                do_fetch();
+            }
+        }
+    });
+
+    // Watch for request completion - update both cache and local state
+    Effect::new({
+        let cache_state = cache_state.clone();
+        move |_| {
+            let req_state = request_state.get();
+
+            if req_state.is_idle() || req_state.is_loading() {
+                return;
+            }
+
+            if let Some(ref error) = req_state.error {
+                cache_state.update(|s| {
+                    s.is_fetching = false;
+                    s.error = Some(error.clone());
+                });
+                state.update(|s| {
+                    s.is_fetching = false;
+                    s.error = Some(error.clone());
+                });
+            } else if let Some(ref data) = req_state.data {
+                // Serialize data to cache
+                if let Ok(bytes) =
+                    bincode::serde::encode_to_vec(data, bincode::config::standard())
+                {
+                    cache_state.update(|s| {
+                        s.data = Some(bytes);
+                        s.error = None;
+                        s.is_fetching = false;
+                        s.is_stale = false;
+                    });
+                }
+                state.update(|s| {
+                    s.data = Some(data.clone());
+                    s.error = None;
+                    s.is_fetching = false;
+                    s.is_stale = false;
+                });
+            }
+        }
+    });
+
+    // Watch for server-side invalidation
+    Effect::new({
+        let ctx = ctx.clone();
+        let query_type = query_type.clone();
+        let query_key = query_key.clone();
+        let do_fetch = do_fetch.clone();
+        move |_| {
+            // Check if this query needs refetching due to invalidation
+            if ctx.query_needs_refetch(&query_type, &query_key) {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::log!(
+                    "[use_query_targeted] Query '{}' for entity {} invalidated, refetching...",
+                    query_type,
+                    entity_id
+                );
+                do_fetch();
+            }
+        }
+    });
+
+    // Cleanup on unmount - release cache reference
+    on_cleanup({
+        let query_type = query_type.clone();
+        let query_key = query_key.clone();
+        move || {
+            ctx.release_query_cache(&query_type, &query_key);
         }
     });
 

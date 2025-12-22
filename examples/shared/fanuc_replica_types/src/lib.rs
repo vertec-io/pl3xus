@@ -465,7 +465,7 @@ pub struct RobotConnection {
 }
 
 /// Named configuration for a robot (frame, tool, arm config).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RobotConfiguration {
     pub id: i64,
     pub robot_connection_id: i64,
@@ -652,7 +652,7 @@ pub struct ExecuteProgram {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StopExecution;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ListPrograms;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -688,7 +688,7 @@ impl RequestMessage for ListPrograms {
 }
 
 /// Request to get a single program with all its instructions.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GetProgram {
     pub program_id: i64,
 }
@@ -828,7 +828,7 @@ impl ErrorResponse for UnloadProgram {
 }
 
 /// Request to list all saved robot connections from the database.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ListRobotConnections;
 
 impl RequestMessage for ListRobotConnections {

@@ -14,14 +14,13 @@ mod menus;
 pub use modals::*;
 
 use leptos::prelude::*;
-use pl3xus_client::{use_sync_context, use_request, ConnectionReadyState};
+use pl3xus_client::{use_query, use_query_keyed};
 use fanuc_replica_types::{ListPrograms, GetProgram, ProgramDetail};
 use crate::layout::LayoutContext;
 
 /// Programs view (toolpath creation and editing).
 #[component]
 pub fn ProgramsView() -> impl IntoView {
-    let ctx = use_sync_context();
     let layout_ctx = use_context::<LayoutContext>().expect("LayoutContext not found");
 
     let (show_new_program, set_show_new_program) = signal(false);
@@ -34,51 +33,32 @@ pub fn ProgramsView() -> impl IntoView {
     let (show_file_menu, set_show_file_menu) = signal(false);
     let (show_view_menu, set_show_view_menu) = signal(false);
 
-    // Request hooks
-    let (list_programs, programs_state) = use_request::<ListPrograms>();
-    let (get_program, get_program_state) = use_request::<GetProgram>();
+    // Query hooks - auto-fetch on mount, auto-refetch on server invalidation
+    let programs_query = use_query::<ListPrograms>(ListPrograms);
+
+    // Keyed query for selected program - fetches when selected_program_id changes
+    let program_query = use_query_keyed::<GetProgram, _>(move || {
+        selected_program_id.get().map(|id| GetProgram { program_id: id })
+    });
 
     // Current program state - use ProgramDetail for full editing capability
     let current_program: RwSignal<Option<ProgramDetail>> = RwSignal::new(None);
 
-    // Watch for get_program response to update current_program
+    // Watch for program query response to update current_program
     Effect::new(move |_| {
-        if let Some(response) = get_program_state.get().data {
-            if let Some(prog) = response.program {
+        if let Some(response) = program_query.data() {
+            if let Some(prog) = response.program.clone() {
                 current_program.set(Some(prog));
             }
         }
     });
 
-    // Guard to prevent infinite loop
-    let (has_loaded, set_has_loaded) = signal(false);
-
-    // Load programs when WebSocket is open - wait for connection before sending request
-    {
-        let list_programs = list_programs.clone();
-        let ready_state = ctx.ready_state;
-        Effect::new(move |_| {
-            // Only send request when WebSocket is open AND we haven't loaded yet
-            if ready_state.get() == ConnectionReadyState::Open && !has_loaded.get_untracked() {
-                set_has_loaded.set(true);
-                list_programs(ListPrograms);
-            }
-        });
-    }
-
-    // Derive programs from request state
+    // Derive programs from query data
     let programs = Memo::new(move |_| {
-        programs_state.get().data
-            .map(|r| r.programs)
+        programs_query.data()
+            .map(|r| r.programs.clone())
             .unwrap_or_default()
     });
-
-    // Clone list_programs and get_program for use in closures
-    let list_programs_1 = list_programs.clone();
-    let list_programs_2 = list_programs.clone();
-    let list_programs_3 = list_programs;
-    let get_program_1 = get_program.clone();
-    let get_program_3 = get_program;
 
     view! {
         <div class="h-full flex flex-col">
@@ -139,19 +119,16 @@ pub fn ProgramsView() -> impl IntoView {
             </div>
 
             // Modals
+            // Note: With server-side invalidation, queries auto-refetch when server broadcasts
+            // QueryInvalidation. No manual refetch needed - just set the selected ID.
             <Show when=move || show_new_program.get()>
                 <NewProgramModal
                     on_close=move || set_show_new_program.set(false)
-                    on_created={
-                        let list_programs = list_programs_1.clone();
-                        let get_program = get_program_1.clone();
-                        move |id| {
-                            set_show_new_program.set(false);
-                            set_selected_program_id.set(Some(id));
-                            // Fetch the newly created program to update current_program
-                            get_program(GetProgram { program_id: id });
-                            list_programs(ListPrograms);
-                        }
+                    on_created=move |id| {
+                        set_show_new_program.set(false);
+                        // Setting selected_program_id triggers program_query to fetch the new program
+                        set_selected_program_id.set(Some(id));
+                        // Server will broadcast QueryInvalidation for ListPrograms
                     }
                 />
             </Show>
@@ -171,38 +148,29 @@ pub fn ProgramsView() -> impl IntoView {
             <Show when=move || show_save_as_modal.get()>
                 <SaveAsProgramModal
                     on_close=move || set_show_save_as_modal.set(false)
-                    on_saved={
-                        let list_programs = list_programs_2.clone();
-                        move |id| {
-                            set_show_save_as_modal.set(false);
-                            set_selected_program_id.set(Some(id));
-                            list_programs(ListPrograms);
-                        }
+                    on_saved=move |id| {
+                        set_show_save_as_modal.set(false);
+                        set_selected_program_id.set(Some(id));
+                        // Server will broadcast QueryInvalidation for ListPrograms
                     }
                 />
             </Show>
 
             <Show when=move || show_csv_upload.get() && selected_program_id.get().is_some()>
-                {
-                    let list_programs = list_programs_3.clone();
-                    let get_program = get_program_3.clone();
-                    move || selected_program_id.get().map(|prog_id| {
-                        let list_programs = list_programs.clone();
-                        let get_program = get_program.clone();
-                        view! {
-                            <CSVUploadModal
-                                program_id=prog_id
-                                on_close=move || set_show_csv_upload.set(false)
-                                on_uploaded=move || {
-                                    set_show_csv_upload.set(false);
-                                    list_programs(ListPrograms);
-                                    // Re-fetch the current program to get updated instructions
-                                    get_program(GetProgram { program_id: prog_id });
-                                }
-                            />
-                        }
-                    })
-                }
+                {move || selected_program_id.get().map(|prog_id| {
+                    view! {
+                        <CSVUploadModal
+                            program_id=prog_id
+                            on_close=move || set_show_csv_upload.set(false)
+                            on_uploaded=move || {
+                                set_show_csv_upload.set(false);
+                                // Server will broadcast QueryInvalidation for ListPrograms and GetProgram
+                                // program_query will auto-refetch since selected_program_id hasn't changed
+                                // but the server invalidated the query
+                            }
+                        />
+                    }
+                })}
             </Show>
         </div>
     }

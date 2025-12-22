@@ -7,7 +7,7 @@
 use leptos::prelude::*;
 use leptos::web_sys;
 
-use pl3xus_client::{use_request, use_mutation, use_query_keyed, use_sync_context, ConnectionReadyState};
+use pl3xus_client::{use_mutation, use_query, use_query_keyed};
 use crate::components::use_toast;
 use fanuc_replica_types::*;
 use crate::components::RobotCreationWizard;
@@ -15,8 +15,6 @@ use crate::components::RobotCreationWizard;
 /// Settings view with two-panel layout.
 #[component]
 pub fn SettingsView() -> impl IntoView {
-    // Get sync context for WebSocket state
-    let ctx = use_sync_context();
 
     // Selected robot for editing
     let (selected_robot_id, set_selected_robot_id) = signal::<Option<i64>>(None);
@@ -26,35 +24,14 @@ pub fn SettingsView() -> impl IntoView {
     let (show_delete_confirm, set_show_delete_confirm) = signal(false);
     let (robot_to_delete, set_robot_to_delete) = signal::<Option<(i64, String)>>(None);
 
-    // Fetch robots
-    let (fetch_robots, robots_state) = use_request::<ListRobotConnections>();
-
-    // Track if we've loaded the robots
-    let (has_loaded, set_has_loaded) = signal(false);
-
-    // Load robot connections when WebSocket is open (only once)
-    {
-        let fetch_robots = fetch_robots.clone();
-        let ready_state = ctx.ready_state;
-        Effect::new(move |_| {
-            // Only fetch when WebSocket is open AND we haven't loaded yet
-            if ready_state.get() == ConnectionReadyState::Open && !has_loaded.get_untracked() {
-                set_has_loaded.set(true);
-                fetch_robots(ListRobotConnections);
-            }
-        });
-    }
+    // Query for robot connections - auto-fetches on mount, auto-refetches on server invalidation
+    let robots_query = use_query::<ListRobotConnections>(ListRobotConnections);
 
     // Get selected robot details
     let selected_robot = move || {
         let id = selected_robot_id.get()?;
-        robots_state.get().data.as_ref()?.connections.iter().find(|r| r.id == id).cloned()
+        robots_query.data()?.connections.iter().find(|r| r.id == id).cloned()
     };
-
-    // Clone for closures
-    let fetch_robots_for_settings = fetch_robots.clone();
-    let fetch_robots_for_wizard = fetch_robots.clone();
-    let fetch_robots_for_delete = fetch_robots.clone();
 
     view! {
         <div class="h-full flex flex-col">
@@ -73,7 +50,7 @@ pub fn SettingsView() -> impl IntoView {
             <div class="flex-1 p-2 flex gap-2 min-h-0">
                 // Left sidebar: Robot browser + System settings
                 <RobotBrowser
-                    robots_state=robots_state
+                    robots_query=robots_query
                     selected_robot_id=selected_robot_id
                     set_selected_robot_id=set_selected_robot_id
                     set_show_add_robot=set_show_add_robot
@@ -85,7 +62,6 @@ pub fn SettingsView() -> impl IntoView {
                 <RobotSettingsPanel
                     selected_robot=selected_robot
                     selected_robot_id=selected_robot_id
-                    fetch_robots=fetch_robots_for_settings
                 />
             </div>
 
@@ -93,33 +69,24 @@ pub fn SettingsView() -> impl IntoView {
             <Show when=move || show_add_robot.get()>
                 <RobotCreationWizard
                     on_close=move || set_show_add_robot.set(false)
-                    on_created={
-                        let fetch_robots = fetch_robots_for_wizard.clone();
-                        move |id| {
-                            set_show_add_robot.set(false);
-                            set_selected_robot_id.set(Some(id));
-                            fetch_robots(ListRobotConnections);
-                        }
+                    on_created=move |id| {
+                        set_show_add_robot.set(false);
+                        set_selected_robot_id.set(Some(id));
+                        // No manual refetch needed - server broadcasts QueryInvalidation
                     }
                 />
             </Show>
 
             // Delete Confirmation Modal
-            {
-                let fetch_robots = fetch_robots_for_delete.clone();
-                view! {
-                    <Show when=move || show_delete_confirm.get()>
-                        <DeleteConfirmModal
-                            robot_to_delete=robot_to_delete
-                            set_show_delete_confirm=set_show_delete_confirm
-                            set_robot_to_delete=set_robot_to_delete
-                            set_selected_robot_id=set_selected_robot_id
-                            selected_robot_id=selected_robot_id
-                            fetch_robots=fetch_robots.clone()
-                        />
-                    </Show>
-                }
-            }
+            <Show when=move || show_delete_confirm.get()>
+                <DeleteConfirmModal
+                    robot_to_delete=robot_to_delete
+                    set_show_delete_confirm=set_show_delete_confirm
+                    set_robot_to_delete=set_robot_to_delete
+                    set_selected_robot_id=set_selected_robot_id
+                    selected_robot_id=selected_robot_id
+                />
+            </Show>
         </div>
     }
 }
@@ -127,7 +94,7 @@ pub fn SettingsView() -> impl IntoView {
 /// Robot browser - left sidebar with list of saved robots and system settings.
 #[component]
 fn RobotBrowser(
-    robots_state: Signal<pl3xus_client::UseRequestState<RobotConnectionsResponse>>,
+    robots_query: pl3xus_client::QueryHandle<ListRobotConnections>,
     selected_robot_id: ReadSignal<Option<i64>>,
     set_selected_robot_id: WriteSignal<Option<i64>>,
     set_show_add_robot: WriteSignal<bool>,
@@ -152,12 +119,11 @@ fn RobotBrowser(
                 // Robot list
                 <div class="flex-1 overflow-y-auto p-1.5 space-y-1">
                     {move || {
-                        let state = robots_state.get();
-                        if state.is_loading() {
+                        if robots_query.is_loading() && robots_query.data().is_none() {
                             view! {
                                 <div class="text-[9px] text-[#555555] text-center py-4">"Loading..."</div>
                             }.into_any()
-                        } else if let Some(data) = state.data.as_ref() {
+                        } else if let Some(data) = robots_query.data() {
                             if data.connections.is_empty() {
                                 view! {
                                     <div class="text-[9px] text-[#555555] text-center py-4">
@@ -302,8 +268,9 @@ fn SystemSettingsPanel() -> impl IntoView {
 fn RobotSettingsPanel(
     selected_robot: impl Fn() -> Option<RobotConnection> + Send + Sync + 'static,
     selected_robot_id: ReadSignal<Option<i64>>,
-    fetch_robots: impl Fn(ListRobotConnections) + Clone + Send + Sync + 'static,
 ) -> impl IntoView {
+    let toast = use_toast();
+
     // Form fields for connection details
     let (edit_name, set_edit_name) = signal(String::new());
     let (edit_desc, set_edit_desc) = signal(String::new());
@@ -349,8 +316,18 @@ fn RobotSettingsPanel(
     let (config_turn6, set_config_turn6) = signal("0".to_string());
     let (config_is_default, set_config_is_default) = signal(false);
 
-    // Update request
-    let (update_robot, _update_state) = use_request::<UpdateRobotConnection>();
+    // Update robot mutation - server-side invalidation handles refetch
+    let update_robot = use_mutation::<UpdateRobotConnection>(move |result| {
+        match result {
+            Ok(r) if r.success => {
+                set_save_status.set(Some("✓ Saved".to_string()));
+                set_has_changes.set(false);
+                // No manual refetch needed - server broadcasts QueryInvalidation
+            }
+            Ok(r) => toast.error(format!("Update failed: {}", r.error.as_deref().unwrap_or(""))),
+            Err(e) => toast.error(format!("Error: {e}")),
+        }
+    });
 
     // Use query for configurations - auto-refetches when robot changes or server invalidates
     let configs_query = use_query_keyed::<GetRobotConfigurations, _>(move || {
@@ -364,8 +341,6 @@ fn RobotSettingsPanel(
     let (is_saving_config, set_is_saving_config) = signal(false);
 
     // Store in StoredValue so they can be accessed inside closures
-    let fetch_robots = StoredValue::new(fetch_robots);
-    let update_robot = StoredValue::new(update_robot);
     let selected_robot = StoredValue::new(selected_robot);
 
     // Configuration CRUD mutations with handlers
@@ -499,16 +474,14 @@ fn RobotSettingsPanel(
                                     disabled=move || !has_changes.get()
                                     on:click=move |_| {
                                         let port: i32 = edit_port.get().parse().unwrap_or(60008);
-                                        update_robot.with_value(|f| f(UpdateRobotConnection {
+                                        update_robot.send(UpdateRobotConnection {
                                             id: robot_id,
                                             name: Some(edit_name.get()),
                                             description: Some(edit_desc.get()),
                                             ip_address: Some(edit_ip.get()),
                                             port: Some(port),
-                                        }));
-                                        set_has_changes.set(false);
-                                        set_save_status.set(Some("✓ Saved".to_string()));
-                                        fetch_robots.with_value(|f| f(ListRobotConnections));
+                                        });
+                                        // Status update handled in mutation callback
                                     }
                                 >
                                     "Save Changes"
@@ -1248,13 +1221,12 @@ fn DeleteConfirmModal(
     set_robot_to_delete: WriteSignal<Option<(i64, String)>>,
     set_selected_robot_id: WriteSignal<Option<i64>>,
     selected_robot_id: ReadSignal<Option<i64>>,
-    fetch_robots: impl Fn(ListRobotConnections) + Clone + Send + Sync + 'static,
 ) -> impl IntoView {
     let (is_deleting, set_is_deleting) = signal(false);
     let toast = use_toast();
-    let fetch_robots_stored = StoredValue::new(fetch_robots.clone());
 
     // DeleteRobotConnection with handler - MutationHandle is Copy
+    // Server-side invalidation handles refetch - no manual refetch needed
     let delete_robot = use_mutation::<DeleteRobotConnection>(move |result| {
         set_is_deleting.set(false);
         set_show_delete_confirm.set(false);
@@ -1262,7 +1234,7 @@ fn DeleteConfirmModal(
         match result {
             Ok(r) if r.success => {
                 toast.success("Robot deleted");
-                fetch_robots_stored.with_value(|f| f(ListRobotConnections));
+                // No manual refetch needed - server broadcasts QueryInvalidation
             }
             Ok(r) => toast.error(format!("Delete failed: {}", r.error.as_deref().unwrap_or(""))),
             Err(e) => toast.error(format!("Error: {e}")),

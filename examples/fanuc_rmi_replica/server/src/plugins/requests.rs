@@ -186,6 +186,7 @@ fn handle_get_robot_configurations(
 fn handle_create_robot_connection(
     mut requests: MessageReader<Request<CreateRobotConnection>>,
     db: Option<Res<DatabaseResource>>,
+    net: Res<Network<WebSocketProvider>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -198,6 +199,11 @@ fn handle_create_robot_connection(
         let response = match result {
             Ok(robot_id) => {
                 info!("✅ Created robot connection id={}", robot_id);
+                // Invalidate ListRobotConnections queries on all clients
+                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
+                    query_types: vec!["ListRobotConnections".to_string()],
+                    keys: None,
+                }));
                 CreateRobotConnectionResponse {
                     robot_id,
                     success: true,
@@ -224,6 +230,7 @@ fn handle_create_robot_connection(
 fn handle_update_robot_connection(
     mut requests: MessageReader<Request<UpdateRobotConnection>>,
     db: Option<Res<DatabaseResource>>,
+    net: Res<Network<WebSocketProvider>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -236,6 +243,11 @@ fn handle_update_robot_connection(
         let response = match result {
             Ok(()) => {
                 info!("✅ Updated robot connection id={}", inner.id);
+                // Invalidate ListRobotConnections queries on all clients
+                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
+                    query_types: vec!["ListRobotConnections".to_string()],
+                    keys: None,
+                }));
                 UpdateRobotConnectionResponse {
                     success: true,
                     error: None,
@@ -260,6 +272,7 @@ fn handle_update_robot_connection(
 fn handle_delete_robot_connection(
     mut requests: MessageReader<Request<DeleteRobotConnection>>,
     db: Option<Res<DatabaseResource>>,
+    net: Res<Network<WebSocketProvider>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -272,6 +285,11 @@ fn handle_delete_robot_connection(
         let response = match result {
             Ok(()) => {
                 info!("✅ Deleted robot connection id={}", inner.id);
+                // Invalidate ListRobotConnections queries on all clients
+                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
+                    query_types: vec!["ListRobotConnections".to_string()],
+                    keys: None,
+                }));
                 DeleteRobotConnectionResponse {
                     success: true,
                     error: None,
@@ -631,6 +649,7 @@ fn handle_get_program(
 fn handle_create_program(
     mut requests: MessageReader<Request<CreateProgram>>,
     db: Option<Res<DatabaseResource>>,
+    net: Res<Network<WebSocketProvider>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -643,6 +662,11 @@ fn handle_create_program(
         let response = match result {
             Ok(program_id) => {
                 info!("✅ Created program id={}", program_id);
+                // Invalidate ListPrograms queries on all clients
+                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
+                    query_types: vec!["ListPrograms".to_string()],
+                    keys: None,
+                }));
                 CreateProgramResponse {
                     success: true,
                     program_id: Some(program_id),
@@ -669,6 +693,7 @@ fn handle_create_program(
 fn handle_delete_program(
     mut requests: MessageReader<Request<DeleteProgram>>,
     db: Option<Res<DatabaseResource>>,
+    net: Res<Network<WebSocketProvider>>,
 ) {
     for request in requests.read() {
         let program_id = request.get_request().program_id;
@@ -681,6 +706,11 @@ fn handle_delete_program(
         let response = match result {
             Ok(()) => {
                 info!("✅ Deleted program id={}", program_id);
+                // Invalidate ListPrograms and GetProgram queries on all clients
+                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
+                    query_types: vec!["ListPrograms".to_string(), "GetProgram".to_string()],
+                    keys: None,
+                }));
                 DeleteProgramResponse {
                     success: true,
                     error: None,
@@ -705,6 +735,7 @@ fn handle_delete_program(
 fn handle_update_program_settings(
     mut requests: MessageReader<Request<UpdateProgramSettings>>,
     db: Option<Res<DatabaseResource>>,
+    net: Res<Network<WebSocketProvider>>,
 ) {
     for request in requests.read() {
         let req = request.get_request();
@@ -739,6 +770,11 @@ fn handle_update_program_settings(
         let response = match result {
             Ok(()) => {
                 info!("✅ Updated program settings for id={}", req.program_id);
+                // Invalidate GetProgram queries for this specific program
+                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
+                    query_types: vec!["GetProgram".to_string()],
+                    keys: Some(vec![req.program_id.to_string()]),
+                }));
                 UpdateProgramSettingsResponse {
                     success: true,
                     error: None,
@@ -763,6 +799,7 @@ fn handle_update_program_settings(
 fn handle_upload_csv(
     mut requests: MessageReader<Request<UploadCsv>>,
     db: Option<Res<DatabaseResource>>,
+    net: Res<Network<WebSocketProvider>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -773,6 +810,11 @@ fn handle_upload_csv(
         let response = match result {
             Ok(count) => {
                 info!("✅ Imported {} lines to program id={}", count, inner.program_id);
+                // Invalidate GetProgram queries for this specific program
+                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
+                    query_types: vec!["GetProgram".to_string()],
+                    keys: Some(vec![inner.program_id.to_string()]),
+                }));
                 UploadCsvResponse {
                     success: true,
                     lines_imported: Some(count),

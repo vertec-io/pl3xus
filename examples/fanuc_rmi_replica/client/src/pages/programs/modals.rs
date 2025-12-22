@@ -3,7 +3,7 @@
 use leptos::prelude::*;
 use leptos::either::Either;
 use leptos::web_sys;
-use pl3xus_client::{use_request, use_request_with_handler};
+use pl3xus_client::{use_mutation, use_query_keyed};
 use fanuc_replica_types::{CreateProgram, UploadCsv, GetProgram, ProgramDetail};
 
 /// New Program Modal - Simple modal to create a program with name and description
@@ -15,11 +15,9 @@ pub fn NewProgramModal(
     let (program_name, set_program_name) = signal("".to_string());
     let (description, set_description) = signal("".to_string());
     let (error_message, set_error_message) = signal::<Option<String>>(None);
-    let (is_creating, set_is_creating) = signal(false);
 
-    // CreateProgram with handler
-    let create_program = use_request_with_handler::<CreateProgram, _>(move |result| {
-        set_is_creating.set(false);
+    // CreateProgram mutation with handler
+    let create_program = use_mutation::<CreateProgram>(move |result| {
         match result {
             Ok(r) if r.success => {
                 if let Some(program_id) = r.program_id {
@@ -109,24 +107,23 @@ pub fn NewProgramModal(
                     <button
                         class={move || format!(
                             "text-[10px] px-3 py-1.5 rounded {}",
-                            if !program_name.get().is_empty() && !is_creating.get() {
+                            if !program_name.get().is_empty() && !create_program.is_loading() {
                                 "bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] hover:bg-[#22c55e30]"
                             } else {
                                 "bg-[#111111] border border-[#ffffff08] text-[#555555] cursor-not-allowed"
                             }
                         )}
-                        disabled=move || program_name.get().is_empty() || is_creating.get()
+                        disabled=move || program_name.get().is_empty() || create_program.is_loading()
                         on:click=move |_| {
-                            set_is_creating.set(true);
                             let name = program_name.get();
                             let desc = description.get();
-                            create_program(CreateProgram {
+                            create_program.send(CreateProgram {
                                 name,
                                 description: if desc.is_empty() { None } else { Some(desc) },
                             });
                         }
                     >
-                        {move || if is_creating.get() { "Creating..." } else { "Create Program" }}
+                        {move || if create_program.is_loading() { "Creating..." } else { "Create Program" }}
                     </button>
                 </div>
             </div>
@@ -142,36 +139,34 @@ pub fn OpenProgramModal(
     on_selected: impl Fn(ProgramDetail) + 'static + Clone + Send,
 ) -> impl IntoView {
     let (selected_id, set_selected_id) = signal::<Option<i64>>(None);
-    let (loading, set_loading) = signal(false);
-    let (has_processed, set_has_processed) = signal(false);
+    // Trigger signal - when set to Some(id), the query will fetch that program
+    let (fetch_program_id, set_fetch_program_id) = signal::<Option<i64>>(None);
 
-    // Request hook for fetching full program data
-    let (get_program, get_program_state) = use_request::<GetProgram>();
+    // Query for program - only fetches when fetch_program_id is Some
+    let program_query = use_query_keyed::<GetProgram, _>(move || {
+        fetch_program_id.get().map(|id| GetProgram { program_id: id })
+    });
 
     let on_close_clone = on_close.clone();
 
-    // Watch for GetProgram response
+    // Watch for query response
     let on_selected_clone = on_selected.clone();
     let on_close_for_effect = on_close.clone();
     Effect::new(move |_| {
-        let state = get_program_state.get();
-        leptos::logging::log!("[OpenProgramModal] Effect triggered - is_loading: {}, has_data: {}, has_error: {:?}, has_processed: {}",
-            state.is_loading, state.data.is_some(), state.error, has_processed.get_untracked());
-
-        if has_processed.get_untracked() {
+        // Only process when we have data and we're not loading
+        if program_query.is_loading() {
             return;
         }
-        if let Some(response) = state.data {
-            leptos::logging::log!("[OpenProgramModal] Got response - program: {:?}", response.program.as_ref().map(|p| &p.name));
-            set_has_processed.set(true);
-            set_loading.set(false);
-            if let Some(program_detail) = response.program {
+        if let Some(response) = program_query.data() {
+            if let Some(program_detail) = response.program.clone() {
                 // Pass the full ProgramDetail directly
                 on_selected_clone(program_detail);
             } else {
                 // Program not found, close modal
                 on_close_for_effect();
             }
+            // Reset trigger to prevent re-processing
+            set_fetch_program_id.set(None);
         }
     });
 
@@ -250,7 +245,7 @@ pub fn OpenProgramModal(
                     <button
                         class={move || format!(
                             "text-[10px] px-3 py-1.5 rounded {}",
-                            if loading.get() {
+                            if program_query.is_loading() {
                                 "bg-[#111111] border border-[#ffffff08] text-[#555555] cursor-wait"
                             } else if selected_id.get().is_some() {
                                 "bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] hover:bg-[#00d9ff30]"
@@ -258,26 +253,15 @@ pub fn OpenProgramModal(
                                 "bg-[#111111] border border-[#ffffff08] text-[#555555] cursor-not-allowed"
                             }
                         )}
-                        disabled=move || selected_id.get().is_none() || loading.get()
-                        on:click={
-                            let get_program = get_program.clone();
-                            move |ev| {
-                                leptos::logging::log!("[OpenProgramModal] Open button clicked! Event: {:?}", ev.type_());
-                                let sel_id = selected_id.get();
-                                leptos::logging::log!("[OpenProgramModal] selected_id = {:?}", sel_id);
-                                if let Some(id) = sel_id {
-                                    leptos::logging::log!("[OpenProgramModal] Calling get_program with id={}", id);
-                                    set_loading.set(true);
-                                    set_has_processed.set(false);
-                                    get_program(GetProgram { program_id: id });
-                                    leptos::logging::log!("[OpenProgramModal] get_program called!");
-                                } else {
-                                    leptos::logging::log!("[OpenProgramModal] No program selected!");
-                                }
+                        disabled=move || selected_id.get().is_none() || program_query.is_loading()
+                        on:click=move |_| {
+                            if let Some(id) = selected_id.get() {
+                                // Setting fetch_program_id triggers the query
+                                set_fetch_program_id.set(Some(id));
                             }
                         }
                     >
-                        {move || if loading.get() { "Loading..." } else { "Open" }}
+                        {move || if program_query.is_loading() { "Loading..." } else { "Open" }}
                     </button>
                 </div>
             </div>
@@ -369,12 +353,10 @@ pub fn CSVUploadModal(
     let (file_name, set_file_name) = signal::<Option<String>>(None);
     let (csv_content, set_csv_content) = signal::<Option<String>>(None);
     let (error_message, set_error_message) = signal::<Option<String>>(None);
-    let (is_uploading, set_is_uploading) = signal(false);
     let on_close_clone = on_close.clone();
 
-    // UploadCsv with handler
-    let upload_csv = use_request_with_handler::<UploadCsv, _>(move |result| {
-        set_is_uploading.set(false);
+    // UploadCsv mutation with handler
+    let upload_csv = use_mutation::<UploadCsv>(move |result| {
         match result {
             Ok(r) if r.success => on_uploaded(),
             Ok(r) => set_error_message.set(r.error.clone()),
@@ -474,17 +456,16 @@ pub fn CSVUploadModal(
                     <button
                         class={move || format!(
                             "text-[10px] px-3 py-1.5 rounded {}",
-                            if csv_content.get().is_some() && !is_uploading.get() {
+                            if csv_content.get().is_some() && !upload_csv.is_loading() {
                                 "bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] hover:bg-[#22c55e30]"
                             } else {
                                 "bg-[#111111] border border-[#ffffff08] text-[#555555] cursor-not-allowed"
                             }
                         )}
-                        disabled=move || csv_content.get().is_none() || is_uploading.get()
+                        disabled=move || csv_content.get().is_none() || upload_csv.is_loading()
                         on:click=move |_| {
                             if let Some(content) = csv_content.get() {
-                                set_is_uploading.set(true);
-                                upload_csv(UploadCsv {
+                                upload_csv.send(UploadCsv {
                                     program_id,
                                     csv_content: content,
                                     start_position: None,
@@ -492,7 +473,7 @@ pub fn CSVUploadModal(
                             }
                         }
                     >
-                        {move || if is_uploading.get() { "Uploading..." } else { "Upload" }}
+                        {move || if upload_csv.is_loading() { "Uploading..." } else { "Upload" }}
                     </button>
                 </div>
             </div>

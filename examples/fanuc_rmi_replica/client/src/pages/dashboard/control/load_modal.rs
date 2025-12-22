@@ -6,7 +6,7 @@
 //! synced ExecutionState.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_request, use_mutation};
+use pl3xus_client::{use_query, use_mutation};
 use fanuc_replica_types::*;
 use crate::components::{use_toast, ToastType};
 
@@ -22,9 +22,11 @@ where
     F: Fn() + Clone + 'static,
 {
     let toast = use_toast();
-    let (list_programs, programs_state) = use_request::<ListPrograms>();
+
+    // Query for programs - auto-fetches on mount, auto-refetches on server invalidation
+    let programs_query = use_query::<ListPrograms>(ListPrograms);
+
     let (selected_id, set_selected_id) = signal::<Option<i64>>(None);
-    let (has_loaded, set_has_loaded) = signal(false);
     let on_close_load = on_close.clone();
 
     // LoadProgram mutation - shows toasts and closes modal on success
@@ -41,23 +43,12 @@ where
         }
     });
 
-    // Fetch programs on mount - with guard to prevent infinite loop
-    Effect::new(move |_| {
-        if !has_loaded.get_untracked() {
-            set_has_loaded.set(true);
-            list_programs(ListPrograms);
-        }
-    });
-
-    // Get programs from state
+    // Get programs from query data
     let programs = Memo::new(move |_| {
-        let state = programs_state.get();
-        state.data.map(|r| r.programs).unwrap_or_default()
+        programs_query.data().map(|r| r.programs.clone()).unwrap_or_default()
     });
 
-    let is_loading = Memo::new(move |_| {
-        programs_state.get().is_loading()
-    });
+    let is_loading = move || programs_query.is_loading();
 
     let on_close_header = on_close.clone();
     let on_close_cancel = on_close.clone();
@@ -93,17 +84,17 @@ where
 
                 // Content
                 <div class="flex-1 overflow-y-auto p-3">
-                    <Show when=move || is_loading.get()>
+                    <Show when=move || is_loading()>
                         <div class="text-center py-8 text-[#666666] text-sm">
                             "Loading programs..."
                         </div>
                     </Show>
-                    <Show when=move || !is_loading.get() && programs.get().is_empty()>
+                    <Show when=move || !is_loading() && programs.get().is_empty()>
                         <div class="text-center py-8 text-[#666666] text-sm">
                             "No programs available. Create a program in the Programs page."
                         </div>
                     </Show>
-                    <Show when=move || !is_loading.get() && !programs.get().is_empty()>
+                    <Show when=move || !is_loading() && !programs.get().is_empty()>
                         <div class="space-y-1">
                             {move || programs.get().into_iter().map(|program| {
                                 let id = program.id;

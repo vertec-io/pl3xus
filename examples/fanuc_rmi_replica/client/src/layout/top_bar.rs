@@ -5,7 +5,7 @@
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
 
-use pl3xus_client::{use_components, use_sync_context, use_connection, use_request, use_message, ControlRequest, ControlResponse, EntityControl, ConnectionReadyState};
+use pl3xus_client::{use_components, use_sync_context, use_connection, use_query_keyed, use_message, ControlRequest, ControlResponse, EntityControl, ConnectionReadyState};
 use fanuc_replica_types::*;
 use crate::pages::dashboard::use_system_entity;
 
@@ -132,15 +132,16 @@ pub fn TopBar() -> impl IntoView {
 #[component]
 fn ConnectionDropdown() -> impl IntoView {
     let connection_state = use_components::<ConnectionState>();
-    let (fetch_robots, robots_state) = use_request::<ListRobotConnections>();
     let (dropdown_open, set_dropdown_open) = signal(false);
 
+    // Use query that only fetches when dropdown is open
+    // Server-side invalidation will auto-refetch if dropdown is open
+    let robots_query = use_query_keyed::<ListRobotConnections, _>(move || {
+        if dropdown_open.get() { Some(ListRobotConnections) } else { None }
+    });
+
     let toggle_dropdown = move |_| {
-        let is_open = !dropdown_open.get();
-        set_dropdown_open.set(is_open);
-        if is_open {
-            fetch_robots(ListRobotConnections);
-        }
+        set_dropdown_open.set(!dropdown_open.get_untracked());
     };
 
     let is_robot_connected = move || {
@@ -172,7 +173,7 @@ fn ConnectionDropdown() -> impl IntoView {
             </button>
 
             <Show when=move || dropdown_open.get()>
-                <DropdownContent robots_state=robots_state set_dropdown_open=set_dropdown_open />
+                <DropdownContent robots_query=robots_query set_dropdown_open=set_dropdown_open />
             </Show>
         </div>
     }
@@ -182,7 +183,7 @@ fn ConnectionDropdown() -> impl IntoView {
 #[allow(dead_code)]
 #[component]
 fn DropdownContent(
-    robots_state: Signal<pl3xus_client::UseRequestState<RobotConnectionsResponse>>,
+    robots_query: pl3xus_client::QueryHandle<ListRobotConnections>,
     set_dropdown_open: WriteSignal<bool>,
 ) -> impl IntoView {
     let ctx = use_sync_context();
@@ -204,11 +205,11 @@ fn DropdownContent(
         <div class="absolute top-full left-0 mt-1 w-56 bg-[#1a1a1a] border border-[#ffffff15] rounded shadow-lg z-50">
             <div class="px-2 py-1.5 border-b border-[#ffffff10] text-[9px] text-[#666666] uppercase tracking-wide">"Saved Robots"</div>
 
-            <Show when=move || robots_state.get().is_loading()>
+            <Show when=move || robots_query.is_loading()>
                 <div class="px-3 py-2 text-[10px] text-[#888888]">"Loading..."</div>
             </Show>
 
-            <RobotConnectionList robots_state=robots_state set_dropdown_open=set_dropdown_open />
+            <RobotConnectionList robots_query=robots_query set_dropdown_open=set_dropdown_open />
 
             <div class="border-t border-[#ffffff10] px-2 py-1.5">
                 <button
@@ -227,18 +228,17 @@ fn DropdownContent(
 #[allow(dead_code)]
 #[component]
 fn RobotConnectionList(
-    robots_state: Signal<pl3xus_client::UseRequestState<RobotConnectionsResponse>>,
+    robots_query: pl3xus_client::QueryHandle<ListRobotConnections>,
     set_dropdown_open: WriteSignal<bool>,
 ) -> impl IntoView {
     let ctx = use_sync_context();
 
     view! {
-        <Show when=move || robots_state.get().is_success()>
+        <Show when=move || robots_query.data().is_some()>
             {
                 let ctx = ctx.clone();
                 move || {
-                    let state = robots_state.get();
-                    let robots = state.data.clone().map(|r| r.connections).unwrap_or_default();
+                    let robots = robots_query.data().map(|r| r.connections.clone()).unwrap_or_default();
                     let ctx = ctx.clone();
 
                     if robots.is_empty() {
@@ -348,17 +348,15 @@ fn WebSocketDropdown(
 fn QuickSettingsButton() -> impl IntoView {
     let ctx = use_sync_context();
     let _navigate = use_navigate();
-    let (fetch_robots, robots_state) = use_request::<ListRobotConnections>();
     let connection_state = use_components::<ConnectionState>();
     let control_state = use_components::<EntityControl>();
 
     let (show_popup, set_show_popup) = signal(false);
 
-    // Load saved connections when popup opens
-    Effect::new(move || {
-        if show_popup.get() {
-            fetch_robots(ListRobotConnections);
-        }
+    // Use query that only fetches when popup is open
+    // Server-side invalidation will auto-refetch if popup is open
+    let robots_query = use_query_keyed::<ListRobotConnections, _>(move || {
+        if show_popup.get() { Some(ListRobotConnections) } else { None }
     });
 
     let robot_connected = move || {
@@ -414,7 +412,7 @@ fn QuickSettingsButton() -> impl IntoView {
             <Show when=move || show_popup.get()>
                 <QuickSettingsPopup
                     set_show_popup=set_show_popup
-                    robots_state=robots_state
+                    robots_query=robots_query
                     robot_connected=Signal::derive(robot_connected)
                     robot_connecting=Signal::derive(robot_connecting)
                     connected_robot_name=Signal::derive(connected_robot_name)
@@ -431,7 +429,7 @@ fn QuickSettingsButton() -> impl IntoView {
 #[component]
 fn QuickSettingsPopup(
     set_show_popup: WriteSignal<bool>,
-    robots_state: Signal<pl3xus_client::UseRequestState<RobotConnectionsResponse>>,
+    robots_query: pl3xus_client::QueryHandle<ListRobotConnections>,
     robot_connected: Signal<bool>,
     robot_connecting: Signal<bool>,
     connected_robot_name: Signal<Option<String>>,
@@ -524,7 +522,7 @@ fn QuickSettingsPopup(
                 <div class="text-[9px] text-[#666666] uppercase tracking-wide mb-1.5">"Saved Robots"</div>
                 <div class="space-y-1 max-h-48 overflow-y-auto">
                     <SavedConnectionsList
-                        robots_state=robots_state
+                        robots_query=robots_query
                         active_connection_id=active_connection_id
                         has_control=has_control
                         robot_connecting=robot_connecting
@@ -563,7 +561,7 @@ fn QuickSettingsPopup(
 /// Saved connections list for quick settings popup
 #[component]
 fn SavedConnectionsList(
-    robots_state: Signal<pl3xus_client::UseRequestState<RobotConnectionsResponse>>,
+    robots_query: pl3xus_client::QueryHandle<ListRobotConnections>,
     active_connection_id: Signal<Option<i64>>,
     has_control: Signal<bool>,
     robot_connecting: Signal<bool>,
@@ -573,8 +571,7 @@ fn SavedConnectionsList(
 
     view! {
         {move || {
-            let state = robots_state.get();
-            if state.is_loading() {
+            if robots_query.is_loading() {
                 return view! {
                     <div class="text-[10px] text-[#555555] italic py-2 text-center">
                         "Loading..."
@@ -582,7 +579,7 @@ fn SavedConnectionsList(
                 }.into_any();
             }
 
-            let connections = state.data.clone().map(|r| r.connections).unwrap_or_default();
+            let connections = robots_query.data().map(|r| r.connections.clone()).unwrap_or_default();
             if connections.is_empty() {
                 view! {
                     <div class="text-[10px] text-[#555555] italic py-2 text-center">

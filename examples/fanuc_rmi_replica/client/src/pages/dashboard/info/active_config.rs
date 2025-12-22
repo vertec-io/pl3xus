@@ -1,8 +1,8 @@
 //! Active Configuration Panel - Shows loaded config and arm config.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_components, use_request, use_request_with_handler};
-use fanuc_replica_types::{ConnectionState, ActiveConfigState, RobotConfiguration, GetRobotConfigurations, LoadConfiguration};
+use pl3xus_client::{use_components, use_query_keyed, use_mutation};
+use fanuc_replica_types::{ConnectionState, ActiveConfigState, GetRobotConfigurations, LoadConfiguration};
 use crate::components::use_toast;
 
 /// Active Configuration Panel - Shows loaded config and arm config (read-only display)
@@ -18,46 +18,35 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
             .unwrap_or(false)
     });
 
-    // Get robot configurations from request
-    let (get_configs, configs_response) = use_request::<GetRobotConfigurations>();
+    // Get active connection ID
+    let active_connection_id = Memo::new(move |_| {
+        connection_state.get().values().next()
+            .and_then(|s| s.active_connection_id)
+    });
 
-    // LoadConfiguration with error handling
-    let load_config = use_request_with_handler::<LoadConfiguration, _>(move |result| {
+    // Query for robot configurations - auto-fetches when robot is connected
+    let configs_query = use_query_keyed::<GetRobotConfigurations, _>(move || {
+        if robot_connected.get() {
+            active_connection_id.get().map(|id| GetRobotConfigurations { robot_connection_id: id })
+        } else {
+            None
+        }
+    });
+
+    // LoadConfiguration mutation with error handling
+    let load_config = use_mutation::<LoadConfiguration>(move |result| {
         match result {
             Ok(r) if r.success => {} // Silent success - config syncs automatically
             Ok(r) => toast.error(format!("Load config failed: {}", r.error.as_deref().unwrap_or(""))),
             Err(e) => toast.error(format!("Config error: {e}")),
         }
     });
-    let load_config = StoredValue::new(load_config);
-    let robot_configs: RwSignal<Vec<RobotConfiguration>> = RwSignal::new(Vec::new());
 
-    // Load configurations when robot connects
-    let (has_loaded, set_has_loaded) = signal(false);
-    Effect::new({
-        let get_configs = get_configs.clone();
-        move |_| {
-            if robot_connected.get() && !has_loaded.get() {
-                // Get the active connection ID from connection state
-                if let Some(conn_state) = connection_state.get().values().next() {
-                    if let Some(conn_id) = conn_state.active_connection_id {
-                        set_has_loaded.set(true);
-                        get_configs(GetRobotConfigurations { robot_connection_id: conn_id });
-                    }
-                }
-            } else if !robot_connected.get() {
-                set_has_loaded.set(false);
-                robot_configs.set(Vec::new());
-            }
-        }
-    });
-
-    // Update robot_configs when response arrives
-    Effect::new(move |_| {
-        let state = configs_response.get();
-        if let Some(response) = state.data {
-            robot_configs.set(response.configurations);
-        }
+    // Derive robot_configs from query data
+    let robot_configs = Memo::new(move |_| {
+        configs_query.data()
+            .map(|r| r.configurations.clone())
+            .unwrap_or_default()
     });
 
     // Get active config values
@@ -90,7 +79,7 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
                                 on:change=move |ev| {
                                     let value = event_target_value(&ev);
                                     if let Ok(id) = value.parse::<i64>() {
-                                        load_config.get_value()(LoadConfiguration { configuration_id: id });
+                                        load_config.send(LoadConfiguration { configuration_id: id });
                                     }
                                 }
                             >
@@ -111,7 +100,7 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
                                     class="px-2 py-1 text-[9px] bg-[#ffaa0020] text-[#ffaa00] border border-[#ffaa00] rounded hover:bg-[#ffaa0030]"
                                     on:click=move |_| {
                                         if let Some(id) = config.get().loaded_from_id {
-                                            load_config.get_value()(LoadConfiguration { configuration_id: id });
+                                            load_config.send(LoadConfiguration { configuration_id: id });
                                         }
                                     }
                                     title="Revert to saved configuration"

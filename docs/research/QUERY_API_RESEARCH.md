@@ -659,16 +659,17 @@ fn handle_create_configuration<NP: NetworkProvider>(world: &mut World, ...) {
 
 ## Implementation Status
 
-### ✅ Completed
+### ✅ Completed (Phase 1 - Core API)
 
 1. **Mutation API** - `use_mutation<R>()` and `use_mutation_targeted<R>()`
    - Copy handles for ergonomic use in closures
    - Handler callbacks called exactly once per response
    - Migrated all fanuc_rmi_replica mutations
 
-2. **Query API** - `use_query<R>()` and `use_query_keyed<R, F>()`
+2. **Query API** - `use_query<R>()`, `use_query_keyed<R, F>()`, `use_query_targeted<R>()`
    - Auto-fetch on mount
    - Reactive refetch when parameters change (keyed queries)
+   - Entity-specific queries with per-entity caching (targeted queries)
    - Server-side invalidation support
    - QueryHandle with .data(), .error(), .is_loading(), .refetch()
 
@@ -677,18 +678,47 @@ fn handle_create_configuration<NP: NetworkProvider>(world: &mut World, ...) {
    - invalidate_queries(), invalidate_queries_with_keys(), invalidate_all_queries() helpers
    - Client automatically refetches when invalidation received
 
-4. **Example Integration**
-   - fanuc_rmi_replica settings.rs migrated to use_query_keyed
-   - Server handlers broadcast invalidation after configuration CRUD
+4. **Query Client** - `use_query_client()` returns `QueryClient`
+   - invalidate::<R>() - Client-side invalidation
+   - invalidate_all() - Invalidate all queries
+   - has_cached_data::<R>() - Check cache status
+   - clear_cache() - Clear all cached data
+
+5. **Query Deduplication**
+   - Multiple components using same query share one state signal
+   - Reference counting for automatic cleanup
+   - Prevents duplicate network requests
+
+6. **Example Integration**
+   - fanuc_rmi_replica fully migrated to new API
+   - Server handlers broadcast invalidation after all CRUD operations
    - Zero manual refetch code needed
+
+### ✅ Completed Enhancements (Phase 2)
+
+1. **Query Client** - `use_query_client()` returns `QueryClient` with:
+   - `invalidate::<R>()` - Invalidate all queries of a specific type
+   - `invalidate_all()` - Invalidate all queries
+   - `has_cached_data::<R>()` - Check if query type has cached data
+   - `clear_cache()` - Clear all cached query data
+
+2. **Query Deduplication** - Multiple components using the same query share one state signal:
+   - Cache uses `(query_type, query_key)` as key
+   - Reference counting for automatic cleanup when all subscribers unmount
+   - Cache stores raw bytes, hooks deserialize to typed `QueryState<T>`
+   - Prevents duplicate network requests
+
+3. **Targeted Queries** - `use_query_targeted<R>(entity_id, request)`:
+   - Similar to `use_query` but targets a specific entity
+   - Cache key includes entity ID for per-entity caching
+   - Supports server-side invalidation
+   - Automatic cleanup on unmount
 
 ### 🔮 Future Enhancements
 
-1. **Query Client** - Global query management, manual invalidation
-2. **Query Deduplication** - Multiple components share one request
-3. **Optimistic Updates** - Update UI before server confirms
-4. **Prefetching** - Fetch data before it's needed
-5. **Targeted Queries** - `use_query_targeted<R>()` for entity-specific data
+1. **Optimistic Updates** - Update UI before server confirms
+2. **Prefetching** - Fetch data before it's needed
+3. **Query Deduplication for use_query_keyed** - Currently only `use_query` uses the cache
 
 ## Conclusion
 

@@ -27,7 +27,10 @@ pub fn ProgramsView() -> impl IntoView {
     let (show_csv_upload, set_show_csv_upload) = signal(false);
     let (show_open_modal, set_show_open_modal) = signal(false);
     let (show_save_as_modal, set_show_save_as_modal) = signal(false);
-    let (selected_program_id, set_selected_program_id) = signal::<Option<i64>>(None);
+
+    // Use layout context's selected_program_id - persists across navigation
+    let selected_program_id = Signal::derive(move || layout_ctx.selected_program_id.get());
+    let set_selected_program_id = move |id: Option<i64>| layout_ctx.selected_program_id.set(id);
 
     // Menu dropdown states
     let (show_file_menu, set_show_file_menu) = signal(false);
@@ -103,7 +106,7 @@ pub fn ProgramsView() -> impl IntoView {
                     <browser::ProgramBrowser
                         programs=programs
                         selected_program_id=selected_program_id
-                        set_selected_program_id=set_selected_program_id
+                        on_select=set_selected_program_id
                     />
                 </Show>
 
@@ -111,7 +114,7 @@ pub fn ProgramsView() -> impl IntoView {
                 <details::ProgramDetails
                     current_program=current_program
                     selected_program_id=selected_program_id
-                    set_selected_program_id=set_selected_program_id
+                    on_select=set_selected_program_id
                     set_show_csv_upload=set_show_csv_upload
                     set_show_open_modal=set_show_open_modal
                     set_show_new_program=set_show_new_program
@@ -127,7 +130,7 @@ pub fn ProgramsView() -> impl IntoView {
                     on_created=move |id| {
                         set_show_new_program.set(false);
                         // Setting selected_program_id triggers program_query to fetch the new program
-                        set_selected_program_id.set(Some(id));
+                        set_selected_program_id(Some(id));
                         // Server will broadcast QueryInvalidation for ListPrograms
                     }
                 />
@@ -139,7 +142,7 @@ pub fn ProgramsView() -> impl IntoView {
                     on_close=move || set_show_open_modal.set(false)
                     on_selected=move |prog: ProgramDetail| {
                         set_show_open_modal.set(false);
-                        set_selected_program_id.set(Some(prog.id));
+                        set_selected_program_id(Some(prog.id));
                         current_program.set(Some(prog));
                     }
                 />
@@ -150,7 +153,7 @@ pub fn ProgramsView() -> impl IntoView {
                     on_close=move || set_show_save_as_modal.set(false)
                     on_saved=move |id| {
                         set_show_save_as_modal.set(false);
-                        set_selected_program_id.set(Some(id));
+                        set_selected_program_id(Some(id));
                         // Server will broadcast QueryInvalidation for ListPrograms
                     }
                 />

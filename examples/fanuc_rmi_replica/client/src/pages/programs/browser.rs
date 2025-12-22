@@ -9,8 +9,8 @@ use crate::layout::LayoutContext;
 #[component]
 pub fn ProgramBrowser(
     programs: Memo<Vec<ProgramWithLines>>,
-    selected_program_id: ReadSignal<Option<i64>>,
-    set_selected_program_id: WriteSignal<Option<i64>>,
+    #[prop(into)] selected_program_id: Signal<Option<i64>>,
+    on_select: impl Fn(Option<i64>) + 'static + Clone + Send,
 ) -> impl IntoView {
     let layout_ctx = use_context::<LayoutContext>().expect("LayoutContext not found");
 
@@ -58,7 +58,10 @@ pub fn ProgramBrowser(
                                             "bg-[#111111] border-[#ffffff08] text-[#888888] hover:border-[#ffffff20]"
                                         }
                                     )}
-                                    on:click=move |_| set_selected_program_id.set(Some(prog_id))
+                                    on:click={
+                                        let on_select = on_select.clone();
+                                        move |_| on_select(Some(prog_id))
+                                    }
                                 >
                                     <div class="font-medium text-[10px] mb-0.5">{prog_name}</div>
                                     <div class="text-[#555555]">{lines_str}</div>

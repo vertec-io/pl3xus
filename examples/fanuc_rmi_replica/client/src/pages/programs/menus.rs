@@ -14,7 +14,7 @@ pub fn FileMenu(
     set_show_open_modal: WriteSignal<bool>,
     set_show_save_as_modal: WriteSignal<bool>,
     set_show_csv_upload: WriteSignal<bool>,
-    selected_program_id: ReadSignal<Option<i64>>,
+    #[prop(into)] selected_program_id: Signal<Option<i64>>,
     current_program: RwSignal<Option<ProgramDetail>>,
 ) -> impl IntoView {
     view! {

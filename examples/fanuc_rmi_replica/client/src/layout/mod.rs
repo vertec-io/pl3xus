@@ -33,6 +33,8 @@ pub struct LayoutContext {
     pub io_popped: RwSignal<bool>,
     /// Whether the program browser sidebar is visible.
     pub show_program_browser: RwSignal<bool>,
+    /// Currently selected/open program ID - persists across navigation.
+    pub selected_program_id: RwSignal<Option<i64>>,
 }
 
 impl LayoutContext {
@@ -43,6 +45,7 @@ impl LayoutContext {
             jog_position: RwSignal::new((100, 100)),
             io_popped: RwSignal::new(false),
             show_program_browser: RwSignal::new(false),
+            selected_program_id: RwSignal::new(None),
         }
     }
 }

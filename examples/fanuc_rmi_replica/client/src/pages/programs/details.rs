@@ -11,8 +11,8 @@ use crate::components::use_toast;
 pub fn ProgramDetails(
     current_program: RwSignal<Option<ProgramDetail>>,
     #[allow(unused_variables)]
-    selected_program_id: ReadSignal<Option<i64>>,
-    set_selected_program_id: WriteSignal<Option<i64>>,
+    #[prop(into)] selected_program_id: Signal<Option<i64>>,
+    on_select: impl Fn(Option<i64>) + 'static + Clone + Send,
     set_show_csv_upload: WriteSignal<bool>,
     set_show_open_modal: WriteSignal<bool>,
     set_show_new_program: WriteSignal<bool>,
@@ -112,9 +112,12 @@ pub fn ProgramDetails(
                                         </button>
                                         <button
                                             class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[9px] px-2 py-1 rounded hover:bg-[#ff444430]"
-                                            on:click=move |_| {
-                                                set_selected_program_id.set(None);
-                                                current_program.set(None);
+                                            on:click={
+                                                let on_select = on_select.clone();
+                                                move |_| {
+                                                    on_select(None);
+                                                    current_program.set(None);
+                                                }
                                             }
                                         >
                                             "Close"

@@ -657,6 +657,39 @@ fn handle_create_configuration<NP: NetworkProvider>(world: &mut World, ...) {
 }
 ```
 
+## Implementation Status
+
+### ✅ Completed
+
+1. **Mutation API** - `use_mutation<R>()` and `use_mutation_targeted<R>()`
+   - Copy handles for ergonomic use in closures
+   - Handler callbacks called exactly once per response
+   - Migrated all fanuc_rmi_replica mutations
+
+2. **Query API** - `use_query<R>()` and `use_query_keyed<R, F>()`
+   - Auto-fetch on mount
+   - Reactive refetch when parameters change (keyed queries)
+   - Server-side invalidation support
+   - QueryHandle with .data(), .error(), .is_loading(), .refetch()
+
+3. **Server-Side Invalidation Protocol**
+   - QueryInvalidation message type
+   - invalidate_queries(), invalidate_queries_with_keys(), invalidate_all_queries() helpers
+   - Client automatically refetches when invalidation received
+
+4. **Example Integration**
+   - fanuc_rmi_replica settings.rs migrated to use_query_keyed
+   - Server handlers broadcast invalidation after configuration CRUD
+   - Zero manual refetch code needed
+
+### 🔮 Future Enhancements
+
+1. **Query Client** - Global query management, manual invalidation
+2. **Query Deduplication** - Multiple components share one request
+3. **Optimistic Updates** - Update UI before server confirms
+4. **Prefetching** - Fetch data before it's needed
+5. **Targeted Queries** - `use_query_targeted<R>()` for entity-specific data
+
 ## Conclusion
 
 The proposed API:

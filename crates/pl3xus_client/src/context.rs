@@ -100,6 +100,35 @@ pub struct SyncContext {
     /// When the server sends a QueryInvalidation, we increment the counter.
     /// Query hooks watch their type's counter and refetch when it changes.
     pub(crate) query_invalidations: RwSignal<HashMap<String, u64>>,
+    /// Query cache for deduplication: (query_type, query_key) -> (state_signal, ref_count)
+    /// Multiple components using the same query share one state signal.
+    /// The query_key is a serialized representation of the request parameters.
+    pub(crate) query_cache: Arc<Mutex<HashMap<(String, String), QueryCacheEntry>>>,
+}
+
+/// Entry in the query cache for deduplication.
+#[derive(Clone)]
+pub struct QueryCacheEntry {
+    /// The shared state signal (type-erased as raw bytes for storage)
+    /// Components deserialize this to their specific QueryState<T>
+    pub state: ArcRwSignal<QueryCacheState>,
+    /// Reference count - when this reaches 0, the entry can be cleaned up
+    pub ref_count: usize,
+    /// Last invalidation counter seen - used to detect when to refetch
+    pub last_invalidation: u64,
+}
+
+/// Type-erased query state stored in the cache.
+#[derive(Clone, Debug, Default)]
+pub struct QueryCacheState {
+    /// Raw response bytes (if available)
+    pub data: Option<Vec<u8>>,
+    /// Error message (if the query failed)
+    pub error: Option<String>,
+    /// Whether the query is currently fetching
+    pub is_fetching: bool,
+    /// Whether data has ever been fetched (for showing stale data while refetching)
+    pub is_stale: bool,
 }
 
 /// State tracking for a single request/response cycle.
@@ -155,6 +184,7 @@ impl SyncContext {
             incoming_messages: RwSignal::new(HashMap::new()),
             requests: RwSignal::new(HashMap::new()),
             query_invalidations: RwSignal::new(HashMap::new()),
+            query_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -958,6 +988,105 @@ impl SyncContext {
             .get(query_type)
             .copied()
             .unwrap_or(0)
+    }
+
+    /// Get or create a cached query entry for deduplication.
+    ///
+    /// If a query with the same type and key already exists, returns the existing
+    /// shared state signal and increments the reference count.
+    /// Otherwise, creates a new entry.
+    ///
+    /// # Arguments
+    /// - `query_type`: The type name of the query (e.g., "GetRobotConfigurations")
+    /// - `query_key`: A serialized representation of the query parameters
+    ///
+    /// # Returns
+    /// The shared query cache state signal
+    pub fn get_or_create_query_cache(
+        &self,
+        query_type: &str,
+        query_key: &str,
+    ) -> ArcRwSignal<QueryCacheState> {
+        let mut cache = self.query_cache.lock().unwrap();
+        let key = (query_type.to_string(), query_key.to_string());
+
+        if let Some(entry) = cache.get_mut(&key) {
+            entry.ref_count += 1;
+            #[cfg(target_arch = "wasm32")]
+            leptos::logging::log!(
+                "[QueryCache] Reusing cached query '{}' (key: '{}', refs: {})",
+                query_type,
+                query_key,
+                entry.ref_count
+            );
+            entry.state.clone()
+        } else {
+            let state = ArcRwSignal::new(QueryCacheState::default());
+            let invalidation_counter = self.query_invalidation_counter(query_type);
+            cache.insert(
+                key,
+                QueryCacheEntry {
+                    state: state.clone(),
+                    ref_count: 1,
+                    last_invalidation: invalidation_counter,
+                },
+            );
+            #[cfg(target_arch = "wasm32")]
+            leptos::logging::log!(
+                "[QueryCache] Created new query '{}' (key: '{}')",
+                query_type,
+                query_key
+            );
+            state
+        }
+    }
+
+    /// Release a reference to a cached query.
+    ///
+    /// Decrements the reference count. When it reaches 0, the entry is removed.
+    pub fn release_query_cache(&self, query_type: &str, query_key: &str) {
+        let mut cache = self.query_cache.lock().unwrap();
+        let key = (query_type.to_string(), query_key.to_string());
+
+        if let Some(entry) = cache.get_mut(&key) {
+            entry.ref_count = entry.ref_count.saturating_sub(1);
+            #[cfg(target_arch = "wasm32")]
+            leptos::logging::log!(
+                "[QueryCache] Released query '{}' (key: '{}', refs: {})",
+                query_type,
+                query_key,
+                entry.ref_count
+            );
+            if entry.ref_count == 0 {
+                cache.remove(&key);
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::log!(
+                    "[QueryCache] Removed query '{}' (key: '{}') - no more references",
+                    query_type,
+                    query_key
+                );
+            }
+        }
+    }
+
+    /// Check if a query needs refetching due to invalidation.
+    ///
+    /// Returns true if the invalidation counter has increased since the last check.
+    pub fn query_needs_refetch(&self, query_type: &str, query_key: &str) -> bool {
+        let mut cache = self.query_cache.lock().unwrap();
+        let key = (query_type.to_string(), query_key.to_string());
+        let current_counter = self.query_invalidation_counter(query_type);
+
+        if let Some(entry) = cache.get_mut(&key) {
+            if current_counter > entry.last_invalidation {
+                entry.last_invalidation = current_counter;
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     }
 
     /// Get a read-only signal for tracking mutation states.

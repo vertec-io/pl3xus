@@ -120,7 +120,7 @@ mod traits;
 // Re-exports
 pub use client_type_registry::{ClientTypeRegistry, ClientTypeRegistryBuilder};
 pub use components::SyncFieldInput;
-pub use context::{MutationState, RequestState, RequestStatus, SyncConnection, SyncContext};
+pub use context::{MutationState, RequestState, RequestStatus, SyncConnection, SyncContext, QueryCacheEntry, QueryCacheState};
 pub use error::SyncError;
 
 // New hook names (preferred)

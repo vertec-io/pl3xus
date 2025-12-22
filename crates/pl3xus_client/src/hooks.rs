@@ -2103,15 +2103,22 @@ where
 pub fn use_query<R>(request: R) -> QueryHandle<R>
 where
     R: pl3xus_common::RequestMessage + Clone + 'static,
+    R::ResponseMessage: serde::de::DeserializeOwned,
 {
     let ctx = use_sync_context();
     let query_type = std::any::type_name::<R>().to_string();
 
-    // The query state
-    let state = RwSignal::new(QueryState::<R::ResponseMessage>::default());
+    // Generate a query key from the request parameters for deduplication
+    // We use bincode serialization to create a stable key (hex-encoded for simplicity)
+    let query_key = bincode::serde::encode_to_vec(&request, bincode::config::standard())
+        .map(|bytes| bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>())
+        .unwrap_or_else(|_| "default".to_string());
 
-    // Track the last invalidation counter we've seen
-    let last_invalidation = RwSignal::new(0u64);
+    // Get or create the shared cache entry
+    let cache_state = ctx.get_or_create_query_cache(&query_type, &query_key);
+
+    // The typed query state - derived from the cache
+    let state = RwSignal::new(QueryState::<R::ResponseMessage>::default());
 
     // Use the underlying request hook for actual fetching
     let (send, request_state) = use_request::<R>();
@@ -2119,73 +2126,130 @@ where
     // Clone request for use in closures
     let request_clone = request.clone();
 
-    // Refetch function
-    let do_fetch = move || {
-        state.update(|s| {
-            s.is_fetching = true;
-            if s.data.is_some() {
-                s.is_stale = true;
-            }
-        });
-        send(request_clone.clone());
+    // Refetch function - updates both cache and local state
+    let do_fetch = {
+        let cache_state = cache_state.clone();
+        move || {
+            // Update cache state
+            cache_state.update(|s| {
+                s.is_fetching = true;
+                if s.data.is_some() {
+                    s.is_stale = true;
+                }
+            });
+            // Update local typed state
+            state.update(|s| {
+                s.is_fetching = true;
+                if s.data.is_some() {
+                    s.is_stale = true;
+                }
+            });
+            send(request_clone.clone());
+        }
     };
 
     // Store refetch function
     let refetch_fn = StoredValue::new(Box::new(do_fetch.clone()) as Box<dyn Fn() + Send + Sync>);
 
-    // Initial fetch
+    // Initial fetch or restore from cache
     Effect::new({
         let do_fetch = do_fetch.clone();
+        let cache_state = cache_state.clone();
         move |_| {
-            // Only fetch on initial mount
-            if state.get_untracked().data.is_none() && !state.get_untracked().is_fetching {
+            let cached = cache_state.get_untracked();
+            // If cache has data, restore it to local state
+            if let Some(ref bytes) = cached.data {
+                if let Ok((data, _)) = bincode::serde::decode_from_slice::<R::ResponseMessage, _>(
+                    bytes,
+                    bincode::config::standard(),
+                ) {
+                    state.update(|s| {
+                        s.data = Some(data);
+                        s.error = cached.error.clone();
+                        s.is_fetching = cached.is_fetching;
+                        s.is_stale = cached.is_stale;
+                    });
+                    #[cfg(target_arch = "wasm32")]
+                    leptos::logging::log!(
+                        "[use_query] Restored '{}' from cache",
+                        std::any::type_name::<R>()
+                    );
+                    return;
+                }
+            }
+            // No cached data, fetch if not already fetching
+            if !cached.is_fetching {
                 do_fetch();
             }
         }
     });
 
-    // Watch for request completion
-    Effect::new(move |_| {
-        let req_state = request_state.get();
+    // Watch for request completion - update both cache and local state
+    Effect::new({
+        let cache_state = cache_state.clone();
+        move |_| {
+            let req_state = request_state.get();
 
-        if req_state.is_idle() || req_state.is_loading() {
-            return;
-        }
+            if req_state.is_idle() || req_state.is_loading() {
+                return;
+            }
 
-        if let Some(ref error) = req_state.error {
-            state.update(|s| {
-                s.is_fetching = false;
-                s.error = Some(error.clone());
-            });
-        } else if let Some(ref data) = req_state.data {
-            state.update(|s| {
-                s.data = Some(data.clone());
-                s.error = None;
-                s.is_fetching = false;
-                s.is_stale = false;
-            });
+            if let Some(ref error) = req_state.error {
+                cache_state.update(|s| {
+                    s.is_fetching = false;
+                    s.error = Some(error.clone());
+                });
+                state.update(|s| {
+                    s.is_fetching = false;
+                    s.error = Some(error.clone());
+                });
+            } else if let Some(ref data) = req_state.data {
+                // Serialize data to cache
+                if let Ok(bytes) =
+                    bincode::serde::encode_to_vec(data, bincode::config::standard())
+                {
+                    cache_state.update(|s| {
+                        s.data = Some(bytes);
+                        s.error = None;
+                        s.is_fetching = false;
+                        s.is_stale = false;
+                    });
+                }
+                state.update(|s| {
+                    s.data = Some(data.clone());
+                    s.error = None;
+                    s.is_fetching = false;
+                    s.is_stale = false;
+                });
+            }
         }
     });
 
     // Watch for server-side invalidation
     Effect::new({
+        let ctx = ctx.clone();
         let query_type = query_type.clone();
+        let query_key = query_key.clone();
         let do_fetch = do_fetch.clone();
         move |_| {
-            let invalidations = ctx.query_invalidations.get();
-            if let Some(&counter) = invalidations.get(&query_type) {
-                let last = last_invalidation.get_untracked();
-                if counter > last {
-                    last_invalidation.set(counter);
-                    // Server invalidated this query, refetch
-                    #[cfg(target_arch = "wasm32")]
-                    leptos::logging::log!(
-                        "[use_query] Query '{}' invalidated, refetching...",
-                        query_type
-                    );
-                    do_fetch();
-                }
+            // Check if this query needs refetching due to invalidation
+            if ctx.query_needs_refetch(&query_type, &query_key) {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::log!(
+                    "[use_query] Query '{}' invalidated, refetching...",
+                    query_type
+                );
+                do_fetch();
             }
+        }
+    });
+
+    // Cleanup on unmount - release cache reference
+    on_cleanup({
+        let query_type = query_type.clone();
+        let query_key = query_key.clone();
+        move || {
+            ctx.release_query_cache(&query_type, &query_key);
         }
     });
 

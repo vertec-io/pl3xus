@@ -1,21 +1,21 @@
 //! Jog Defaults Panel - Configure per-robot jog speed and step defaults.
 
 use leptos::prelude::*;
-use pl3xus_client::use_components;
+use pl3xus_client::use_entity_component;
 use fanuc_replica_types::{ConnectionState, JogSettingsState};
 use super::NumberInput;
+use crate::pages::dashboard::use_system_entity;
 
 /// Jog Defaults Panel - Configure per-robot jog speed and step defaults
 #[component]
 pub fn JogDefaultsPanel() -> impl IntoView {
-    let connection_state = use_components::<ConnectionState>();
-    let jog_settings = use_components::<JogSettingsState>();
+    let system_ctx = use_system_entity();
 
-    let robot_connected = Memo::new(move |_| {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connected)
-            .unwrap_or(false)
-    });
+    // Subscribe to entity-specific components
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    let (jog_settings, _) = use_entity_component::<JogSettingsState, _>(move || system_ctx.robot_entity_id.get());
+
+    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
 
     // Local state for editing
     let (cart_speed, set_cart_speed) = signal(String::new());
@@ -26,7 +26,8 @@ pub fn JogDefaultsPanel() -> impl IntoView {
 
     // Initialize from synced jog settings
     Effect::new(move || {
-        if let Some(settings) = jog_settings.get().values().next() {
+        let settings = jog_settings.get();
+        if settings.cartesian_jog_speed > 0.0 {
             set_cart_speed.set(format!("{:.1}", settings.cartesian_jog_speed));
             set_cart_step.set(format!("{:.1}", settings.cartesian_jog_step));
             set_joint_speed.set(format!("{:.1}", settings.joint_jog_speed));
@@ -37,18 +38,17 @@ pub fn JogDefaultsPanel() -> impl IntoView {
 
     // Check if edited values differ from synced settings
     let check_changes = move || {
-        if let Some(settings) = jog_settings.get_untracked().values().next() {
-            let cs = cart_speed.get().parse::<f64>().unwrap_or(0.0);
-            let cst = cart_step.get().parse::<f64>().unwrap_or(0.0);
-            let js = joint_speed.get().parse::<f64>().unwrap_or(0.0);
-            let jst = joint_step.get().parse::<f64>().unwrap_or(0.0);
+        let settings = jog_settings.get_untracked();
+        let cs = cart_speed.get().parse::<f64>().unwrap_or(0.0);
+        let cst = cart_step.get().parse::<f64>().unwrap_or(0.0);
+        let js = joint_speed.get().parse::<f64>().unwrap_or(0.0);
+        let jst = joint_step.get().parse::<f64>().unwrap_or(0.0);
 
-            let changed = (cs - settings.cartesian_jog_speed).abs() > 0.01
-                || (cst - settings.cartesian_jog_step).abs() > 0.01
-                || (js - settings.joint_jog_speed).abs() > 0.01
-                || (jst - settings.joint_jog_step).abs() > 0.01;
-            set_has_changes.set(changed);
-        }
+        let changed = (cs - settings.cartesian_jog_speed).abs() > 0.01
+            || (cst - settings.cartesian_jog_step).abs() > 0.01
+            || (js - settings.joint_jog_speed).abs() > 0.01
+            || (jst - settings.joint_jog_step).abs() > 0.01;
+        set_has_changes.set(changed);
     };
 
     view! {
@@ -132,13 +132,12 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                             class="px-3 py-1 text-[9px] bg-[#1a1a1a] border border-[#ffffff08] text-[#888888] rounded hover:text-white"
                             on:click=move |_| {
                                 // Reset to synced settings
-                                if let Some(settings) = jog_settings.get().values().next() {
-                                    set_cart_speed.set(format!("{:.1}", settings.cartesian_jog_speed));
-                                    set_cart_step.set(format!("{:.1}", settings.cartesian_jog_step));
-                                    set_joint_speed.set(format!("{:.1}", settings.joint_jog_speed));
-                                    set_joint_step.set(format!("{:.1}", settings.joint_jog_step));
-                                    set_has_changes.set(false);
-                                }
+                                let settings = jog_settings.get();
+                                set_cart_speed.set(format!("{:.1}", settings.cartesian_jog_speed));
+                                set_cart_step.set(format!("{:.1}", settings.cartesian_jog_step));
+                                set_joint_speed.set(format!("{:.1}", settings.joint_jog_speed));
+                                set_joint_step.set(format!("{:.1}", settings.joint_jog_step));
+                                set_has_changes.set(false);
                             }
                         >
                             "Cancel"

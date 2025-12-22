@@ -20,9 +20,9 @@ pub use composer::CommandComposerModal;
 pub use joint_jog::JointJogPanel;
 
 use leptos::prelude::*;
-use pl3xus_client::use_components;
+use pl3xus_client::use_entity_component;
 use fanuc_replica_types::*;
-use crate::pages::dashboard::context::WorkspaceContext;
+use crate::pages::dashboard::context::{WorkspaceContext, use_system_entity};
 
 /// Control tab content (command composer).
 ///
@@ -32,13 +32,11 @@ use crate::pages::dashboard::context::WorkspaceContext;
 pub fn ControlTab() -> impl IntoView {
     let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let show_composer = ctx.show_composer;
+    let system_ctx = use_system_entity();
 
-    let connection_state = use_components::<ConnectionState>();
-    let robot_connected = Memo::new(move |_| {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connected)
-            .unwrap_or(false)
-    });
+    // Subscribe to the active system's connection state
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
 
     view! {
         <div class="h-full flex flex-col gap-2">

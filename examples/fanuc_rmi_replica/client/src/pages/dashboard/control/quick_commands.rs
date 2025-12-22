@@ -12,7 +12,7 @@
 //! The UI never lies to the user - it only shows success when the server confirms.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_mutation_targeted, use_components};
+use pl3xus_client::{use_mutation_targeted, use_entity_component};
 use fanuc_replica_types::*;
 use crate::components::use_toast;
 use crate::pages::dashboard::context::{WorkspaceContext, MessageDirection, MessageType};
@@ -23,19 +23,17 @@ use crate::pages::dashboard::use_system_entity;
 pub fn QuickCommandsPanel() -> impl IntoView {
     let ws_ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let toast = use_toast();
-    let status = use_components::<RobotStatus>();
-    let connection_state = use_components::<ConnectionState>();
     let system_ctx = use_system_entity();
+
+    // Subscribe to entity-specific components
+    let (status, _) = use_entity_component::<RobotStatus, _>(move || system_ctx.robot_entity_id.get());
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
 
     // Track when user is actively dragging the slider
     let (user_editing, set_user_editing) = signal(false);
 
     // Robot connected state
-    let robot_connected = Memo::new(move |_| {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connected)
-            .unwrap_or(false)
-    });
+    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
 
     // Get the Robot entity bits (for targeted robot commands)
     let robot_entity_bits = move || system_ctx.robot_entity_id.get();
@@ -44,11 +42,7 @@ pub fn QuickCommandsPanel() -> impl IntoView {
     let (pending_speed, set_pending_speed) = signal::<Option<u32>>(None);
 
     // Get server speed value
-    let server_speed = move || {
-        status.get().values().next()
-            .map(|s| s.speed_override as u32)
-            .unwrap_or(100)
-    };
+    let server_speed = move || status.get().speed_override as u32;
 
     // Display value: use pending value while editing or waiting for sync, otherwise use server value
     let display_speed = move || {

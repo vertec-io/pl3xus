@@ -6,7 +6,7 @@
 //! Commands are sent to the System entity - server will route to the active robot.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_sync_context, use_components};
+use pl3xus_client::{use_sync_context, use_entity_component};
 use fanuc_replica_types::*;
 use crate::pages::dashboard::use_system_entity;
 
@@ -14,10 +14,12 @@ use crate::pages::dashboard::use_system_entity;
 #[component]
 pub fn JointJogPanel() -> impl IntoView {
     let ctx = use_sync_context();
-    let joint_angles = use_components::<JointAngles>();
-    let connection_state = use_components::<ConnectionState>();
-    let jog_settings = use_components::<JogSettingsState>();
     let system_ctx = use_system_entity();
+
+    // Subscribe to entity-specific components
+    let (joint_angles, _) = use_entity_component::<JointAngles, _>(move || system_ctx.robot_entity_id.get());
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    let (jog_settings, _) = use_entity_component::<JogSettingsState, _>(move || system_ctx.robot_entity_id.get());
 
     // Local string state for inputs (initialized from server state)
     let (speed_str, set_speed_str) = signal(String::new());
@@ -26,22 +28,17 @@ pub fn JointJogPanel() -> impl IntoView {
 
     // Initialize from server state when it becomes available
     Effect::new(move |_| {
-        if let Some(settings) = jog_settings.get().values().next() {
-            // Only initialize once, don't overwrite user edits
-            if !initialized.get_untracked() {
-                set_speed_str.set(format!("{:.1}", settings.joint_jog_speed));
-                set_step_str.set(format!("{:.1}", settings.joint_jog_step));
-                set_initialized.set(true);
-            }
+        let settings = jog_settings.get();
+        // Only initialize once, don't overwrite user edits
+        if !initialized.get_untracked() && settings.joint_jog_speed > 0.0 {
+            set_speed_str.set(format!("{:.1}", settings.joint_jog_speed));
+            set_step_str.set(format!("{:.1}", settings.joint_jog_step));
+            set_initialized.set(true);
         }
     });
 
     // Robot connected state
-    let robot_connected = Memo::new(move |_| {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connected)
-            .unwrap_or(false)
-    });
+    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
 
     // Get the Robot entity bits (for targeted robot commands)
     // Jog commands target the Robot entity, not the System
@@ -51,9 +48,7 @@ pub fn JointJogPanel() -> impl IntoView {
     let controls_disabled = move || !robot_connected.get();
 
     // Get current joint angles
-    let get_angles = move || {
-        joint_angles.get().values().next().cloned()
-    };
+    let get_angles = move || Some(joint_angles.get());
 
     // Send joint jog command for a specific joint
     let send_joint_jog = {

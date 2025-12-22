@@ -5,7 +5,7 @@
 
 use leptos::prelude::*;
 
-use pl3xus_client::{use_sync_context, use_components, EntityControl};
+use pl3xus_client::{use_sync_context, use_entity_component, EntityControl};
 use fanuc_replica_types::*;
 use crate::components::use_toast;
 use crate::pages::dashboard::context::use_system_entity;
@@ -21,8 +21,10 @@ pub fn JogControls() -> impl IntoView {
     let ctx = use_sync_context();
     let toast = use_toast();
     let system_ctx = use_system_entity();
-    let control_state = use_components::<EntityControl>();
-    let jog_settings = use_components::<JogSettingsState>();
+
+    // Subscribe to entity-specific components
+    let (control_state, _) = use_entity_component::<EntityControl, _>(move || system_ctx.system_entity_id.get());
+    let (jog_settings, _) = use_entity_component::<JogSettingsState, _>(move || system_ctx.robot_entity_id.get());
 
     // Speed and step as string signals for text input (initialized from server state)
     let (speed_str, set_speed_str) = signal(String::new());
@@ -37,15 +39,14 @@ pub fn JogControls() -> impl IntoView {
 
     // Initialize from server state when it becomes available
     Effect::new(move |_| {
-        if let Some(settings) = jog_settings.get().values().next() {
-            // Only initialize once, don't overwrite user edits
-            if !initialized.get_untracked() {
-                set_speed_str.set(format!("{:.1}", settings.cartesian_jog_speed));
-                set_step_str.set(format!("{:.1}", settings.cartesian_jog_step));
-                set_rot_speed_str.set(format!("{:.1}", settings.rotation_jog_speed));
-                set_rot_step_str.set(format!("{:.1}", settings.rotation_jog_step));
-                set_initialized.set(true);
-            }
+        let settings = jog_settings.get();
+        // Only initialize once, don't overwrite user edits
+        if !initialized.get_untracked() && settings.cartesian_jog_speed > 0.0 {
+            set_speed_str.set(format!("{:.1}", settings.cartesian_jog_speed));
+            set_step_str.set(format!("{:.1}", settings.cartesian_jog_step));
+            set_rot_speed_str.set(format!("{:.1}", settings.rotation_jog_speed));
+            set_rot_step_str.set(format!("{:.1}", settings.rotation_jog_step));
+            set_initialized.set(true);
         }
     });
 
@@ -57,10 +58,7 @@ pub fn JogControls() -> impl IntoView {
     let has_control = move || {
         let my_id = ctx.my_connection_id.get();
         let state = control_state.get();
-        system_ctx.system_entity_id.get()
-            .and_then(|sys_entity| state.get(&sys_entity))
-            .map(|s| Some(s.client_id) == my_id)
-            .unwrap_or(false)
+        Some(state.client_id) == my_id
     };
 
     let jog = move |axis: JogAxis, direction: JogDirection| {

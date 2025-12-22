@@ -23,7 +23,7 @@
 //! This ensures all connected clients see the same notification simultaneously.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_mutation_targeted, use_components, use_sync_context, EntityControl};
+use pl3xus_client::{use_mutation_targeted, use_entity_component, use_sync_context, EntityControl};
 use fanuc_replica_types::*;
 use super::LoadProgramModal;
 use crate::components::use_toast;
@@ -44,10 +44,9 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
 
     // === Server-Driven State ===
     //
-    // We subscribe to the full component signals and extract the first entity.
-    // Using use_components (returns ReadSignal) for reliable reactivity.
-    let all_exec = use_components::<ExecutionState>();
-    let all_control = use_components::<EntityControl>();
+    // Subscribe to entity-specific components for the active robot/system.
+    let (exec_state, _) = use_entity_component::<ExecutionState, _>(move || system_ctx.robot_entity_id.get());
+    let (control_state, _) = use_entity_component::<EntityControl, _>(move || system_ctx.system_entity_id.get());
 
     let (show_load_modal, set_show_load_modal) = signal(false);
 
@@ -61,16 +60,11 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
     // Check if THIS client has control of the System entity
     let has_control = move || {
         let my_id = ctx.my_connection_id.get();
-        system_entity_bits()
-            .and_then(|sys_entity| all_control.get().get(&sys_entity).cloned())
-            .map(|c| Some(c.client_id) == my_id)
-            .unwrap_or(false)
+        Some(control_state.get().client_id) == my_id
     };
 
-    // Helper to get the first ExecutionState
-    let get_exec = move || {
-        all_exec.get().values().next().cloned().unwrap_or_default()
-    };
+    // Helper to get the ExecutionState
+    let get_exec = move || exec_state.get();
 
     // === Derived State ===
     let loaded_name = move || get_exec().loaded_program_name;

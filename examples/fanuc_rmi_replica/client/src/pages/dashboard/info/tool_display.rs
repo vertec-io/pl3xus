@@ -1,28 +1,27 @@
 //! Multi Tool Display - Accordion showing detailed tool data.
 
 use leptos::prelude::*;
-use pl3xus_client::use_components;
+use pl3xus_client::use_entity_component;
 use fanuc_replica_types::{ConnectionState, FrameToolDataState};
 use crate::pages::dashboard::context::WorkspaceContext;
+use crate::pages::dashboard::use_system_entity;
 
 /// Multi Tool Display - Accordion showing detailed tool geometry for tools 1-10
 #[component]
 pub fn MultiToolDisplay() -> impl IntoView {
     let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
-    let connection_state = use_components::<ConnectionState>();
-    let frame_tool_data = use_components::<FrameToolDataState>();
+    let system_ctx = use_system_entity();
+
+    // Subscribe to entity-specific components
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    let (frame_tool_data, _) = use_entity_component::<FrameToolDataState, _>(move || system_ctx.robot_entity_id.get());
     let expanded_tools = ctx.expanded_tools;
 
-    let robot_connected = Memo::new(move |_| {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connected)
-            .unwrap_or(false)
-    });
+    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
 
     // Get tool data from synced component
-    let get_ft_data = move || frame_tool_data.get().values().next().cloned().unwrap_or_default();
     let tool_data = move |tool_num: i32| -> (f64, f64, f64, f64, f64, f64) {
-        let data = get_ft_data().get_tool(tool_num);
+        let data = frame_tool_data.get().get_tool(tool_num);
         (data.x, data.y, data.z, data.w, data.p, data.r)
     };
 

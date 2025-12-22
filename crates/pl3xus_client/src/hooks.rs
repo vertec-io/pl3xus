@@ -12,6 +12,38 @@ use crate::traits::SyncComponent;
 #[cfg(feature = "stores")]
 use reactive_stores::Store;
 
+/// Extract the short type name from a full type path.
+///
+/// This is used to match query type names between server and client.
+/// The server uses short names like "GetProgram" while Rust's type_name
+/// returns the full path like "fanuc_replica_types::GetProgram".
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// assert_eq!(short_type_name::<fanuc_replica_types::GetProgram>(), "GetProgram");
+/// assert_eq!(short_type_name::<std::vec::Vec<i32>>(), "Vec<i32>");
+/// ```
+fn short_type_name<T: ?Sized>() -> String {
+    let full_name = std::any::type_name::<T>();
+    // Find the last '::' that's not inside angle brackets
+    let mut depth = 0;
+    let mut last_separator = 0;
+    for (i, c) in full_name.char_indices() {
+        match c {
+            '<' => depth += 1,
+            '>' => depth -= 1,
+            ':' if depth == 0 => {
+                if full_name.get(i..i + 2) == Some("::") {
+                    last_separator = i + 2;
+                }
+            }
+            _ => {}
+        }
+    }
+    full_name[last_separator..].to_string()
+}
+
 /// Hook to subscribe to all entities with a component type.
 ///
 /// This returns a signal containing a HashMap of entity_id -> component.
@@ -2092,7 +2124,7 @@ impl QueryClient {
     ///
     /// This triggers a refetch for all active queries of this type.
     pub fn invalidate<R: pl3xus_common::RequestMessage>(&self) {
-        let query_type = std::any::type_name::<R>().to_string();
+        let query_type = short_type_name::<R>();
         self.ctx.query_invalidations.update(|map| {
             let counter = map.entry(query_type.clone()).or_insert(0);
             *counter += 1;
@@ -2119,7 +2151,7 @@ impl QueryClient {
 
     /// Check if a query type has any cached data.
     pub fn has_cached_data<R: pl3xus_common::RequestMessage>(&self) -> bool {
-        let query_type = std::any::type_name::<R>().to_string();
+        let query_type = short_type_name::<R>();
         let cache = self.ctx.query_cache.lock().unwrap();
         cache.iter().any(|((qt, _), entry)| {
             qt == &query_type && entry.state.get_untracked().data.is_some()
@@ -2212,7 +2244,7 @@ where
     R::ResponseMessage: serde::de::DeserializeOwned,
 {
     let ctx = use_sync_context();
-    let query_type = std::any::type_name::<R>().to_string();
+    let query_type = short_type_name::<R>();
 
     // Generate a query key from the request parameters for deduplication
     // We use bincode serialization to create a stable key (hex-encoded for simplicity)
@@ -2409,7 +2441,7 @@ where
     F: Fn() -> Option<R> + Clone + Send + Sync + 'static,
 {
     let ctx = use_sync_context();
-    let query_type = std::any::type_name::<R>().to_string();
+    let query_type = short_type_name::<R>();
 
     // The query state
     let state = RwSignal::new(QueryState::<R::ResponseMessage>::default());
@@ -2550,7 +2582,7 @@ where
     R::ResponseMessage: serde::de::DeserializeOwned,
 {
     let ctx = use_sync_context();
-    let query_type = std::any::type_name::<R>().to_string();
+    let query_type = short_type_name::<R>();
 
     // Generate a query key that includes the entity ID
     let query_key = format!(

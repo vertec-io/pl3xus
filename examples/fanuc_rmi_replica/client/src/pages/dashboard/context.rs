@@ -10,13 +10,13 @@
 //!
 //! Server-owned state (program execution, robot position, connection status,
 //! active frame/tool, etc.) should be read directly from synced components
-//! using use_components<T>(). See ARCHITECTURE_SPECIFICATION.md for details.
+//! using use_entity_component<T>(). See ARCHITECTURE_SPECIFICATION.md for details.
 //!
 //! Examples of server-owned state (DO NOT put in this context):
-//! - Active UFrame/UTool -> use_components::<FrameToolDataState>()
-//! - Program execution -> use_components::<ExecutionState>()
-//! - Robot position -> use_components::<RobotPosition>()
-//! - Connection state -> use_components::<ConnectionState>()
+//! - Active UFrame/UTool -> use_entity_component::<FrameToolDataState, _>(|| ctx.robot_entity_id.get())
+//! - Program execution -> use_entity_component::<ExecutionState, _>(|| ctx.robot_entity_id.get())
+//! - Robot position -> use_entity_component::<RobotPosition, _>(|| ctx.robot_entity_id.get())
+//! - Connection state -> use_entity_component::<ConnectionState, _>(|| ctx.system_entity_id.get())
 
 use leptos::prelude::*;
 use std::collections::HashSet;

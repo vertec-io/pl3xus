@@ -20,8 +20,9 @@ pub use tool_display::MultiToolDisplay;
 pub use number_input::NumberInput;
 
 use leptos::prelude::*;
-use pl3xus_client::{use_components, use_request};
+use pl3xus_client::{use_entity_component, use_request};
 use fanuc_replica_types::{ConnectionState, GetFrameData, GetToolData, GetActiveFrameTool};
+use crate::pages::dashboard::use_system_entity;
 
 /// Info tab showing frame, tool, and configuration data.
 ///
@@ -29,18 +30,17 @@ use fanuc_replica_types::{ConnectionState, GetFrameData, GetToolData, GetActiveF
 /// No need to copy server state to context - components use use_components directly.
 #[component]
 pub fn InfoTab() -> impl IntoView {
-    let connection_state = use_components::<ConnectionState>();
+    let system_ctx = use_system_entity();
+
+    // Subscribe to entity-specific connection state
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
 
     // Request hooks for loading frame/tool data
     let (get_frame_data, _) = use_request::<GetFrameData>();
     let (get_tool_data, _) = use_request::<GetToolData>();
     let (get_active_frame_tool, _) = use_request::<GetActiveFrameTool>();
 
-    let robot_connected = Memo::new(move |_| {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connected)
-            .unwrap_or(false)
-    });
+    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
 
     // Load frame/tool data when robot becomes connected
     let (has_loaded, set_has_loaded) = signal(false);

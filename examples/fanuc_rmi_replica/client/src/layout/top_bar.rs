@@ -5,7 +5,7 @@
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
 
-use pl3xus_client::{use_components, use_sync_context, use_connection, use_query_keyed, use_message, ControlRequest, ControlResponse, EntityControl, ConnectionReadyState};
+use pl3xus_client::{use_entity_component, use_sync_context, use_connection, use_query_keyed, use_message, ControlRequest, ControlResponse, EntityControl, ConnectionReadyState};
 use fanuc_replica_types::*;
 use crate::pages::dashboard::use_system_entity;
 
@@ -14,28 +14,21 @@ use crate::pages::dashboard::use_system_entity;
 pub fn TopBar() -> impl IntoView {
     let _ctx = use_sync_context();
     let connection = use_connection();
-    let connection_state = use_components::<ConnectionState>();
+    let system_ctx = use_system_entity();
+
+    // Subscribe to the active system's connection state
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
 
     // WebSocket connection state from connection
     let ws_connected = Signal::derive(move || connection.ready_state.get() == ConnectionReadyState::Open);
     let ws_connecting = Signal::derive(move || connection.ready_state.get() == ConnectionReadyState::Connecting);
 
     // Robot connection state from synced component
-    let robot_connected = move || {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connected)
-            .unwrap_or(false)
-    };
-
-    let robot_connecting = move || {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connecting)
-            .unwrap_or(false)
-    };
-
+    let robot_connected = move || connection_state.get().robot_connected;
+    let robot_connecting = move || connection_state.get().robot_connecting;
     let connected_robot_name = move || {
-        connection_state.get().values().next()
-            .and_then(|s| if s.robot_connected { Some(s.robot_name.clone()) } else { None })
+        let state = connection_state.get();
+        if state.robot_connected { Some(state.robot_name.clone()) } else { None }
     };
 
     // State for connection dropdown
@@ -131,7 +124,8 @@ pub fn TopBar() -> impl IntoView {
 /// Connection dropdown - shows robot connection status and allows connecting.
 #[component]
 fn ConnectionDropdown() -> impl IntoView {
-    let connection_state = use_components::<ConnectionState>();
+    let system_ctx = use_system_entity();
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
     let (dropdown_open, set_dropdown_open) = signal(false);
 
     // Use query that only fetches when dropdown is open
@@ -144,17 +138,8 @@ fn ConnectionDropdown() -> impl IntoView {
         set_dropdown_open.set(!dropdown_open.get_untracked());
     };
 
-    let is_robot_connected = move || {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connected)
-            .unwrap_or(false)
-    };
-
-    let robot_addr = move || {
-        connection_state.get().values().next()
-            .map(|s| s.robot_addr.clone())
-            .unwrap_or_else(|| "Not connected".to_string())
-    };
+    let is_robot_connected = move || connection_state.get().robot_connected;
+    let robot_addr = move || connection_state.get().robot_addr.clone();
 
     view! {
         <div class="relative">
@@ -348,8 +333,11 @@ fn WebSocketDropdown(
 fn QuickSettingsButton() -> impl IntoView {
     let ctx = use_sync_context();
     let _navigate = use_navigate();
-    let connection_state = use_components::<ConnectionState>();
-    let control_state = use_components::<EntityControl>();
+    let system_ctx = use_system_entity();
+
+    // Subscribe to entity-specific components
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    let (control_state, _) = use_entity_component::<EntityControl, _>(move || system_ctx.system_entity_id.get());
 
     let (show_popup, set_show_popup) = signal(false);
 
@@ -359,40 +347,23 @@ fn QuickSettingsButton() -> impl IntoView {
         if show_popup.get() { Some(ListRobotConnections) } else { None }
     });
 
-    let robot_connected = move || {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connected)
-            .unwrap_or(false)
-    };
-
-    let robot_connecting = move || {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connecting)
-            .unwrap_or(false)
-    };
-
+    let robot_connected = move || connection_state.get().robot_connected;
+    let robot_connecting = move || connection_state.get().robot_connecting;
     let connected_robot_name = move || {
-        connection_state.get().values().next()
-            .and_then(|s| if s.robot_connected { Some(s.robot_name.clone()) } else { None })
+        let state = connection_state.get();
+        if state.robot_connected { Some(state.robot_name.clone()) } else { None }
     };
-
-    let active_connection_id = move || {
-        connection_state.get().values().next()
-            .and_then(|s| s.active_connection_id)
-    };
+    let active_connection_id = move || connection_state.get().active_connection_id;
 
     // Check if THIS client has control by comparing EntityControl.client_id with our own connection ID
     let has_control = move || {
         let my_id = ctx.my_connection_id.get();
-        control_state.get().values().next()
-            .map(|s| Some(s.client_id) == my_id)
-            .unwrap_or(false)
+        Some(control_state.get().client_id) == my_id
     };
 
     // Get the controlling client ID (if any)
     let controlling_client_id = move || -> Option<u32> {
-        control_state.get().values().next()
-            .map(|s| s.client_id.id)
+        Some(control_state.get().client_id.id)
     };
 
     view! {
@@ -726,7 +697,9 @@ fn ControlButton() -> impl IntoView {
     let ctx = use_sync_context();
     let toast = crate::components::use_toast();
     let system_ctx = use_system_entity();
-    let control_state = use_components::<EntityControl>();
+
+    // Subscribe to entity-specific control state
+    let (control_state, _) = use_entity_component::<EntityControl, _>(move || system_ctx.system_entity_id.get());
 
     // Get the System entity ID from the context (provided by DesktopLayout)
     // Control requests target the System entity
@@ -738,24 +711,15 @@ fn ControlButton() -> impl IntoView {
     // Use the System entity (from context) to check control status
     let has_control = move || {
         let my_id = ctx.my_connection_id.get();
-        let state = control_state.get();
-        system_entity_bits()
-            .and_then(|sys_entity| state.get(&sys_entity))
-            .map(|s| Some(s.client_id) == my_id)
-            .unwrap_or(false)
+        Some(control_state.get().client_id) == my_id
     };
 
     // Check if another client has control
     let other_has_control = move || {
         let my_id = ctx.my_connection_id.get();
         let state = control_state.get();
-        system_entity_bits()
-            .and_then(|sys_entity| state.get(&sys_entity))
-            .map(|s| {
-                // Someone has control and it's not us
-                s.client_id.id != 0 && Some(s.client_id) != my_id
-            })
-            .unwrap_or(false)
+        // Someone has control and it's not us
+        state.client_id.id != 0 && Some(state.client_id) != my_id
     };
 
     view! {
@@ -896,19 +860,23 @@ pub fn ControlResponseHandler() -> impl IntoView {
 #[component]
 pub fn ConnectionStateHandler() -> impl IntoView {
     let toast = crate::components::use_toast();
-    let connection_state = use_components::<ConnectionState>();
+    let system_ctx = use_system_entity();
+
+    // Subscribe to entity-specific connection state
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
 
     // Track previous state to detect transitions
     // (was_connecting, was_connected, robot_name)
     let prev_state = StoredValue::new((false, false, String::new()));
 
     Effect::new(move |_| {
-        let state = connection_state.get();
-        let current = state.values().next();
+        let current = connection_state.get();
 
-        let (is_connecting, is_connected, robot_name) = current
-            .map(|s| (s.robot_connecting, s.robot_connected, s.robot_name.clone()))
-            .unwrap_or((false, false, String::new()));
+        let (is_connecting, is_connected, robot_name) = (
+            current.robot_connecting,
+            current.robot_connected,
+            current.robot_name.clone(),
+        );
 
         let (was_connecting, was_connected, prev_name) = prev_state.get_value();
 

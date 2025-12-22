@@ -1,28 +1,25 @@
 //! Active Configuration Panel - Shows loaded config and arm config.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_components, use_query_keyed, use_mutation};
+use pl3xus_client::{use_entity_component, use_query_keyed, use_mutation};
 use fanuc_replica_types::{ConnectionState, ActiveConfigState, GetRobotConfigurations, LoadConfiguration};
 use crate::components::use_toast;
+use crate::pages::dashboard::use_system_entity;
 
 /// Active Configuration Panel - Shows loaded config and arm config (read-only display)
 #[component]
 pub fn ActiveConfigurationPanel() -> impl IntoView {
     let toast = use_toast();
-    let connection_state = use_components::<ConnectionState>();
-    let active_config = use_components::<ActiveConfigState>();
+    let system_ctx = use_system_entity();
 
-    let robot_connected = Memo::new(move |_| {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connected)
-            .unwrap_or(false)
-    });
+    // Subscribe to entity-specific components
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    let (active_config, _) = use_entity_component::<ActiveConfigState, _>(move || system_ctx.robot_entity_id.get());
+
+    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
 
     // Get active connection ID
-    let active_connection_id = Memo::new(move |_| {
-        connection_state.get().values().next()
-            .and_then(|s| s.active_connection_id)
-    });
+    let active_connection_id = Memo::new(move |_| connection_state.get().active_connection_id);
 
     // Query for robot configurations - auto-fetches when robot is connected
     let configs_query = use_query_keyed::<GetRobotConfigurations, _>(move || {
@@ -50,9 +47,7 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
     });
 
     // Get active config values
-    let config = Memo::new(move |_| {
-        active_config.get().values().next().cloned().unwrap_or_default()
-    });
+    let config = Memo::new(move |_| active_config.get());
 
     // Modal state for save confirmation
     let (show_save_modal, set_show_save_modal) = signal(false);

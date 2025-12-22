@@ -4,9 +4,10 @@
 //! Server is the single source of truth for active frame/tool.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_components, use_mutation};
+use pl3xus_client::{use_entity_component, use_mutation};
 use fanuc_replica_types::{ConnectionState, FrameToolDataState, SetActiveFrameTool};
 use crate::components::use_toast;
+use crate::pages::dashboard::use_system_entity;
 
 /// Tool Management Panel - Tool selector with Apply button
 ///
@@ -15,20 +16,15 @@ use crate::components::use_toast;
 #[component]
 pub fn ToolManagementPanel() -> impl IntoView {
     let toast = use_toast();
-    let connection_state = use_components::<ConnectionState>();
-    let frame_tool_state = use_components::<FrameToolDataState>();
+    let system_ctx = use_system_entity();
+
+    // Subscribe to entity-specific components
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    let (frame_tool_state, _) = use_entity_component::<FrameToolDataState, _>(move || system_ctx.robot_entity_id.get());
 
     // Derive active frame/tool from synced server state
-    let active_frame = Memo::new(move |_| {
-        frame_tool_state.get().values().next()
-            .map(|s| s.active_frame as usize)
-            .unwrap_or(0)
-    });
-    let active_tool = Memo::new(move |_| {
-        frame_tool_state.get().values().next()
-            .map(|s| s.active_tool as usize)
-            .unwrap_or(1)
-    });
+    let active_frame = Memo::new(move |_| frame_tool_state.get().active_frame as usize);
+    let active_tool = Memo::new(move |_| frame_tool_state.get().active_tool as usize);
 
     // Mutation for setting active frame/tool with error handling
     let set_frame_tool = use_mutation::<SetActiveFrameTool>(move |result| {
@@ -39,11 +35,7 @@ pub fn ToolManagementPanel() -> impl IntoView {
         }
     });
 
-    let robot_connected = Memo::new(move |_| {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connected)
-            .unwrap_or(false)
-    });
+    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
 
     // Local UI state for pending tool selection (before Apply is clicked)
     let (pending_tool, set_pending_tool) = signal::<Option<usize>>(None);

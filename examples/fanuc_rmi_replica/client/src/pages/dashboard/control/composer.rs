@@ -9,7 +9,7 @@
 use leptos::prelude::*;
 use leptos::web_sys;
 use wasm_bindgen::JsCast;
-use pl3xus_client::{use_sync_context, use_components};
+use pl3xus_client::{use_sync_context, use_entity_component};
 use fanuc_replica_types::*;
 use fanuc_rmi::dto::{SendPacket, Instruction, FrcLinearMotion, FrcLinearRelative, FrcJointMotion, Position, Configuration};
 use fanuc_rmi::{SpeedType, TermType};
@@ -58,10 +58,12 @@ impl InstructionType {
 pub fn CommandComposerModal() -> impl IntoView {
     let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let sync_ctx = use_sync_context();
-    let current_position = use_components::<RobotPosition>();
-    let current_joints = use_components::<JointAngles>();
-    let active_config = use_components::<ActiveConfigState>();
     let system_ctx = use_system_entity();
+
+    // Subscribe to entity-specific components
+    let (current_position, _) = use_entity_component::<RobotPosition, _>(move || system_ctx.robot_entity_id.get());
+    let (current_joints, _) = use_entity_component::<JointAngles, _>(move || system_ctx.robot_entity_id.get());
+    let (active_config, _) = use_entity_component::<ActiveConfigState, _>(move || system_ctx.robot_entity_id.get());
 
     // Get the Robot entity bits (for targeted motion commands)
     // Motion commands target the Robot entity
@@ -107,24 +109,22 @@ pub fn CommandComposerModal() -> impl IntoView {
         if itype.is_absolute() {
             // Absolute moves: load current position
             if itype.is_cartesian() {
-                if let Some(pos) = current_position.get_untracked().values().next() {
-                    set_x.set(pos.x as f64);
-                    set_y.set(pos.y as f64);
-                    set_z.set(pos.z as f64);
-                    set_w.set(pos.w as f64);
-                    set_p.set(pos.p as f64);
-                    set_r.set(pos.r as f64);
-                }
+                let pos = current_position.get_untracked();
+                set_x.set(pos.x as f64);
+                set_y.set(pos.y as f64);
+                set_z.set(pos.z as f64);
+                set_w.set(pos.w as f64);
+                set_p.set(pos.p as f64);
+                set_r.set(pos.r as f64);
             } else {
                 // Joint absolute - load current joint angles
-                if let Some(joints) = current_joints.get_untracked().values().next() {
-                    set_j1.set(joints.j1 as f64);
-                    set_j2.set(joints.j2 as f64);
-                    set_j3.set(joints.j3 as f64);
-                    set_j4.set(joints.j4 as f64);
-                    set_j5.set(joints.j5 as f64);
-                    set_j6.set(joints.j6 as f64);
-                }
+                let joints = current_joints.get_untracked();
+                set_j1.set(joints.j1 as f64);
+                set_j2.set(joints.j2 as f64);
+                set_j3.set(joints.j3 as f64);
+                set_j4.set(joints.j4 as f64);
+                set_j5.set(joints.j5 as f64);
+                set_j6.set(joints.j6 as f64);
             }
         } else {
             // Relative moves: default to zeros
@@ -146,17 +146,16 @@ pub fn CommandComposerModal() -> impl IntoView {
     // Get active configuration for motion commands - from server-synced state
     let get_configuration = move || {
         let config = active_config.get_untracked();
-        let config = config.values().next();
         Configuration {
-            u_tool_number: config.map(|c| c.u_tool_number as i8).unwrap_or(1),
-            u_frame_number: config.map(|c| c.u_frame_number as i8).unwrap_or(0),
-            front: config.map(|c| c.front as i8).unwrap_or(1),
-            up: config.map(|c| c.up as i8).unwrap_or(1),
-            left: config.map(|c| c.left as i8).unwrap_or(0),
-            flip: config.map(|c| c.flip as i8).unwrap_or(0),
-            turn4: config.map(|c| c.turn4 as i8).unwrap_or(0),
-            turn5: config.map(|c| c.turn5 as i8).unwrap_or(0),
-            turn6: config.map(|c| c.turn6 as i8).unwrap_or(0),
+            u_tool_number: config.u_tool_number as i8,
+            u_frame_number: config.u_frame_number as i8,
+            front: config.front as i8,
+            up: config.up as i8,
+            left: config.left as i8,
+            flip: config.flip as i8,
+            turn4: config.turn4 as i8,
+            turn5: config.turn5 as i8,
+            turn6: config.turn6 as i8,
         }
     };
 
@@ -233,9 +232,8 @@ pub fn CommandComposerModal() -> impl IntoView {
 
         // Get uframe/utool from server-synced active config
         let config = active_config.get_untracked();
-        let config = config.values().next();
-        let uframe = config.map(|c| c.u_frame_number as u8).unwrap_or(0);
-        let utool = config.map(|c| c.u_tool_number as u8).unwrap_or(1);
+        let uframe = config.u_frame_number as u8;
+        let utool = config.u_tool_number as u8;
 
         let cmd = RecentCommand {
             id: new_id,
@@ -286,23 +284,21 @@ pub fn CommandComposerModal() -> impl IntoView {
     let load_current = move |_| {
         let itype = instr_type.get_untracked();
         if itype.is_cartesian() {
-            if let Some(pos) = current_position.get_untracked().values().next() {
-                set_x.set(pos.x as f64);
-                set_y.set(pos.y as f64);
-                set_z.set(pos.z as f64);
-                set_w.set(pos.w as f64);
-                set_p.set(pos.p as f64);
-                set_r.set(pos.r as f64);
-            }
+            let pos = current_position.get_untracked();
+            set_x.set(pos.x as f64);
+            set_y.set(pos.y as f64);
+            set_z.set(pos.z as f64);
+            set_w.set(pos.w as f64);
+            set_p.set(pos.p as f64);
+            set_r.set(pos.r as f64);
         } else {
-            if let Some(joints) = current_joints.get_untracked().values().next() {
-                set_j1.set(joints.j1 as f64);
-                set_j2.set(joints.j2 as f64);
-                set_j3.set(joints.j3 as f64);
-                set_j4.set(joints.j4 as f64);
-                set_j5.set(joints.j5 as f64);
-                set_j6.set(joints.j6 as f64);
-            }
+            let joints = current_joints.get_untracked();
+            set_j1.set(joints.j1 as f64);
+            set_j2.set(joints.j2 as f64);
+            set_j3.set(joints.j3 as f64);
+            set_j4.set(joints.j4 as f64);
+            set_j5.set(joints.j5 as f64);
+            set_j6.set(joints.j6 as f64);
         }
     };
 

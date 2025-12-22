@@ -2,17 +2,21 @@
 
 use leptos::prelude::*;
 
-use pl3xus_client::use_components;
+use pl3xus_client::use_entity_component;
 use fanuc_replica_types::*;
+use crate::pages::dashboard::use_system_entity;
 
 /// Position display showing XYZ and WPR values.
 #[component]
 pub fn PositionDisplay() -> impl IntoView {
-    let pos = use_components::<RobotPosition>();
-    let joints = use_components::<JointAngles>();
-    
-    let get_pos = move || pos.get().values().next().cloned().unwrap_or_default();
-    let get_joints = move || joints.get().values().next().cloned().unwrap_or_default();
+    let ctx = use_system_entity();
+
+    // Subscribe to the active robot's position and joint angles
+    let (pos, _pos_exists) = use_entity_component::<RobotPosition, _>(move || ctx.robot_entity_id.get());
+    let (joints, _joints_exists) = use_entity_component::<JointAngles, _>(move || ctx.robot_entity_id.get());
+
+    let get_pos = move || pos.get();
+    let get_joints = move || joints.get();
 
     view! {
         <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-2">

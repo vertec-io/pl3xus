@@ -3,7 +3,7 @@
 //! A demonstration client for the pl3xus real-time synchronization framework.
 //!
 //! # Key Features
-//! - **Zero boilerplate sync**: `use_components::<T>()` handles subscription lifecycle
+//! - **Entity-specific sync**: `use_entity_component::<T, _>(|| entity_id)` for targeted subscriptions
 //! - **Clean RPC**: `ctx.send(msg)` sends typed messages with automatic serialization
 //! - **Queries**: `use_query::<T>()` for read operations with auto-fetch and server-side invalidation
 //! - **Mutations**: `use_mutation::<T>()` for write operations with response handling

@@ -3,10 +3,11 @@
 use leptos::prelude::*;
 use leptos::web_sys;
 
-use pl3xus_client::{use_components, use_mutation, use_request};
+use pl3xus_client::{use_entity_component, use_mutation, use_request};
 use fanuc_replica_types::*;
 use crate::components::use_toast;
 use crate::layout::LayoutContext;
+use crate::pages::dashboard::use_system_entity;
 
 /// I/O status panel showing digital/analog/group inputs and outputs.
 #[component]
@@ -19,10 +20,14 @@ pub fn IoStatusPanel(
     show_popout: bool,
 ) -> impl IntoView {
     let layout_ctx = use_context::<LayoutContext>().expect("LayoutContext required");
-    let io_status = use_components::<IoStatus>();
-    let io_config = use_components::<IoConfigState>();
-    let get_io = move || io_status.get().values().next().cloned().unwrap_or_default();
-    let get_config = move || io_config.get().values().next().cloned().unwrap_or_default();
+    let ctx = use_system_entity();
+
+    // Subscribe to the active robot's I/O components
+    let (io_status, _) = use_entity_component::<IoStatus, _>(move || ctx.robot_entity_id.get());
+    let (io_config, _) = use_entity_component::<IoConfigState, _>(move || ctx.robot_entity_id.get());
+
+    let get_io = move || io_status.get();
+    let get_config = move || io_config.get();
 
     // Request hooks for reading I/O
     let (read_din_batch, _) = use_request::<ReadDinBatch>();

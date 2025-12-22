@@ -2,19 +2,23 @@
 
 use leptos::prelude::*;
 
-use pl3xus_client::use_components;
+use pl3xus_client::use_entity_component;
 use fanuc_replica_types::*;
+use crate::pages::dashboard::use_system_entity;
 
 /// Status panel showing robot status indicators.
 #[component]
 pub fn StatusPanel() -> impl IntoView {
-    let status = use_components::<RobotStatus>();
-    let connection = use_components::<ConnectionState>();
-    let frame_tool = use_components::<FrameToolDataState>();
+    let ctx = use_system_entity();
 
-    let get_status = move || status.get().values().next().cloned().unwrap_or_default();
-    let get_connection = move || connection.get().values().next().cloned().unwrap_or_default();
-    let get_frame_tool = move || frame_tool.get().values().next().cloned().unwrap_or_default();
+    // Subscribe to the active robot's components
+    let (status, _) = use_entity_component::<RobotStatus, _>(move || ctx.robot_entity_id.get());
+    let (connection, _) = use_entity_component::<ConnectionState, _>(move || ctx.system_entity_id.get());
+    let (frame_tool, _) = use_entity_component::<FrameToolDataState, _>(move || ctx.robot_entity_id.get());
+
+    let get_status = move || status.get();
+    let get_connection = move || connection.get();
+    let get_frame_tool = move || frame_tool.get();
 
     view! {
         <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-2">

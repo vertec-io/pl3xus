@@ -1,23 +1,23 @@
 //! Right panel with status display, position, jog controls, and I/O status.
 
 use leptos::prelude::*;
-use pl3xus_client::use_components;
+use pl3xus_client::use_entity_component;
 use fanuc_replica_types::ConnectionState;
 
 use crate::components::{StatusPanel, PositionDisplay, JogControls, IoStatusPanel, ErrorLog};
 use crate::layout::LayoutContext;
+use crate::pages::dashboard::use_system_entity;
 
 /// Right panel component (visible on dashboard).
 #[component]
 pub fn RightPanel() -> impl IntoView {
     let layout_ctx = use_context::<LayoutContext>().expect("LayoutContext required");
-    let connection_state = use_components::<ConnectionState>();
+    let system_ctx = use_system_entity();
 
-    let robot_connected = Memo::new(move |_| {
-        connection_state.get().values().next()
-            .map(|s| s.robot_connected)
-            .unwrap_or(false)
-    });
+    // Subscribe to the active system's connection state
+    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+
+    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
 
     view! {
         <aside class="w-56 bg-[#0d0d0d] border-l border-[#ffffff08] flex flex-col overflow-hidden shrink-0">

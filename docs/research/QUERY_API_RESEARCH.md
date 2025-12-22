@@ -554,35 +554,36 @@ WebSocket doesn't have HTTP caching semantics. Our "cache" is:
 - [x] Add `MutationHandle` return type with ergonomic methods
 - [x] Make handles `Copy` for ergonomic use in closures
 
-### Phase 2: Server-Side Invalidation Protocol
-- [ ] Add `QueryInvalidation` message to `SyncServerMessage`
-- [ ] Add query cache to `SyncContext` on client
-- [ ] Add `subscribe_invalidations(type_name)` method to context
-- [ ] Handle `QueryInvalidation` in client message router
+### Phase 2: Server-Side Invalidation Protocol ✅ COMPLETE
+- [x] Add `QueryInvalidation` message to `SyncServerMessage`
+- [x] Add `query_invalidations` tracking to `SyncContext` on client
+- [x] Add `handle_query_invalidation()` method to context
+- [x] Handle `QueryInvalidation` in client message router
 
-### Phase 3: Query API
-- [ ] Add `use_query<R>()` for auto-fetching reads
-- [ ] Add `QueryHandle` with reactive data and state
-- [ ] Add `use_query_keyed<R, K>()` for keyed queries
-- [ ] Add `use_query_targeted<R>()` for entity-specific queries
-- [ ] Make QueryHandle `Copy`
+### Phase 3: Query API ✅ COMPLETE
+- [x] Add `use_query<R>()` for auto-fetching reads
+- [x] Add `QueryHandle` with reactive data and state
+- [x] Add `use_query_keyed<R, F>()` for reactive keyed queries
+- [x] Add `QueryState` with is_loading, is_fetching, is_stale, is_success, is_error
+- [x] Make QueryHandle `Copy`
 
-### Phase 4: Query Client
+### Phase 4: Server-Side Integration ✅ COMPLETE
+- [x] Add `invalidate_queries::<NP>(world, &["QueryType"])` helper
+- [x] Add `invalidate_queries_with_keys::<NP>(world, types, keys)` for specific keys
+- [x] Add `invalidate_all_queries::<NP>(world)` nuclear option
+
+### Phase 5: Query Client (Future - Optional)
 - [ ] Add `QueryClientProvider` context component
 - [ ] Add `use_query_client()` hook
-- [ ] Implement `query_client.invalidate::<R>()` for manual invalidation
+- [ ] Implement `query_client.invalidate::<R>()` for manual client-side invalidation
 - [ ] Add `query_client.refetch::<R>()` for manual refetch
-
-### Phase 5: Server-Side Integration
-- [ ] Add helper to broadcast invalidations: `network.invalidate_queries::<R>()`
-- [ ] Document pattern for invalidating after mutations
-- [ ] Add convenience methods to `Network` resource
 
 ### Phase 6: Advanced Features (Future)
 - [ ] Query deduplication (multiple `use_query` calls share one request)
-- [ ] Stale-while-revalidate pattern (optional)
+- [ ] Stale-while-revalidate UI patterns (show stale data with indicator)
 - [ ] Optimistic updates for mutations
 - [ ] Prefetching API
+- [ ] `use_query_targeted<R>()` for entity-specific queries
 
 ## Migration Path
 
@@ -632,19 +633,28 @@ Effect::new(move |_| {
 ### After (server-pushed invalidation)
 ```rust
 // settings.rs - ~10 lines total
-let configs = use_query_keyed::<GetRobotConfigurations, _>(
-    move || selected_robot_id.get(),
-    |id| GetRobotConfigurations { robot_connection_id: id.unwrap() },
-);
+// Query configurations for selected robot - auto-refetches when robot changes
+// AND when server invalidates the query type
+let configs = use_query_keyed::<GetRobotConfigurations, _>(move || {
+    selected_robot_id.get().map(|id| GetRobotConfigurations { robot_connection_id: id })
+});
 
 let create_config = use_mutation::<CreateConfiguration>(move |result| {
     match result {
         Ok(r) if r.success => toast.success("Configuration created"),
-        Ok(r) => toast.error(format!("Failed: {}", r.error())),
+        Ok(r) => toast.error(format!("Failed: {}", r.error.as_deref().unwrap_or(""))),
         Err(e) => toast.error(format!("Error: {e}")),
     }
     // No manual refetch needed! Server pushes invalidation.
 });
+
+// On server side, after creating configuration:
+fn handle_create_configuration<NP: NetworkProvider>(world: &mut World, ...) {
+    // ... create configuration in database ...
+
+    // Tell all clients to refetch their configurations
+    invalidate_queries::<NP>(world, &["GetRobotConfigurations"]);
+}
 ```
 
 ## Conclusion

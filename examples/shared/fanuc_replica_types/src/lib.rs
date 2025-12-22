@@ -1379,7 +1379,7 @@ impl RequestMessage for DeleteRobotConnection {
 }
 
 /// Request to get configurations for a specific robot.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GetRobotConfigurations {
     pub robot_connection_id: i64,
 }

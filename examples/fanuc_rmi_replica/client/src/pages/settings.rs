@@ -7,7 +7,7 @@
 use leptos::prelude::*;
 use leptos::web_sys;
 
-use pl3xus_client::{use_request, use_mutation, use_sync_context, ConnectionReadyState};
+use pl3xus_client::{use_request, use_mutation, use_query_keyed, use_sync_context, ConnectionReadyState};
 use crate::components::use_toast;
 use fanuc_replica_types::*;
 use crate::components::RobotCreationWizard;
@@ -351,7 +351,11 @@ fn RobotSettingsPanel(
 
     // Update request
     let (update_robot, _update_state) = use_request::<UpdateRobotConnection>();
-    let (fetch_configs, configs_state) = use_request::<GetRobotConfigurations>();
+
+    // Use query for configurations - auto-refetches when robot changes or server invalidates
+    let configs_query = use_query_keyed::<GetRobotConfigurations, _>(move || {
+        selected_robot_id.get().map(|id| GetRobotConfigurations { robot_connection_id: id })
+    });
 
     // Configuration delete confirmation
     let (show_delete_config_confirm, set_show_delete_config_confirm) = signal(false);
@@ -363,20 +367,17 @@ fn RobotSettingsPanel(
     let fetch_robots = StoredValue::new(fetch_robots);
     let update_robot = StoredValue::new(update_robot);
     let selected_robot = StoredValue::new(selected_robot);
-    let fetch_configs = StoredValue::new(fetch_configs);
 
     // Configuration CRUD mutations with handlers
     // MutationHandle is Copy, so no StoredValue needed
+    // Server-side invalidation automatically triggers refetch - no manual refetch needed!
     let create_config = use_mutation::<CreateConfiguration>(move |result| {
         set_is_saving_config.set(false);
         match result {
             Ok(r) if r.success => {
                 set_show_config_form.set(false);
                 set_config_error_message.set(None);
-                // Refresh configurations (will be automatic with server-side invalidation)
-                if let Some(robot_id) = selected_robot_id.get_untracked() {
-                    fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot_id }));
-                }
+                // No manual refetch needed - server broadcasts QueryInvalidation
             }
             Ok(r) => set_config_error_message.set(r.error.clone()),
             Err(e) => set_config_error_message.set(Some(e.to_string())),
@@ -389,10 +390,7 @@ fn RobotSettingsPanel(
             Ok(r) if r.success => {
                 set_show_config_form.set(false);
                 set_config_error_message.set(None);
-                // Refresh configurations
-                if let Some(robot_id) = selected_robot_id.get_untracked() {
-                    fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot_id }));
-                }
+                // No manual refetch needed - server broadcasts QueryInvalidation
             }
             Ok(r) => set_config_error_message.set(r.error.clone()),
             Err(e) => set_config_error_message.set(Some(e.to_string())),
@@ -404,10 +402,7 @@ fn RobotSettingsPanel(
             Ok(r) if r.success => {
                 set_show_delete_config_confirm.set(false);
                 set_config_to_delete.set(None);
-                // Refresh configurations
-                if let Some(robot_id) = selected_robot_id.get_untracked() {
-                    fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot_id }));
-                }
+                // No manual refetch needed - server broadcasts QueryInvalidation
             }
             Ok(_) | Err(_) => {
                 // Error handling could be added here
@@ -418,18 +413,15 @@ fn RobotSettingsPanel(
     let set_default_config = use_mutation::<SetDefaultConfiguration>(move |result| {
         if let Ok(r) = result {
             if r.success {
-                // Refresh configurations to show updated default
-                if let Some(robot_id) = selected_robot_id.get_untracked() {
-                    fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot_id }));
-                }
+                // No manual refetch needed - server broadcasts QueryInvalidation
             }
         }
     });
 
-    // Track last loaded robot ID to avoid re-fetching
+    // Track last loaded robot ID to avoid re-setting form fields
     let (last_loaded_robot_id, set_last_loaded_robot_id) = signal::<Option<i64>>(None);
 
-    // Load robot data when selection changes
+    // Load robot form data when selection changes
     Effect::new(move |_| {
         // Only track selected_robot_id changes, not the full robot data
         let current_id = selected_robot_id.get();
@@ -458,22 +450,15 @@ fn RobotSettingsPanel(
                 set_edit_joint_step.set(robot.default_joint_jog_step.to_string());
                 set_has_changes.set(false);
                 set_save_status.set(None);
-                // Load configurations for this robot
-                fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot.id }));
+                // No manual fetch needed - use_query_keyed auto-fetches when selected_robot_id changes
             }
         }
     });
 
-    // Track last received configs to avoid re-setting
-    let (last_configs_version, set_last_configs_version) = signal::<usize>(0);
-
-    // Update configurations when response arrives
+    // Update configurations signal when query data changes
+    // This bridges the query result to the local configurations signal used by the UI
     Effect::new(move |_| {
-        let state = configs_state.get();
-        if let Some(response) = &state.data {
-            // Use a version counter to track changes
-            let new_version = last_configs_version.get_untracked() + 1;
-            set_last_configs_version.set(new_version);
+        if let Some(response) = configs_query.data() {
             set_configurations.set(response.configurations.clone());
         }
     });

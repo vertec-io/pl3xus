@@ -8,7 +8,7 @@ use pl3xus::managers::network_request::{AppNetworkRequestMessage, Request};
 use pl3xus::Network;
 use pl3xus_websockets::WebSocketProvider;
 use pl3xus_sync::control::EntityControl;
-use pl3xus_sync::AuthorizedRequest;
+use pl3xus_sync::{AuthorizedRequest, QueryInvalidation, SyncServerMessage};
 use fanuc_replica_types::*;
 
 use bevy_tokio_tasks::TokioTasksRuntime;
@@ -296,7 +296,10 @@ fn handle_delete_robot_connection(
 fn handle_create_configuration(
     mut requests: MessageReader<Request<CreateConfiguration>>,
     db: Option<Res<DatabaseResource>>,
+    net: Option<Res<Network<WebSocketProvider>>>,
 ) {
+    let mut should_invalidate = false;
+
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling CreateConfiguration for robot_connection_id={}", inner.robot_connection_id);
@@ -308,6 +311,7 @@ fn handle_create_configuration(
         let response = match result {
             Ok(id) => {
                 info!("✅ Created configuration id={}", id);
+                should_invalidate = true;
                 CreateConfigurationResponse {
                     success: true,
                     configuration_id: id,
@@ -328,13 +332,28 @@ fn handle_create_configuration(
             error!("Failed to send response: {:?}", e);
         }
     }
+
+    // Invalidate configuration queries so all clients refetch
+    if should_invalidate {
+        if let Some(net) = net {
+            let invalidation = QueryInvalidation {
+                query_types: vec!["GetRobotConfigurations".to_string()],
+                keys: None,
+            };
+            net.broadcast(SyncServerMessage::QueryInvalidation(invalidation));
+            info!("📢 Broadcast query invalidation for GetRobotConfigurations");
+        }
+    }
 }
 
 /// Handle UpdateConfiguration request - updates an existing configuration.
 fn handle_update_configuration(
     mut requests: MessageReader<Request<UpdateConfiguration>>,
     db: Option<Res<DatabaseResource>>,
+    net: Option<Res<Network<WebSocketProvider>>>,
 ) {
+    let mut should_invalidate = false;
+
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling UpdateConfiguration for id={}", inner.id);
@@ -346,6 +365,7 @@ fn handle_update_configuration(
         let response = match result {
             Ok(()) => {
                 info!("✅ Updated configuration id={}", inner.id);
+                should_invalidate = true;
                 UpdateConfigurationResponse {
                     success: true,
                     error: None,
@@ -364,13 +384,28 @@ fn handle_update_configuration(
             error!("Failed to send response: {:?}", e);
         }
     }
+
+    // Invalidate configuration queries so all clients refetch
+    if should_invalidate {
+        if let Some(net) = net {
+            let invalidation = QueryInvalidation {
+                query_types: vec!["GetRobotConfigurations".to_string()],
+                keys: None,
+            };
+            net.broadcast(SyncServerMessage::QueryInvalidation(invalidation));
+            info!("📢 Broadcast query invalidation for GetRobotConfigurations");
+        }
+    }
 }
 
 /// Handle DeleteConfiguration request - deletes a configuration.
 fn handle_delete_configuration(
     mut requests: MessageReader<Request<DeleteConfiguration>>,
     db: Option<Res<DatabaseResource>>,
+    net: Option<Res<Network<WebSocketProvider>>>,
 ) {
+    let mut should_invalidate = false;
+
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling DeleteConfiguration for id={}", inner.id);
@@ -382,6 +417,7 @@ fn handle_delete_configuration(
         let response = match result {
             Ok(()) => {
                 info!("✅ Deleted configuration id={}", inner.id);
+                should_invalidate = true;
                 DeleteConfigurationResponse {
                     success: true,
                     error: None,
@@ -400,13 +436,28 @@ fn handle_delete_configuration(
             error!("Failed to send response: {:?}", e);
         }
     }
+
+    // Invalidate configuration queries so all clients refetch
+    if should_invalidate {
+        if let Some(net) = net {
+            let invalidation = QueryInvalidation {
+                query_types: vec!["GetRobotConfigurations".to_string()],
+                keys: None,
+            };
+            net.broadcast(SyncServerMessage::QueryInvalidation(invalidation));
+            info!("📢 Broadcast query invalidation for GetRobotConfigurations");
+        }
+    }
 }
 
 /// Handle SetDefaultConfiguration request - sets a configuration as the default.
 fn handle_set_default_configuration(
     mut requests: MessageReader<Request<SetDefaultConfiguration>>,
     db: Option<Res<DatabaseResource>>,
+    net: Option<Res<Network<WebSocketProvider>>>,
 ) {
+    let mut should_invalidate = false;
+
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling SetDefaultConfiguration for id={}", inner.id);
@@ -418,6 +469,7 @@ fn handle_set_default_configuration(
         let response = match result {
             Ok(()) => {
                 info!("✅ Set default configuration id={}", inner.id);
+                should_invalidate = true;
                 SetDefaultConfigurationResponse {
                     success: true,
                     error: None,
@@ -434,6 +486,18 @@ fn handle_set_default_configuration(
 
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
+        }
+    }
+
+    // Invalidate configuration queries so all clients refetch
+    if should_invalidate {
+        if let Some(net) = net {
+            let invalidation = QueryInvalidation {
+                query_types: vec!["GetRobotConfigurations".to_string()],
+                keys: None,
+            };
+            net.broadcast(SyncServerMessage::QueryInvalidation(invalidation));
+            info!("📢 Broadcast query invalidation for GetRobotConfigurations");
         }
     }
 }

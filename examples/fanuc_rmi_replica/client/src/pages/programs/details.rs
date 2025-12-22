@@ -2,7 +2,7 @@
 
 use leptos::prelude::*;
 use leptos::either::Either;
-use pl3xus_client::use_request_with_handler;
+use pl3xus_client::use_mutation;
 use fanuc_replica_types::{ProgramDetail, UpdateProgramSettings};
 use crate::components::use_toast;
 
@@ -43,15 +43,14 @@ pub fn ProgramDetails(
     // Toast context for validation errors
     let toast = use_toast();
 
-    // Request hook for updating settings with error handling
-    let update_settings = use_request_with_handler::<UpdateProgramSettings, _>(move |result| {
+    // Mutation for updating settings with error handling
+    let update_settings = use_mutation::<UpdateProgramSettings>(move |result| {
         match result {
             Ok(r) if r.success => toast.success("Settings saved"),
             Ok(r) => toast.error(format!("Save failed: {}", r.error.as_deref().unwrap_or(""))),
             Err(e) => toast.error(format!("Error: {e}")),
         }
     });
-    let update_settings = StoredValue::new(update_settings);
 
     // Sync signals when program changes or is re-fetched with new data
     Effect::new(move |_| {
@@ -235,7 +234,7 @@ pub fn ProgramDetails(
                                                 return;
                                             }
 
-                                            update_settings.with_value(|f| f(UpdateProgramSettings {
+                                            update_settings.send(UpdateProgramSettings {
                                                 program_id: prog_id,
                                                 start_x: start_x.get().parse().ok(),
                                                 start_y: start_y.get().parse().ok(),
@@ -252,7 +251,7 @@ pub fn ProgramDetails(
                                                 move_speed: parsed_move_speed,
                                                 default_term_type: Some(term_type_val),
                                                 default_term_value: parsed_term_value,
-                                            }));
+                                            });
                                             set_settings_modified.set(false);
                                         }
                                     >

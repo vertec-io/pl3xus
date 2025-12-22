@@ -4,7 +4,7 @@
 //! Server is the single source of truth for active frame/tool.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_components, use_request_with_handler};
+use pl3xus_client::{use_components, use_mutation};
 use fanuc_replica_types::{ConnectionState, FrameToolDataState, SetActiveFrameTool};
 use crate::components::use_toast;
 
@@ -30,15 +30,14 @@ pub fn FrameManagementPanel() -> impl IntoView {
             .unwrap_or(1)
     });
 
-    // Request hook for setting active frame/tool with error handling
-    let set_frame_tool = use_request_with_handler::<SetActiveFrameTool, _>(move |result| {
+    // Mutation for setting active frame/tool with error handling
+    let set_frame_tool = use_mutation::<SetActiveFrameTool>(move |result| {
         match result {
             Ok(r) if r.success => {} // Silent success - UI updates from synced state
             Ok(r) => toast.error(format!("Frame change failed: {}", r.error.as_deref().unwrap_or(""))),
             Err(e) => toast.error(format!("Frame error: {e}")),
         }
     });
-    let set_frame_tool = StoredValue::new(set_frame_tool);
 
     let robot_connected = Memo::new(move |_| {
         connection_state.get().values().next()
@@ -118,7 +117,7 @@ pub fn FrameManagementPanel() -> impl IntoView {
                                             let tool = active_tool.get();
                                             // Send request to server - server updates FrameToolDataState
                                             // which syncs back to all clients
-                                            set_frame_tool.get_value()(SetActiveFrameTool {
+                                            set_frame_tool.send(SetActiveFrameTool {
                                                 uframe: frame as i32,
                                                 utool: tool as i32,
                                             });
@@ -171,7 +170,7 @@ pub fn FrameManagementPanel() -> impl IntoView {
                                         let tool = active_tool.get();
                                         // Send request to server - server updates FrameToolDataState
                                         // which syncs back to all clients
-                                        set_frame_tool.get_value()(SetActiveFrameTool {
+                                        set_frame_tool.send(SetActiveFrameTool {
                                             uframe: frame as i32,
                                             utool: tool as i32,
                                         });

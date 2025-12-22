@@ -5,7 +5,7 @@
 
 use leptos::prelude::*;
 
-use pl3xus_client::use_request_with_handler;
+use pl3xus_client::use_mutation;
 use fanuc_replica_types::*;
 
 /// Wizard step enumeration
@@ -100,9 +100,9 @@ where
     let (config_turn5, set_config_turn5) = signal("0".to_string());
     let (config_turn6, set_config_turn6) = signal("0".to_string());
 
-    // CreateRobotConnection with handler
+    // CreateRobotConnection mutation
     let on_created_for_handler = on_created.clone();
-    let create_robot = use_request_with_handler::<CreateRobotConnection, _>(move |result| {
+    let create_robot = use_mutation::<CreateRobotConnection>(move |result| {
         set_is_submitting.set(false);
         match result {
             Ok(r) if r.success => on_created_for_handler(r.robot_id),
@@ -110,7 +110,6 @@ where
             Err(e) => set_validation_error.set(Some(e.to_string())),
         }
     });
-    let create_robot = StoredValue::new(create_robot);
 
     // Validation helper
     let validate_current_step = move || -> Result<(), String> {
@@ -202,7 +201,7 @@ where
             set_current_step.set(WizardStep::DefaultConfiguration);
             set_is_submitting.set(true);
 
-            create_robot.with_value(|f| f(CreateRobotConnection {
+            create_robot.send(CreateRobotConnection {
                 name: robot_name.get(),
                 description: if robot_description.get().is_empty() { None } else { Some(robot_description.get()) },
                 ip_address: robot_ip.get(),
@@ -232,7 +231,7 @@ where
                     turn5: config_turn5.get().parse().unwrap(),
                     turn6: config_turn6.get().parse().unwrap(),
                 },
-            }));
+            });
         }
     };
 

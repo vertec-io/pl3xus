@@ -3,7 +3,7 @@
 use leptos::prelude::*;
 use leptos::web_sys;
 
-use pl3xus_client::{use_components, use_request, use_request_with_handler};
+use pl3xus_client::{use_components, use_mutation, use_request};
 use fanuc_replica_types::*;
 use crate::components::use_toast;
 use crate::layout::LayoutContext;
@@ -285,21 +285,20 @@ fn IOButton(
     let display_name = name.clone();
     let title_name = name;
 
-    let write_dout = use_request_with_handler::<WriteDout, _>(move |result| {
+    let write_dout = use_mutation::<WriteDout>(move |result| {
         match result {
             Ok(r) if r.success => {} // Silent success
             Ok(r) => toast.error(format!("DOUT write failed: {}", r.error.as_deref().unwrap_or(""))),
             Err(e) => toast.error(format!("DOUT error: {e}")),
         }
     });
-    let write_dout = StoredValue::new(write_dout);
 
     let toggle = move |_| {
         let current = value.get();
-        write_dout.with_value(|f| f(WriteDout {
+        write_dout.send(WriteDout {
             port_number: port,
             port_value: !current,
-        }));
+        });
     };
 
     view! {
@@ -355,22 +354,21 @@ fn AnalogOutput(
     let display_name = name.clone();
     let title_name = name;
 
-    let write_aout = use_request_with_handler::<WriteAout, _>(move |result| {
+    let write_aout = use_mutation::<WriteAout>(move |result| {
         match result {
             Ok(r) if r.success => {} // Silent success
             Ok(r) => toast.error(format!("AOUT write failed: {}", r.error.as_deref().unwrap_or(""))),
             Err(e) => toast.error(format!("AOUT error: {e}")),
         }
     });
-    let write_aout = StoredValue::new(write_aout);
 
     // Inline submit for blur
     let do_blur_submit = move |_| {
         if let Ok(new_val) = input_value.get().parse::<f64>() {
-            write_aout.with_value(|f| f(WriteAout {
+            write_aout.send(WriteAout {
                 port_number: port,
                 port_value: new_val,
-            }));
+            });
         }
         set_editing.set(false);
     };
@@ -379,10 +377,10 @@ fn AnalogOutput(
     let do_key_submit = move |ev: web_sys::KeyboardEvent| {
         if ev.key() == "Enter" {
             if let Ok(new_val) = input_value.get().parse::<f64>() {
-                write_aout.with_value(|f| f(WriteAout {
+                write_aout.send(WriteAout {
                     port_number: port,
                     port_value: new_val,
-                }));
+                });
             }
             set_editing.set(false);
         }
@@ -461,22 +459,21 @@ fn GroupOutput(
     let display_name = name.clone();
     let title_name = name;
 
-    let write_gout = use_request_with_handler::<WriteGout, _>(move |result| {
+    let write_gout = use_mutation::<WriteGout>(move |result| {
         match result {
             Ok(r) if r.success => {} // Silent success
             Ok(r) => toast.error(format!("GOUT write failed: {}", r.error.as_deref().unwrap_or(""))),
             Err(e) => toast.error(format!("GOUT error: {e}")),
         }
     });
-    let write_gout = StoredValue::new(write_gout);
 
     // Inline submit for blur
     let do_blur_submit = move |_| {
         if let Ok(new_val) = input_value.get().parse::<u32>() {
-            write_gout.with_value(|f| f(WriteGout {
+            write_gout.send(WriteGout {
                 port_number: port,
                 port_value: new_val,
-            }));
+            });
         }
         set_editing.set(false);
     };
@@ -485,10 +482,10 @@ fn GroupOutput(
     let do_key_submit = move |ev: web_sys::KeyboardEvent| {
         if ev.key() == "Enter" {
             if let Ok(new_val) = input_value.get().parse::<u32>() {
-                write_gout.with_value(|f| f(WriteGout {
+                write_gout.send(WriteGout {
                     port_number: port,
                     port_value: new_val,
-                }));
+                });
             }
             set_editing.set(false);
         }

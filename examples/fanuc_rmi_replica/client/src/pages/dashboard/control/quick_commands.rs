@@ -1,18 +1,18 @@
 //! Quick Commands panel for robot control (Initialize, Reset, Abort, Continue).
 //!
-//! Uses targeted requests with authorization for robot commands.
+//! Uses targeted mutations with authorization for robot commands.
 //! Commands are sent to the Robot entity and return responses.
 //!
 //! ## Server-Driven Response Handling
 //!
-//! All robot commands use the targeted request pattern which requires control.
+//! All robot commands use the targeted mutation pattern which requires control.
 //! The server sends responses indicating success or failure, and the client
 //! displays appropriate toast notifications based on those responses.
 //!
 //! The UI never lies to the user - it only shows success when the server confirms.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_targeted_request, use_targeted_request_with_handler, use_components};
+use pl3xus_client::{use_mutation_targeted, use_components};
 use fanuc_replica_types::*;
 use crate::components::use_toast;
 use crate::pages::dashboard::context::{WorkspaceContext, MessageDirection, MessageType};
@@ -64,40 +64,32 @@ pub fn QuickCommandsPanel() -> impl IntoView {
     };
 
     // =========================================================================
-    // Targeted Request Hooks with Handlers
+    // Targeted Mutation Hooks (TanStack Query-inspired API)
     //
-    // use_targeted_request_with_handler handles response deduplication internally
+    // use_mutation_targeted handles response deduplication internally
     // - The handler is called exactly once per response
-    // - No manual Effect boilerplate needed
+    // - Returns a MutationHandle with .send() and state accessors
     // =========================================================================
 
-    // SetSpeedOverride - needs raw hook since we also manage pending_speed
-    let (send_speed_override, status_speed_override) = use_targeted_request::<SetSpeedOverride>();
-    let (speed_processed, set_speed_processed) = signal::<Option<bool>>(None);
-
-    Effect::new(move |_| {
-        let state = status_speed_override.get();
-        if state.is_loading() { set_speed_processed.set(None); return; }
-        if state.is_idle() || speed_processed.get_untracked().is_some() { return; }
-
-        if state.is_error() {
-            set_pending_speed.set(None);
-            set_speed_processed.set(Some(false));
-            toast.error(format!("Failed to set speed: {}", state.error.clone().unwrap_or_default()));
-            return;
-        }
-
-        if let Some(ref response) = state.data {
-            set_speed_processed.set(Some(response.success));
-            if !response.success {
+    // SetSpeedOverride - mutation handler clears pending_speed on failure
+    let speed_override = use_mutation_targeted::<SetSpeedOverride>(move |result| {
+        match result {
+            Ok(r) if r.success => {
+                // Success - pending_speed will be cleared when synced component updates
+            }
+            Ok(r) => {
                 set_pending_speed.set(None);
-                toast.error(format!("Speed denied: {}", response.error.as_deref().unwrap_or("No control")));
+                toast.error(format!("Speed denied: {}", r.error.as_deref().unwrap_or("No control")));
+            }
+            Err(e) => {
+                set_pending_speed.set(None);
+                toast.error(format!("Failed to set speed: {e}"));
             }
         }
     });
 
-    // InitializeRobot - use the clean handler API
-    let send_initialize = use_targeted_request_with_handler::<InitializeRobot, _>(move |result| {
+    // InitializeRobot - use the clean mutation API
+    let initialize = use_mutation_targeted::<InitializeRobot>(move |result| {
         match result {
             Ok(r) if r.success => {
                 toast.success("Robot initialized");
@@ -109,7 +101,7 @@ pub fn QuickCommandsPanel() -> impl IntoView {
     });
 
     // ResetRobot
-    let send_reset = use_targeted_request_with_handler::<ResetRobot, _>(move |result| {
+    let reset = use_mutation_targeted::<ResetRobot>(move |result| {
         match result {
             Ok(r) if r.success => {
                 toast.success("Robot reset");
@@ -121,7 +113,7 @@ pub fn QuickCommandsPanel() -> impl IntoView {
     });
 
     // AbortMotion
-    let send_abort = use_targeted_request_with_handler::<AbortMotion, _>(move |result| {
+    let abort = use_mutation_targeted::<AbortMotion>(move |result| {
         match result {
             Ok(r) if r.success => {
                 toast.warning("Motion aborted");
@@ -143,30 +135,26 @@ pub fn QuickCommandsPanel() -> impl IntoView {
         }
     });
 
-    // Store in StoredValue for use in closures
-    let send_speed_override = StoredValue::new(send_speed_override);
-    let send_initialize = StoredValue::new(send_initialize);
-    let send_reset = StoredValue::new(send_reset);
-    let send_abort = StoredValue::new(send_abort);
-
     // Send override command when slider changes
+    // MutationHandle is Copy, so no StoredValue needed
     let send_override = move |value: u32| {
         let Some(entity_bits) = robot_entity_bits() else {
             toast.error("Cannot send speed: Robot not found");
             return;
         };
         let clamped = value.min(100) as u8;
-        send_speed_override.with_value(|f| f(entity_bits, SetSpeedOverride { speed: clamped }));
+        speed_override.send(entity_bits, SetSpeedOverride { speed: clamped });
     };
     let send_override = StoredValue::new(send_override);
 
+    // Click handlers using the new mutation API
     let init_click = move |_| {
         let Some(entity_bits) = robot_entity_bits() else {
             toast.error("Cannot initialize: Robot not found");
             return;
         };
         ws_ctx.add_console_message("Initialize Robot".to_string(), MessageDirection::Sent, MessageType::Command);
-        send_initialize.with_value(|f| f(entity_bits, InitializeRobot { group_mask: Some(1) }));
+        initialize.send(entity_bits, InitializeRobot { group_mask: Some(1) });
     };
     let reset_click = move |_| {
         let Some(entity_bits) = robot_entity_bits() else {
@@ -174,7 +162,7 @@ pub fn QuickCommandsPanel() -> impl IntoView {
             return;
         };
         ws_ctx.add_console_message("Reset Robot".to_string(), MessageDirection::Sent, MessageType::Command);
-        send_reset.with_value(|f| f(entity_bits, ResetRobot));
+        reset.send(entity_bits, ResetRobot);
     };
     let abort_click = move |_| {
         let Some(entity_bits) = robot_entity_bits() else {
@@ -182,7 +170,7 @@ pub fn QuickCommandsPanel() -> impl IntoView {
             return;
         };
         ws_ctx.add_console_message("Abort Motion".to_string(), MessageDirection::Sent, MessageType::Command);
-        send_abort.with_value(|f| f(entity_bits, AbortMotion));
+        abort.send(entity_bits, AbortMotion);
     };
 
     view! {

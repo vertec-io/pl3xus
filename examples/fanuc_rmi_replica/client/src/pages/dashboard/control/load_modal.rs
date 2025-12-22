@@ -1,18 +1,18 @@
 //! Load Program Modal - Select and load a program for execution.
 //!
-//! This modal sends a LoadProgram request to the server. The server updates
+//! This modal sends a LoadProgram mutation to the server. The server updates
 //! the ExecutionState component which is automatically synced to all clients.
 //! No client-side state updates are needed - the UI reads directly from the
 //! synced ExecutionState.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_request, use_request_with_handler};
+use pl3xus_client::{use_request, use_mutation};
 use fanuc_replica_types::*;
 use crate::components::{use_toast, ToastType};
 
 /// Load Program Modal - Select and load a program for execution.
 ///
-/// Sends LoadProgram request to server. Server updates ExecutionState which
+/// Sends LoadProgram mutation to server. Server updates ExecutionState which
 /// is automatically synced to all clients. No client-side state updates needed.
 #[component]
 pub fn LoadProgramModal<F>(
@@ -24,13 +24,11 @@ where
     let toast = use_toast();
     let (list_programs, programs_state) = use_request::<ListPrograms>();
     let (selected_id, set_selected_id) = signal::<Option<i64>>(None);
-    let (loading, set_loading) = signal(false);
     let (has_loaded, set_has_loaded) = signal(false);
     let on_close_load = on_close.clone();
 
-    // LoadProgram with handler - shows toasts and closes modal on success
-    let load_program_fn = use_request_with_handler::<LoadProgram, _>(move |result| {
-        set_loading.set(false);
+    // LoadProgram mutation - shows toasts and closes modal on success
+    let load = use_mutation::<LoadProgram>(move |result| {
         match result {
             Ok(r) if r.success => {
                 if let Some(program) = &r.program {
@@ -42,7 +40,6 @@ where
             Err(e) => toast.show(e, ToastType::Error),
         }
     });
-    let load_program_fn = StoredValue::new(load_program_fn);
 
     // Fetch programs on mount - with guard to prevent infinite loop
     Effect::new(move |_| {
@@ -65,11 +62,11 @@ where
     let on_close_header = on_close.clone();
     let on_close_cancel = on_close.clone();
 
-    // Load selected program - sends request to server
-    let load_program = move |_| {
+    // Load selected program - sends mutation to server
+    // Note: MutationHandle is Copy, so it can be used directly in closures
+    let load_click = move |_| {
         if let Some(id) = selected_id.get() {
-            set_loading.set(true);
-            load_program_fn.with_value(|f| f(LoadProgram { program_id: id }));
+            load.send(LoadProgram { program_id: id });
         }
     };
 
@@ -157,16 +154,16 @@ where
                     <button
                         class=move || format!(
                             "text-[10px] px-4 py-1.5 rounded transition-colors {}",
-                            if selected_id.get().is_some() && !loading.get() {
+                            if selected_id.get().is_some() && !load.is_loading() {
                                 "bg-[#00d9ff] text-black hover:bg-[#00c4e6]"
                             } else {
                                 "bg-[#333333] text-[#666666] cursor-not-allowed"
                             }
                         )
-                        disabled=move || selected_id.get().is_none() || loading.get()
-                        on:click=load_program
+                        disabled=move || selected_id.get().is_none() || load.is_loading()
+                        on:click=load_click.clone()
                     >
-                        {move || if loading.get() { "Loading..." } else { "Load Program" }}
+                        {move || if load.is_loading() { "Loading..." } else { "Load Program" }}
                     </button>
                 </div>
             </div>

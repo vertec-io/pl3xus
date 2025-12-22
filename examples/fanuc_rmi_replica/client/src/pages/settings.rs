@@ -7,7 +7,7 @@
 use leptos::prelude::*;
 use leptos::web_sys;
 
-use pl3xus_client::{use_request, use_request_with_handler, use_sync_context, ConnectionReadyState};
+use pl3xus_client::{use_request, use_mutation, use_sync_context, ConnectionReadyState};
 use crate::components::use_toast;
 use fanuc_replica_types::*;
 use crate::components::RobotCreationWizard;
@@ -226,8 +226,8 @@ fn SystemSettingsPanel() -> impl IntoView {
     let (confirm_reset, set_confirm_reset) = signal(false);
     let toast = use_toast();
 
-    // ResetDatabase with handler
-    let reset_database = use_request_with_handler::<ResetDatabase, _>(move |result| {
+    // ResetDatabase with handler - MutationHandle is Copy, no StoredValue needed
+    let reset_database = use_mutation::<ResetDatabase>(move |result| {
         set_confirm_reset.set(false);
         match result {
             Ok(r) if r.success => {
@@ -240,7 +240,6 @@ fn SystemSettingsPanel() -> impl IntoView {
             Err(e) => toast.error(format!("Error: {e}")),
         }
     });
-    let reset_database = StoredValue::new(reset_database);
 
     view! {
         <div class="bg-[#0d0d0d] border border-[#ffffff08] rounded">
@@ -277,7 +276,7 @@ fn SystemSettingsPanel() -> impl IntoView {
                                 <button
                                     class="flex-1 text-[8px] px-2 py-1 bg-[#ff4444] text-white rounded hover:bg-[#ff5555]"
                                     on:click=move |_| {
-                                        reset_database.get_value()(ResetDatabase);
+                                        reset_database.send(ResetDatabase);
                                     }
                                 >
                                     "Yes"
@@ -354,12 +353,6 @@ fn RobotSettingsPanel(
     let (update_robot, _update_state) = use_request::<UpdateRobotConnection>();
     let (fetch_configs, configs_state) = use_request::<GetRobotConfigurations>();
 
-    // Configuration CRUD requests
-    let (create_config, create_config_state) = use_request::<CreateConfiguration>();
-    let (update_config, update_config_state) = use_request::<UpdateConfiguration>();
-    let (delete_config, delete_config_state) = use_request::<DeleteConfiguration>();
-    let (set_default_config, set_default_config_state) = use_request::<SetDefaultConfiguration>();
-
     // Configuration delete confirmation
     let (show_delete_config_confirm, set_show_delete_config_confirm) = signal(false);
     let (config_to_delete, set_config_to_delete) = signal::<Option<i64>>(None);
@@ -371,10 +364,67 @@ fn RobotSettingsPanel(
     let update_robot = StoredValue::new(update_robot);
     let selected_robot = StoredValue::new(selected_robot);
     let fetch_configs = StoredValue::new(fetch_configs);
-    let create_config = StoredValue::new(create_config);
-    let update_config = StoredValue::new(update_config);
-    let delete_config = StoredValue::new(delete_config);
-    let set_default_config = StoredValue::new(set_default_config);
+
+    // Configuration CRUD mutations with handlers
+    // MutationHandle is Copy, so no StoredValue needed
+    let create_config = use_mutation::<CreateConfiguration>(move |result| {
+        set_is_saving_config.set(false);
+        match result {
+            Ok(r) if r.success => {
+                set_show_config_form.set(false);
+                set_config_error_message.set(None);
+                // Refresh configurations (will be automatic with server-side invalidation)
+                if let Some(robot_id) = selected_robot_id.get_untracked() {
+                    fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot_id }));
+                }
+            }
+            Ok(r) => set_config_error_message.set(r.error.clone()),
+            Err(e) => set_config_error_message.set(Some(e.to_string())),
+        }
+    });
+
+    let update_config = use_mutation::<UpdateConfiguration>(move |result| {
+        set_is_saving_config.set(false);
+        match result {
+            Ok(r) if r.success => {
+                set_show_config_form.set(false);
+                set_config_error_message.set(None);
+                // Refresh configurations
+                if let Some(robot_id) = selected_robot_id.get_untracked() {
+                    fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot_id }));
+                }
+            }
+            Ok(r) => set_config_error_message.set(r.error.clone()),
+            Err(e) => set_config_error_message.set(Some(e.to_string())),
+        }
+    });
+
+    let delete_config = use_mutation::<DeleteConfiguration>(move |result| {
+        match result {
+            Ok(r) if r.success => {
+                set_show_delete_config_confirm.set(false);
+                set_config_to_delete.set(None);
+                // Refresh configurations
+                if let Some(robot_id) = selected_robot_id.get_untracked() {
+                    fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot_id }));
+                }
+            }
+            Ok(_) | Err(_) => {
+                // Error handling could be added here
+            }
+        }
+    });
+
+    let set_default_config = use_mutation::<SetDefaultConfiguration>(move |result| {
+        if let Ok(r) = result {
+            if r.success {
+                // Refresh configurations to show updated default
+                if let Some(robot_id) = selected_robot_id.get_untracked() {
+                    fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot_id }));
+                }
+            }
+        }
+    });
 
     // Track last loaded robot ID to avoid re-fetching
     let (last_loaded_robot_id, set_last_loaded_robot_id) = signal::<Option<i64>>(None);
@@ -428,69 +478,8 @@ fn RobotSettingsPanel(
         }
     });
 
-    // Handle create configuration response
-    Effect::new(move |_| {
-        let state = create_config_state.get();
-        if let Some(response) = &state.data {
-            set_is_saving_config.set(false);
-            if response.success {
-                set_show_config_form.set(false);
-                set_config_error_message.set(None);
-                // Refresh configurations
-                if let Some(robot_id) = selected_robot_id.get_untracked() {
-                    fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot_id }));
-                }
-            } else {
-                set_config_error_message.set(response.error.clone());
-            }
-        }
-    });
-
-    // Handle update configuration response
-    Effect::new(move |_| {
-        let state = update_config_state.get();
-        if let Some(response) = &state.data {
-            set_is_saving_config.set(false);
-            if response.success {
-                set_show_config_form.set(false);
-                set_config_error_message.set(None);
-                // Refresh configurations
-                if let Some(robot_id) = selected_robot_id.get_untracked() {
-                    fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot_id }));
-                }
-            } else {
-                set_config_error_message.set(response.error.clone());
-            }
-        }
-    });
-
-    // Handle delete configuration response
-    Effect::new(move |_| {
-        let state = delete_config_state.get();
-        if let Some(response) = &state.data {
-            if response.success {
-                set_show_delete_config_confirm.set(false);
-                set_config_to_delete.set(None);
-                // Refresh configurations
-                if let Some(robot_id) = selected_robot_id.get_untracked() {
-                    fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot_id }));
-                }
-            }
-        }
-    });
-
-    // Handle set default configuration response
-    Effect::new(move |_| {
-        let state = set_default_config_state.get();
-        if let Some(response) = &state.data {
-            if response.success {
-                // Refresh configurations to show updated default
-                if let Some(robot_id) = selected_robot_id.get_untracked() {
-                    fetch_configs.with_value(|f| f(GetRobotConfigurations { robot_connection_id: robot_id }));
-                }
-            }
-        }
-    });
+    // Note: Configuration CRUD response handling is now done in the mutation handlers above.
+    // No Effects needed - handlers are called exactly once per response.
 
     view! {
         <div class="flex-1 bg-[#0a0a0a] rounded border border-[#ffffff08] flex flex-col min-h-0">
@@ -872,7 +861,7 @@ fn RobotSettingsPanel(
                                                                     title="Set as Default"
                                                                     on:click=move |ev| {
                                                                         ev.stop_propagation();
-                                                                        set_default_config.with_value(|f| f(SetDefaultConfiguration { id: config_id }));
+                                                                        set_default_config.send(SetDefaultConfiguration { id: config_id });
                                                                     }
                                                                 >
                                                                     "⭐"
@@ -1156,7 +1145,7 @@ fn RobotSettingsPanel(
 
                                     if let Some(config_id) = editing_config_id.get() {
                                         // Update existing configuration
-                                        update_config.with_value(|f| f(UpdateConfiguration {
+                                        update_config.send(UpdateConfiguration {
                                             id: config_id,
                                             name: Some(config_name.get()),
                                             is_default: Some(config_is_default.get()),
@@ -1169,10 +1158,10 @@ fn RobotSettingsPanel(
                                             turn4: config_turn4.get().parse().ok(),
                                             turn5: config_turn5.get().parse().ok(),
                                             turn6: config_turn6.get().parse().ok(),
-                                        }));
+                                        });
                                     } else {
                                         // Create new configuration
-                                        create_config.with_value(|f| f(CreateConfiguration {
+                                        create_config.send(CreateConfiguration {
                                             robot_connection_id: robot_id,
                                             name: config_name.get(),
                                             is_default: config_is_default.get(),
@@ -1185,7 +1174,7 @@ fn RobotSettingsPanel(
                                             turn4: config_turn4.get().parse().unwrap_or(0),
                                             turn5: config_turn5.get().parse().unwrap_or(0),
                                             turn6: config_turn6.get().parse().unwrap_or(0),
-                                        }));
+                                        });
                                     }
                                 }
                             >
@@ -1243,7 +1232,7 @@ fn RobotSettingsPanel(
                                 class="flex-1 text-[10px] px-4 py-2 bg-[#ff4444] text-white rounded hover:bg-[#ff5555] font-medium"
                                 on:click=move |_| {
                                     if let Some(id) = config_to_delete.get() {
-                                        delete_config.with_value(|f| f(DeleteConfiguration { id }));
+                                        delete_config.send(DeleteConfiguration { id });
                                     }
                                 }
                             >
@@ -1280,8 +1269,8 @@ fn DeleteConfirmModal(
     let toast = use_toast();
     let fetch_robots_stored = StoredValue::new(fetch_robots.clone());
 
-    // DeleteRobotConnection with handler
-    let delete_robot = use_request_with_handler::<DeleteRobotConnection, _>(move |result| {
+    // DeleteRobotConnection with handler - MutationHandle is Copy
+    let delete_robot = use_mutation::<DeleteRobotConnection>(move |result| {
         set_is_deleting.set(false);
         set_show_delete_confirm.set(false);
         set_robot_to_delete.set(None);
@@ -1322,7 +1311,7 @@ fn DeleteConfirmModal(
                         on:click=move |_| {
                             if let Some((id, _)) = robot_to_delete.get() {
                                 set_is_deleting.set(true);
-                                delete_robot(DeleteRobotConnection { id });
+                                delete_robot.send(DeleteRobotConnection { id });
 
                                 // Clear selection if we deleted the selected robot
                                 if selected_robot_id.get() == Some(id) {

@@ -131,6 +131,9 @@ pub use hooks::{
     use_request, use_request_with_handler, use_request_state,
     use_targeted_request, use_targeted_request_with_handler,
     UseRequestState, use_send_targeted,
+    // TanStack Query-inspired mutation API
+    use_mutation, use_mutation_targeted,
+    MutationHandle, TargetedMutationHandle,
 };
 
 // Deprecated hook names (for backwards compatibility)

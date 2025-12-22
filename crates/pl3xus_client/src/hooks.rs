@@ -1602,3 +1602,363 @@ where
 
     send
 }
+
+// ============================================================================
+// MUTATION API (TanStack Query-inspired)
+// ============================================================================
+
+/// Handle returned by `use_mutation` for sending mutations and accessing state.
+///
+/// This provides an ergonomic API for mutations (write operations) with:
+/// - A `send` method to trigger the mutation
+/// - State accessors (`is_loading`, `is_idle`, `is_success`, `is_error`)
+/// - Access to response data and errors
+///
+/// The handle is `Copy`, so it can be used directly in multiple closures without cloning.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let create = use_mutation::<CreateProgram>(move |result| {
+///     match result {
+///         Ok(r) if r.success => toast.success("Created!"),
+///         Ok(r) => toast.error(format!("Failed: {}", r.error())),
+///         Err(e) => toast.error(format!("Error: {e}")),
+///     }
+/// });
+///
+/// // Send the mutation
+/// create.send(CreateProgram { name: "test".into() });
+///
+/// // Check state
+/// if create.is_loading() { /* show spinner */ }
+/// ```
+pub struct MutationHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    send_fn: StoredValue<Box<dyn Fn(R) + Send + Sync>>,
+    state: Signal<UseRequestState<R::ResponseMessage>>,
+}
+
+// Manual Clone/Copy implementations because StoredValue is Copy
+// but derive(Copy) doesn't work with Box<dyn Fn>
+impl<R> Clone for MutationHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<R> Copy for MutationHandle<R> where R: pl3xus_common::RequestMessage + Clone + 'static {}
+
+impl<R> MutationHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    /// Send the mutation request.
+    pub fn send(&self, request: R) {
+        self.send_fn.with_value(|f| f(request));
+    }
+
+    /// Returns true if the mutation is currently in flight.
+    pub fn is_loading(&self) -> bool {
+        self.state.get().is_loading()
+    }
+
+    /// Returns true if no mutation has been sent yet.
+    pub fn is_idle(&self) -> bool {
+        self.state.get().is_idle()
+    }
+
+    /// Returns true if the last mutation completed successfully (transport-level).
+    pub fn is_success(&self) -> bool {
+        self.state.get().is_success()
+    }
+
+    /// Returns true if the last mutation failed (transport-level).
+    pub fn is_error(&self) -> bool {
+        self.state.get().is_error()
+    }
+
+    /// Get the response data from the last successful mutation.
+    pub fn data(&self) -> Option<R::ResponseMessage> {
+        self.state.get().data.clone()
+    }
+
+    /// Get the error message from the last failed mutation.
+    pub fn error(&self) -> Option<String> {
+        self.state.get().error.clone()
+    }
+
+    /// Get the raw state signal for advanced use cases.
+    pub fn state(&self) -> Signal<UseRequestState<R::ResponseMessage>> {
+        self.state
+    }
+}
+
+/// Hook for mutations (write operations) with a response handler.
+///
+/// This is the primary hook for sending mutations to the server. It provides:
+/// - Automatic response deduplication (handler called exactly once per response)
+/// - Ergonomic `MutationHandle` with state accessors
+/// - Type-safe request/response handling
+///
+/// # Arguments
+///
+/// * `handler` - Callback receiving `Result<&ResponseMessage, &str>`:
+///   - `Ok(response)` - Transport succeeded, check `response.success` for business logic
+///   - `Err(error)` - Transport-level error
+///
+/// # Returns
+///
+/// A `MutationHandle` with `send()` method and state accessors.
+///
+/// # Panics
+///
+/// Panics if called outside of a `SyncProvider` context.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_mutation;
+///
+/// let toast = use_toast();
+///
+/// let load = use_mutation::<LoadProgram>(move |result| {
+///     match result {
+///         Ok(r) if r.success => toast.success("Program loaded"),
+///         Ok(r) => toast.error(format!("Failed: {}", r.error.as_deref().unwrap_or(""))),
+///         Err(e) => toast.error(format!("Error: {e}")),
+///     }
+/// });
+///
+/// // Send the mutation
+/// load.send(LoadProgram { program_id: 42 });
+///
+/// // Access state
+/// view! {
+///     <button disabled=move || load.is_loading()>
+///         "Load"
+///     </button>
+/// }
+/// ```
+pub fn use_mutation<R>(
+    handler: impl Fn(Result<&R::ResponseMessage, &str>) + Clone + 'static,
+) -> MutationHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    let (send, state) = use_request::<R>();
+
+    // Track whether the current response has been processed
+    let processed = RwSignal::new(false);
+
+    // Set up the Effect that calls the handler exactly once per response
+    Effect::new(move |_| {
+        let current_state = state.get();
+
+        // Reset processed flag when a new request starts loading
+        if current_state.is_loading() {
+            processed.set(false);
+            return;
+        }
+
+        // Skip if idle (no request made yet) or already processed
+        if current_state.is_idle() || processed.get_untracked() {
+            return;
+        }
+
+        // Mark as processed before calling handler
+        processed.set(true);
+
+        // Call the handler with the result
+        if let Some(ref error) = current_state.error {
+            handler(Err(error.as_str()));
+        } else if let Some(ref data) = current_state.data {
+            handler(Ok(data));
+        }
+    });
+
+    // Store the send function in a StoredValue to make the handle Copy
+    let send_fn = StoredValue::new(Box::new(send) as Box<dyn Fn(R) + Send + Sync>);
+
+    MutationHandle { send_fn, state }
+}
+
+/// Handle returned by `use_mutation_targeted` for sending entity-targeted mutations.
+///
+/// Similar to `MutationHandle` but the `send` method takes an entity ID.
+///
+/// The handle is `Copy`, so it can be used directly in multiple closures without cloning.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let set_speed = use_mutation_targeted::<SetSpeedOverride>(move |result| {
+///     match result {
+///         Ok(r) if r.success => toast.success("Speed set"),
+///         Ok(r) => toast.error(format!("Denied: {}", r.error())),
+///         Err(e) => toast.error(format!("Error: {e}")),
+///     }
+/// });
+///
+/// // Send to specific entity
+/// set_speed.send(entity_id, SetSpeedOverride { value: 50.0 });
+/// ```
+pub struct TargetedMutationHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    send_fn: StoredValue<Box<dyn Fn(u64, R) + Send + Sync>>,
+    state: Signal<UseRequestState<R::ResponseMessage>>,
+}
+
+// Manual Clone/Copy implementations because StoredValue is Copy
+// but derive(Copy) doesn't work with Box<dyn Fn>
+impl<R> Clone for TargetedMutationHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<R> Copy for TargetedMutationHandle<R> where R: pl3xus_common::RequestMessage + Clone + 'static {}
+
+impl<R> TargetedMutationHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    /// Send the mutation request to a specific entity.
+    pub fn send(&self, entity_id: u64, request: R) {
+        self.send_fn.with_value(|f| f(entity_id, request));
+    }
+
+    /// Returns true if the mutation is currently in flight.
+    pub fn is_loading(&self) -> bool {
+        self.state.get().is_loading()
+    }
+
+    /// Returns true if no mutation has been sent yet.
+    pub fn is_idle(&self) -> bool {
+        self.state.get().is_idle()
+    }
+
+    /// Returns true if the last mutation completed successfully (transport-level).
+    pub fn is_success(&self) -> bool {
+        self.state.get().is_success()
+    }
+
+    /// Returns true if the last mutation failed (transport-level).
+    pub fn is_error(&self) -> bool {
+        self.state.get().is_error()
+    }
+
+    /// Get the response data from the last successful mutation.
+    pub fn data(&self) -> Option<R::ResponseMessage> {
+        self.state.get().data.clone()
+    }
+
+    /// Get the error message from the last failed mutation.
+    pub fn error(&self) -> Option<String> {
+        self.state.get().error.clone()
+    }
+
+    /// Get the raw state signal for advanced use cases.
+    pub fn state(&self) -> Signal<UseRequestState<R::ResponseMessage>> {
+        self.state
+    }
+}
+
+/// Hook for entity-targeted mutations with a response handler.
+///
+/// This is the primary hook for sending mutations to specific entities. It provides:
+/// - Entity-targeted requests with server-side authorization
+/// - Automatic response deduplication (handler called exactly once per response)
+/// - Ergonomic `TargetedMutationHandle` with state accessors
+///
+/// # Arguments
+///
+/// * `handler` - Callback receiving `Result<&ResponseMessage, &str>`:
+///   - `Ok(response)` - Transport succeeded, check `response.success` for business logic
+///   - `Err(error)` - Transport-level error (including authorization failures)
+///
+/// # Returns
+///
+/// A `TargetedMutationHandle` with `send(entity_id, request)` method and state accessors.
+///
+/// # Panics
+///
+/// Panics if called outside of a `SyncProvider` context.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_mutation_targeted;
+///
+/// let toast = use_toast();
+///
+/// let abort = use_mutation_targeted::<AbortMotion>(move |result| {
+///     match result {
+///         Ok(r) if r.success => toast.warning("Motion aborted"),
+///         Ok(r) => toast.error(format!("Denied: {}", r.error.as_deref().unwrap_or(""))),
+///         Err(e) => toast.error(format!("Error: {e}")),
+///     }
+/// });
+///
+/// // Send to specific entity
+/// abort.send(robot_entity_id, AbortMotion);
+///
+/// // Access state
+/// view! {
+///     <button disabled=move || abort.is_loading()>
+///         "Abort"
+///     </button>
+/// }
+/// ```
+pub fn use_mutation_targeted<R>(
+    handler: impl Fn(Result<&R::ResponseMessage, &str>) + Clone + 'static,
+) -> TargetedMutationHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    let (send, state) = use_targeted_request::<R>();
+
+    // Track whether the current response has been processed
+    let processed = RwSignal::new(false);
+
+    // Set up the Effect that calls the handler exactly once per response
+    Effect::new(move |_| {
+        let current_state = state.get();
+
+        // Reset processed flag when a new request starts loading
+        if current_state.is_loading() {
+            processed.set(false);
+            return;
+        }
+
+        // Skip if idle (no request made yet) or already processed
+        if current_state.is_idle() || processed.get_untracked() {
+            return;
+        }
+
+        // Mark as processed before calling handler
+        processed.set(true);
+
+        // Call the handler with the result
+        if let Some(ref error) = current_state.error {
+            handler(Err(error.as_str()));
+        } else if let Some(ref data) = current_state.data {
+            handler(Ok(data));
+        }
+    });
+
+    // Store the send function in a StoredValue to make the handle Copy
+    let send_fn = StoredValue::new(Box::new(send) as Box<dyn Fn(u64, R) + Send + Sync>);
+
+    TargetedMutationHandle { send_fn, state }
+}

@@ -23,7 +23,7 @@
 //! This ensures all connected clients see the same notification simultaneously.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_targeted_request_with_handler, use_components, use_sync_context, EntityControl};
+use pl3xus_client::{use_mutation_targeted, use_components, use_sync_context, EntityControl};
 use fanuc_replica_types::*;
 use super::LoadProgramModal;
 use crate::components::use_toast;
@@ -106,57 +106,59 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
     };
 
     // =========================================================================
-    // Targeted Request Hooks with Handlers
+    // Targeted Mutation Hooks (TanStack Query-inspired API)
     //
-    // use_targeted_request_with_handler handles response deduplication internally
+    // use_mutation_targeted handles response deduplication internally
     // - The handler is called exactly once per response
-    // - No manual Effect boilerplate needed
+    // - Returns a MutationHandle with .send() and state accessors
     // - Success cases: no toast (ExecutionState sync updates the UI)
     // - Error cases: show error toast with reason
     // =========================================================================
 
-    let start_program = StoredValue::new(use_targeted_request_with_handler::<StartProgram, _>(move |result| {
+    let start = use_mutation_targeted::<StartProgram>(move |result| {
         match result {
             Ok(r) if r.success => { /* Success: no toast, UI updates via ExecutionState sync */ }
             Ok(r) => toast.error(format!("Start denied: {}", r.error.as_deref().unwrap_or("No control"))),
             Err(e) => toast.error(format!("Start failed: {e}")),
         }
-    }));
+    });
 
-    let pause_program = StoredValue::new(use_targeted_request_with_handler::<PauseProgram, _>(move |result| {
+    let pause = use_mutation_targeted::<PauseProgram>(move |result| {
         match result {
             Ok(r) if r.success => { /* Success: no toast */ }
             Ok(r) => toast.error(format!("Pause denied: {}", r.error.as_deref().unwrap_or("No control"))),
             Err(e) => toast.error(format!("Pause failed: {e}")),
         }
-    }));
+    });
 
-    let resume_program = StoredValue::new(use_targeted_request_with_handler::<ResumeProgram, _>(move |result| {
+    let resume = use_mutation_targeted::<ResumeProgram>(move |result| {
         match result {
             Ok(r) if r.success => { /* Success: no toast */ }
             Ok(r) => toast.error(format!("Resume denied: {}", r.error.as_deref().unwrap_or("No control"))),
             Err(e) => toast.error(format!("Resume failed: {e}")),
         }
-    }));
+    });
 
-    let stop_program = StoredValue::new(use_targeted_request_with_handler::<StopProgram, _>(move |result| {
+    let stop = use_mutation_targeted::<StopProgram>(move |result| {
         match result {
             Ok(r) if r.success => { /* Success: no toast */ }
             Ok(r) => toast.error(format!("Stop denied: {}", r.error.as_deref().unwrap_or("No control"))),
             Err(e) => toast.error(format!("Stop failed: {e}")),
         }
-    }));
+    });
 
-    let unload_program = StoredValue::new(use_targeted_request_with_handler::<UnloadProgram, _>(move |result| {
+    let unload = use_mutation_targeted::<UnloadProgram>(move |result| {
         match result {
             Ok(r) if r.success => { /* Success: no toast */ }
             Ok(r) => toast.error(format!("Unload denied: {}", r.error.as_deref().unwrap_or("No control"))),
             Err(e) => toast.error(format!("Unload failed: {e}")),
         }
-    }));
+    });
 
     // Get the system entity ID for targeting
     let system_entity_id = system_ctx.system_entity_id;
+
+    // Note: TargetedMutationHandle is Copy, so it can be used directly in closures
 
     view! {
         <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] flex flex-col overflow-hidden">
@@ -188,7 +190,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
-                                    start_program.with_value(|f| f(entity_id, StartProgram));
+                                    start.send(entity_id, StartProgram);
                                 }
                             }
                         >
@@ -201,7 +203,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             class="bg-[#f59e0b20] border border-[#f59e0b40] text-[#f59e0b] text-[8px] px-2 py-0.5 rounded hover:bg-[#f59e0b30]"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
-                                    pause_program.with_value(|f| f(entity_id, PauseProgram));
+                                    pause.send(entity_id, PauseProgram);
                                 }
                             }
                         >
@@ -214,7 +216,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
-                                    resume_program.with_value(|f| f(entity_id, ResumeProgram));
+                                    resume.send(entity_id, ResumeProgram);
                                 }
                             }
                         >
@@ -227,7 +229,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430]"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
-                                    stop_program.with_value(|f| f(entity_id, StopProgram));
+                                    stop.send(entity_id, StopProgram);
                                 }
                             }
                         >
@@ -240,7 +242,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430] flex items-center gap-1"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
-                                    unload_program.with_value(|f| f(entity_id, UnloadProgram));
+                                    unload.send(entity_id, UnloadProgram);
                                 }
                             }
                             title="Unload program"

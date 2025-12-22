@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 use leptos::prelude::*;
 
-use crate::hooks::use_sync_field_editor;
+use crate::hooks::use_field_editor;
 use crate::traits::SyncComponent;
 
 /// A ready-to-use editable input component with Enter-to-apply, blur-to-revert UX.
@@ -103,7 +103,7 @@ where
     M: Fn(&T, F) -> T + Clone + 'static,
 {
     let (input_ref, is_focused, initial_value, on_keydown, on_blur_handler) =
-        use_sync_field_editor(entity_id, field_accessor, field_mutator);
+        use_field_editor(entity_id, field_accessor, field_mutator);
 
     view! {
         <input

@@ -122,15 +122,34 @@ pub use client_type_registry::{ClientTypeRegistry, ClientTypeRegistryBuilder};
 pub use components::SyncFieldInput;
 pub use context::{MutationState, RequestState, RequestStatus, SyncConnection, SyncContext};
 pub use error::SyncError;
+
+// New hook names (preferred)
 pub use hooks::{
-    use_sync_component, use_sync_component_where, use_sync_connection, use_sync_context,
-    use_sync_entity, use_sync_entity_component, use_sync_entity_reactive,
-    use_sync_field_editor, use_sync_message, use_sync_mutations, use_sync_untracked,
-    use_request, use_request_state, UseRequestState, use_send_targeted,
+    use_components, use_components_where, use_connection, use_sync_context,
+    use_entity, use_entity_component, use_entity_reactive,
+    use_field_editor, use_message, use_mutations, use_untracked,
+    use_request, use_request_with_handler, use_request_state,
+    use_targeted_request, use_targeted_request_with_handler,
+    UseRequestState, use_send_targeted,
 };
 
+// Deprecated hook names (for backwards compatibility)
+#[allow(deprecated)]
+pub use hooks::{
+    use_sync_component, use_sync_component_where, use_sync_connection,
+    use_sync_entity, use_sync_entity_component, use_sync_entity_reactive,
+    use_sync_field_editor, use_sync_message, use_sync_mutations, use_sync_untracked,
+};
+
+// New store hook names (preferred)
 #[cfg(feature = "stores")]
+pub use hooks::{use_message_store, use_component_store, use_entity_component_store};
+
+// Deprecated store hook names (for backwards compatibility)
+#[cfg(feature = "stores")]
+#[allow(deprecated)]
 pub use hooks::{use_sync_message_store, use_sync_component_store, use_sync_entity_component_store};
+
 pub use provider::SyncProvider;
 pub use traits::SyncComponent;
 

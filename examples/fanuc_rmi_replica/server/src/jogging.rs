@@ -1,117 +1,22 @@
 use bevy::prelude::*;
 use bevy::ecs::message::MessageReader;
 use bevy_tokio_tasks::TokioTasksRuntime;
-use pl3xus::NetworkData;
-use pl3xus_sync::AuthorizedMessage;
+use pl3xus_sync::{AuthorizedTargetedMessage, AuthorizedRequest};
 use fanuc_replica_types::*;
 use fanuc_rmi::dto as raw_dto;
 use fanuc_rmi::{SpeedType, TermType};
 use fanuc_rmi::packets::PacketPriority;
-use pl3xus_sync::control::EntityControl;
 use crate::plugins::connection::{FanucRobot, RmiDriver, RobotConnectionState};
-use crate::plugins::system::SystemMarker;
 use crate::WebSocketProvider;
 
-/// Handle jog commands from clients - entity-based, uses pl3xus EntityControl on System
-pub fn handle_jog_commands(
-    tokio_runtime: Res<TokioTasksRuntime>,
-    mut events: MessageReader<NetworkData<JogCommand>>,
-    system_query: Query<&EntityControl, With<SystemMarker>>,
-    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
-) {
-    // Enter the Tokio runtime context so send_packet can use tokio::spawn
-    let _guard = tokio_runtime.runtime().enter();
-
-    for event in events.read() {
-        let client_id = *event.source();
-        // NetworkData<T> implements Deref<Target=T>, so we can access fields directly
-        let cmd: &JogCommand = &*event;
-
-        // Check control on System entity
-        let Ok(system_control) = system_query.single() else {
-            warn!("Jog rejected: No System entity found");
-            continue;
-        };
-
-        if system_control.client_id != client_id {
-            warn!("Jog rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
-            continue;
-        }
-
-        // Find a connected robot (in future, match by entity ID from command)
-        let Some((entity, _, driver)) = robot_query.iter()
-            .find(|(_, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
-        else {
-            warn!("Jog rejected: No connected robot");
-            continue;
-        };
-
-        let driver = driver.expect("Checked above");
-
-        info!("Processing JogCommand on {:?}: {:?} direction={:?} dist={} speed={}",
-            entity, cmd.axis, cmd.direction, cmd.distance, cmd.speed);
-
-        // Build position delta (PositionDto uses f32)
-        let mut pos = raw_dto::Position {
-            x: 0.0, y: 0.0, z: 0.0,
-            w: 0.0, p: 0.0, r: 0.0,
-            ext1: 0.0, ext2: 0.0, ext3: 0.0,
-        };
-        let dist = if cmd.direction == JogDirection::Positive { cmd.distance as f64 } else { -(cmd.distance as f64) };
-
-        match cmd.axis {
-            JogAxis::X => pos.x = dist,
-            JogAxis::Y => pos.y = dist,
-            JogAxis::Z => pos.z = dist,
-            JogAxis::W => pos.w = dist,
-            JogAxis::P => pos.p = dist,
-            JogAxis::R => pos.r = dist,
-            JogAxis::J1 | JogAxis::J2 | JogAxis::J3 | JogAxis::J4 | JogAxis::J5 | JogAxis::J6 => {
-                // Joint jogs not supported by this simulator - need FrcJointRelativeJRep
-                warn!("Joint jogging not supported by this simulator");
-                continue;
-            }
-        }
-
-        // Build instruction - use FrcLinearRelative for Cartesian jogs
-        let instruction = raw_dto::Instruction::FrcLinearRelative(raw_dto::FrcLinearRelative {
-            sequence_id: 0,
-            configuration: raw_dto::Configuration {
-                u_frame_number: 0,
-                u_tool_number: 0,
-                turn4: 0, turn5: 0, turn6: 0,
-                front: 0, up: 0, left: 0, flip: 0,
-            },
-            position: pos,
-            speed_type: SpeedType::MMSec.into(),
-            speed: cmd.speed as f64,
-            term_type: TermType::FINE.into(), // Use FINE for step moves
-            term_value: 1,
-        });
-
-        // Send instruction via driver
-        let send_packet: fanuc_rmi::packets::SendPacket =
-            raw_dto::SendPacket::Instruction(instruction).into();
-
-        match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
-            Ok(seq) => {
-                info!("Sent Cartesian jog command with sequence {}", seq);
-            }
-            Err(e) => {
-                error!("Failed to send jog instruction: {:?}", e);
-            }
-        }
-    }
-}
-
-/// Handle authorized jog commands - uses the new AuthorizedMessage pattern.
+/// Handle authorized jog commands - uses the new AuthorizedTargetedMessage pattern.
 ///
 /// This handler receives only messages that have passed authorization middleware.
 /// The middleware checks that the client has control of the target entity (System).
 /// No manual control check is needed here.
 pub fn handle_authorized_jog_commands(
     tokio_runtime: Res<TokioTasksRuntime>,
-    mut events: MessageReader<AuthorizedMessage<JogCommand>>,
+    mut events: MessageReader<AuthorizedTargetedMessage<JogCommand>>,
     robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
@@ -193,29 +98,19 @@ pub fn handle_authorized_jog_commands(
 /// Handle JogRobot commands (simplified jog from Joint Jog panel)
 /// Supports both Cartesian jogs (X/Y/Z/W/P/R) using FrcLinearRelative
 /// and Joint jogs (J1-J6) using FrcJointRelativeJRep.
+///
+/// Authorization is handled by middleware - no manual control check needed.
 pub fn handle_jog_robot_commands(
     tokio_runtime: Res<TokioTasksRuntime>,
-    mut events: MessageReader<NetworkData<JogRobot>>,
-    system_query: Query<&EntityControl, With<SystemMarker>>,
+    mut events: MessageReader<AuthorizedTargetedMessage<JogRobot>>,
     robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
     for event in events.read() {
-        let client_id = *event.source();
-        let cmd: &JogRobot = &*event;
-
-        // Check control on System entity
-        let Ok(system_control) = system_query.single() else {
-            warn!("JogRobot rejected: No System entity found");
-            continue;
-        };
-
-        if system_control.client_id != client_id {
-            warn!("JogRobot rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
-            continue;
-        }
+        let cmd = &event.message;
+        let target_entity = event.target_entity;
 
         // Find a connected robot
         let Some((entity, _, driver)) = robot_query.iter()
@@ -230,8 +125,8 @@ pub fn handle_jog_robot_commands(
         // Determine if this is a joint jog or cartesian jog
         let is_joint_jog = matches!(cmd.axis, JogAxis::J1 | JogAxis::J2 | JogAxis::J3 | JogAxis::J4 | JogAxis::J5 | JogAxis::J6);
 
-        info!("Processing JogRobot on {:?}: {:?} dist={} speed={}",
-            entity, cmd.axis, cmd.distance, cmd.speed);
+        info!("Processing authorized JogRobot for {:?} on {:?}: {:?} dist={} speed={}",
+            target_entity, entity, cmd.axis, cmd.distance, cmd.speed);
 
         let send_packet = if is_joint_jog {
             // Joint jog - use FrcJointRelativeJRep instruction
@@ -313,47 +208,45 @@ pub fn handle_jog_robot_commands(
     }
 }
 
-/// Handle InitializeRobot commands - initializes the robot for motion
+/// Handle InitializeRobot requests - initializes the robot for motion
+///
+/// Authorization is handled by middleware - no manual control check needed.
+/// This is a targeted request that returns a response to the client.
 pub fn handle_initialize_robot(
     tokio_runtime: Res<TokioTasksRuntime>,
-    mut events: MessageReader<NetworkData<InitializeRobot>>,
-    system_query: Query<&EntityControl, With<SystemMarker>>,
+    mut events: MessageReader<AuthorizedRequest<InitializeRobot>>,
     mut robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, &mut RobotStatus), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
     for event in events.read() {
-        let client_id = *event.source();
-        let cmd: &InitializeRobot = &*event;
-
-        // Check control on System entity
-        let Ok(system_control) = system_query.single() else {
-            warn!("InitializeRobot rejected: No System entity found");
-            continue;
-        };
-
-        if system_control.client_id != client_id {
-            warn!("InitializeRobot rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
-            continue;
-        }
+        let event = event.clone();
+        let cmd = event.get_request().clone();
+        let target_entity = event.target_entity;
 
         // Find a connected robot
         let Some((entity, _, driver, _status)) = robot_query.iter_mut()
             .find(|(_, state, driver, _)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("InitializeRobot rejected: No connected robot");
+            let _ = event.respond(InitializeRobotResponse {
+                success: false,
+                error: Some("No connected robot".to_string()),
+            });
             continue;
         };
 
         let driver = driver.expect("Checked above");
         let _group_mask = cmd.group_mask.unwrap_or(1);
 
-        info!("Processing InitializeRobot on {:?}", entity);
+        info!("Processing authorized InitializeRobot for {:?} on {:?}", target_entity, entity);
 
         // Use the async initialize() method which properly waits for response
         // and resets the sequence counter after successful initialization.
         let driver_clone = driver.0.clone();
+        // Take the responder for async response handling
+        let responder = event.take_responder();
         tokio_runtime.spawn_background_task(move |mut ctx| async move {
             match driver_clone.initialize().await {
                 Ok(response) => {
@@ -367,65 +260,69 @@ pub fn handle_initialize_robot(
                                 status.tp_program_initialized = true;
                             }
                         }).await;
+                        // Send success response
+                        let _ = responder.respond(InitializeRobotResponse { success: true, error: None });
                     } else {
-                        error!("❌ FRC_Initialize failed with error_id: {}", response.error_id);
+                        let error_msg = format!("FRC_Initialize failed with error_id: {}", response.error_id);
+                        error!("❌ {}", error_msg);
                         ctx.run_on_main_thread(move |ctx| {
                             let mut status_query = ctx.world.query_filtered::<&mut RobotStatus, With<FanucRobot>>();
                             if let Ok(mut status) = status_query.single_mut(ctx.world) {
                                 status.tp_program_initialized = false;
                             }
                         }).await;
+                        // Send error response
+                        let _ = responder.respond(InitializeRobotResponse { success: false, error: Some(error_msg) });
                     }
                 }
                 Err(e) => {
-                    error!("❌ Failed to initialize robot: {}", e);
+                    let error_msg = format!("Failed to initialize robot: {}", e);
+                    error!("❌ {}", error_msg);
                     ctx.run_on_main_thread(move |ctx| {
                         let mut status_query = ctx.world.query_filtered::<&mut RobotStatus, With<FanucRobot>>();
                         if let Ok(mut status) = status_query.single_mut(ctx.world) {
                             status.tp_program_initialized = false;
                         }
                     }).await;
+                    // Send error response
+                    let _ = responder.respond(InitializeRobotResponse { success: false, error: Some(error_msg) });
                 }
             }
         });
     }
 }
 
-/// Handle AbortMotion commands - aborts current motion
+/// Handle AbortMotion requests - aborts current motion
+///
+/// Authorization is handled by middleware - no manual control check needed.
+/// This is a targeted request that returns a response to the client.
 pub fn handle_abort_motion(
     tokio_runtime: Res<TokioTasksRuntime>,
-    mut events: MessageReader<NetworkData<AbortMotion>>,
-    system_query: Query<&EntityControl, With<SystemMarker>>,
+    mut events: MessageReader<AuthorizedRequest<AbortMotion>>,
     mut robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, &mut RobotStatus), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
     for event in events.read() {
-        let client_id = *event.source();
-
-        // Check control on System entity
-        let Ok(system_control) = system_query.single() else {
-            warn!("AbortMotion rejected: No System entity found");
-            continue;
-        };
-
-        if system_control.client_id != client_id {
-            warn!("AbortMotion rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
-            continue;
-        }
+        let event = event.clone();
+        let target_entity = event.target_entity;
 
         // Find a connected robot
         let Some((entity, _, driver, mut status)) = robot_query.iter_mut()
             .find(|(_, state, driver, _)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("AbortMotion rejected: No connected robot");
+            let _ = event.respond(AbortMotionResponse {
+                success: false,
+                error: Some("No connected robot".to_string()),
+            });
             continue;
         };
 
         let driver = driver.expect("Checked above");
 
-        info!("Processing AbortMotion on {:?}", entity);
+        info!("Processing authorized AbortMotion for {:?} on {:?}", target_entity, entity);
 
         // Send FrcAbort command (unit variant)
         let command = raw_dto::Command::FrcAbort;
@@ -436,49 +333,50 @@ pub fn handle_abort_motion(
                 info!("Sent AbortMotion command with sequence {}", seq);
                 // Mark TP program as not initialized after abort
                 status.tp_program_initialized = false;
+                let _ = event.respond(AbortMotionResponse { success: true, error: None });
             }
             Err(e) => {
                 error!("Failed to send AbortMotion command: {:?}", e);
+                let _ = event.respond(AbortMotionResponse {
+                    success: false,
+                    error: Some(format!("Failed to send AbortMotion: {:?}", e)),
+                });
             }
         }
     }
 }
 
-/// Handle ResetRobot commands - resets robot errors
+/// Handle ResetRobot requests - resets robot errors
+///
+/// Authorization is handled by middleware - no manual control check needed.
+/// This is a targeted request that returns a response to the client.
 pub fn handle_reset_robot(
     tokio_runtime: Res<TokioTasksRuntime>,
-    mut events: MessageReader<NetworkData<ResetRobot>>,
-    system_query: Query<&EntityControl, With<SystemMarker>>,
+    mut events: MessageReader<AuthorizedRequest<ResetRobot>>,
     robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
     for event in events.read() {
-        let client_id = *event.source();
-
-        // Check control on System entity
-        let Ok(system_control) = system_query.single() else {
-            warn!("ResetRobot rejected: No System entity found");
-            continue;
-        };
-
-        if system_control.client_id != client_id {
-            warn!("ResetRobot rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
-            continue;
-        }
+        let event = event.clone();
+        let target_entity = event.target_entity;
 
         // Find a connected robot
         let Some((entity, _, driver)) = robot_query.iter()
             .find(|(_, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("ResetRobot rejected: No connected robot");
+            let _ = event.respond(ResetRobotResponse {
+                success: false,
+                error: Some("No connected robot".to_string()),
+            });
             continue;
         };
 
         let driver = driver.expect("Checked above");
 
-        info!("Processing ResetRobot on {:?}", entity);
+        info!("Processing authorized ResetRobot for {:?} on {:?}", target_entity, entity);
 
         // Send FrcReset command (unit variant)
         let command = raw_dto::Command::FrcReset;
@@ -487,9 +385,14 @@ pub fn handle_reset_robot(
         match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
             Ok(seq) => {
                 info!("Sent ResetRobot command with sequence {}", seq);
+                let _ = event.respond(ResetRobotResponse { success: true, error: None });
             }
             Err(e) => {
                 error!("Failed to send ResetRobot command: {:?}", e);
+                let _ = event.respond(ResetRobotResponse {
+                    success: false,
+                    error: Some(format!("Failed to send ResetRobot: {:?}", e)),
+                });
             }
         }
     }
@@ -497,10 +400,11 @@ pub fn handle_reset_robot(
 
 /// Handle SendPacket messages - forwards fanuc_rmi::dto::SendPacket directly to the driver
 /// This is the primary way to send motion commands from the client
+///
+/// Authorization is handled by middleware - no manual control check needed.
 pub fn handle_send_packet(
     tokio_runtime: Res<TokioTasksRuntime>,
-    mut events: MessageReader<NetworkData<raw_dto::SendPacket>>,
-    system_query: Query<&EntityControl, With<SystemMarker>>,
+    mut events: MessageReader<AuthorizedTargetedMessage<raw_dto::SendPacket>>,
     robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
     net: Res<pl3xus::Network<WebSocketProvider>>,
 ) {
@@ -510,33 +414,9 @@ pub fn handle_send_packet(
     let _guard = tokio_runtime.runtime().enter();
 
     for event in events.read() {
-        let client_id = *event.source();
-        let dto_packet: &raw_dto::SendPacket = &*event;
-
-        // Check control on System entity
-        let Ok(system_control) = system_query.single() else {
-            warn!("SendPacket rejected: No System entity found");
-            let _ = net.send(
-                client_id,
-                ServerNotification::error("No system entity found").with_context("SendPacket"),
-            );
-            continue;
-        };
-
-        if system_control.client_id != client_id {
-            let holder_msg = if system_control.client_id.id == 0 {
-                "No client has control"
-            } else {
-                "Another client has control"
-            };
-            warn!("SendPacket rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
-            let _ = net.send(
-                client_id,
-                ServerNotification::warning(format!("Motion command rejected: {}", holder_msg))
-                    .with_context("SendPacket"),
-            );
-            continue;
-        }
+        let dto_packet = &event.message;
+        let target_entity = event.target_entity;
+        let source = event.source;
 
         // Find a connected robot
         let Some((entity, _, driver)) = robot_query.iter()
@@ -544,7 +424,7 @@ pub fn handle_send_packet(
         else {
             warn!("SendPacket rejected: No connected robot");
             let _ = net.send(
-                client_id,
+                source,
                 ServerNotification::error("No connected robot available").with_context("SendPacket"),
             );
             continue;
@@ -555,7 +435,7 @@ pub fn handle_send_packet(
         // Convert DTO to protocol type using Into
         let protocol_packet: fanuc_rmi::packets::SendPacket = dto_packet.clone().into();
 
-        info!("Processing SendPacket on {:?}: {:?}", entity, protocol_packet);
+        info!("Processing authorized SendPacket for {:?} on {:?}: {:?}", target_entity, entity, protocol_packet);
 
         match driver.0.send_packet(protocol_packet, PacketPriority::Immediate) {
             Ok(seq) => {
@@ -564,7 +444,7 @@ pub fn handle_send_packet(
             Err(e) => {
                 error!("Failed to send packet: {:?}", e);
                 let _ = net.send(
-                    client_id,
+                    source,
                     ServerNotification::error(format!("Failed to send packet: {:?}", e))
                         .with_context("SendPacket"),
                 );
@@ -573,42 +453,38 @@ pub fn handle_send_packet(
     }
 }
 
-/// Handle SetSpeedOverride commands - sets robot speed override
+/// Handle SetSpeedOverride requests - sets robot speed override
+///
+/// Authorization is handled by middleware - no manual control check needed.
+/// This is a targeted request that returns a response to the client.
 pub fn handle_set_speed_override(
     tokio_runtime: Res<TokioTasksRuntime>,
-    mut events: MessageReader<NetworkData<SetSpeedOverride>>,
-    system_query: Query<&EntityControl, With<SystemMarker>>,
+    mut events: MessageReader<AuthorizedRequest<SetSpeedOverride>>,
     robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
     for event in events.read() {
-        let client_id = *event.source();
-        let cmd: &SetSpeedOverride = &*event;
-
-        // Check control on System entity
-        let Ok(system_control) = system_query.single() else {
-            warn!("SetSpeedOverride rejected: No System entity found");
-            continue;
-        };
-
-        if system_control.client_id != client_id {
-            warn!("SetSpeedOverride rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
-            continue;
-        }
+        let event = event.clone();
+        let cmd = event.get_request().clone();
+        let target_entity = event.target_entity;
 
         // Find a connected robot
         let Some((entity, _, driver)) = robot_query.iter()
             .find(|(_, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("SetSpeedOverride rejected: No connected robot");
+            let _ = event.respond(SetSpeedOverrideResponse {
+                success: false,
+                error: Some("No connected robot".to_string()),
+            });
             continue;
         };
 
         let driver = driver.expect("Checked above");
 
-        info!("Processing SetSpeedOverride on {:?}: speed={}", entity, cmd.speed);
+        info!("Processing authorized SetSpeedOverride for {:?} on {:?}: speed={}", target_entity, entity, cmd.speed);
 
         // Send FrcSetOverRide command
         let command = raw_dto::Command::FrcSetOverRide(raw_dto::FrcSetOverRide { value: cmd.speed });
@@ -617,9 +493,14 @@ pub fn handle_set_speed_override(
         match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
             Ok(seq) => {
                 info!("Sent SetSpeedOverride command with sequence {}", seq);
+                let _ = event.respond(SetSpeedOverrideResponse { success: true, error: None });
             }
             Err(e) => {
                 error!("Failed to send SetSpeedOverride command: {:?}", e);
+                let _ = event.respond(SetSpeedOverrideResponse {
+                    success: false,
+                    error: Some(format!("Failed to send SetSpeedOverride: {:?}", e)),
+                });
             }
         }
     }

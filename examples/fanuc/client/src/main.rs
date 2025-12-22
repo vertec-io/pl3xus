@@ -1,5 +1,5 @@
 use pl3xus_client::{
-    ClientTypeRegistry, SyncProvider, use_sync_component,
+    ClientTypeRegistry, SyncProvider, use_components,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -66,7 +66,7 @@ fn App() -> impl IntoView {
 
 #[component]
 fn RobotStatusDisplay() -> impl IntoView {
-    let robot_statuses = use_sync_component::<RobotStatus>();
+    let robot_statuses = use_components::<RobotStatus>();
 
     // Get the first robot status (assuming single robot)
     let robot_status = move || {
@@ -108,7 +108,7 @@ fn RobotStatusDisplay() -> impl IntoView {
 
 #[component]
 fn PositionDisplay() -> impl IntoView {
-    let robot_positions = use_sync_component::<RobotPosition>();
+    let robot_positions = use_components::<RobotPosition>();
 
     // Get the first robot position (assuming single robot)
     let robot_position = move || {
@@ -165,7 +165,7 @@ fn PositionDisplay() -> impl IntoView {
 
 #[component]
 fn JointAnglesDisplay() -> impl IntoView {
-    let joint_angles = use_sync_component::<JointAngles>();
+    let joint_angles = use_components::<JointAngles>();
 
     // Get the first joint angles (assuming single robot)
     let joints = move || {

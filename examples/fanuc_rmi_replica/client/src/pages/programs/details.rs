@@ -2,7 +2,7 @@
 
 use leptos::prelude::*;
 use leptos::either::Either;
-use pl3xus_client::use_request;
+use pl3xus_client::use_request_with_handler;
 use fanuc_replica_types::{ProgramDetail, UpdateProgramSettings};
 use crate::components::use_toast;
 
@@ -40,11 +40,18 @@ pub fn ProgramDetails(
     let (current_prog_id, set_current_prog_id) = signal::<Option<i64>>(None);
     let (current_inst_count, set_current_inst_count) = signal::<usize>(0);
 
-    // Request hook for updating settings
-    let (update_settings, _update_state) = use_request::<UpdateProgramSettings>();
-
     // Toast context for validation errors
     let toast = use_toast();
+
+    // Request hook for updating settings with error handling
+    let update_settings = use_request_with_handler::<UpdateProgramSettings, _>(move |result| {
+        match result {
+            Ok(r) if r.success => toast.success("Settings saved"),
+            Ok(r) => toast.error(format!("Save failed: {}", r.error.as_deref().unwrap_or(""))),
+            Err(e) => toast.error(format!("Error: {e}")),
+        }
+    });
+    let update_settings = StoredValue::new(update_settings);
 
     // Sync signals when program changes or is re-fetched with new data
     Effect::new(move |_| {
@@ -87,7 +94,6 @@ pub fn ProgramDetails(
                     let prog_desc = prog.description.clone().unwrap_or_default();
                     let line_count = prog.instructions.len();
                     let instructions_for_table = prog.instructions.clone();
-                    let update_settings = update_settings.clone();
 
                     Either::Left(view! {
                         <div class="h-full flex flex-col">
@@ -201,62 +207,57 @@ pub fn ProgramDetails(
                                     />
                                 </div>
                                 <Show when=move || settings_modified.get()>
-                                    {
-                                        let update_settings = update_settings.clone();
-                                        view! {
-                                            <button
-                                                class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[9px] px-3 py-1 rounded hover:bg-[#22c55e30]"
-                                                on:click=move |_| {
-                                                    // Validate required fields before saving
-                                                    let move_speed_val = move_speed.get();
-                                                    let term_type_val = term_type.get();
-                                                    let term_value_val = term_value.get();
+                                    <button
+                                        class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[9px] px-3 py-1 rounded hover:bg-[#22c55e30]"
+                                        on:click=move |_| {
+                                            // Validate required fields before saving
+                                            let move_speed_val = move_speed.get();
+                                            let term_type_val = term_type.get();
+                                            let term_value_val = term_value.get();
 
-                                                    // Validate move_speed (required, must be positive number)
-                                                    let parsed_move_speed: Option<f64> = move_speed_val.parse().ok();
-                                                    if parsed_move_speed.is_none() || parsed_move_speed.unwrap() <= 0.0 {
-                                                        toast.error("Move Speed is required and must be a positive number");
-                                                        return;
-                                                    }
+                                            // Validate move_speed (required, must be positive number)
+                                            let parsed_move_speed: Option<f64> = move_speed_val.parse().ok();
+                                            if parsed_move_speed.is_none() || parsed_move_speed.unwrap() <= 0.0 {
+                                                toast.error("Move Speed is required and must be a positive number");
+                                                return;
+                                            }
 
-                                                    // Validate term_type (required, must be CNT or FINE)
-                                                    if term_type_val != "CNT" && term_type_val != "FINE" {
-                                                        toast.error("Term Type must be CNT or FINE");
-                                                        return;
-                                                    }
+                                            // Validate term_type (required, must be CNT or FINE)
+                                            if term_type_val != "CNT" && term_type_val != "FINE" {
+                                                toast.error("Term Type must be CNT or FINE");
+                                                return;
+                                            }
 
-                                                    // Validate term_value (required, must be 0-100)
-                                                    let parsed_term_value: Option<u8> = term_value_val.parse().ok();
-                                                    if parsed_term_value.is_none() || parsed_term_value.unwrap() > 100 {
-                                                        toast.error("Term Value is required and must be 0-100");
-                                                        return;
-                                                    }
+                                            // Validate term_value (required, must be 0-100)
+                                            let parsed_term_value: Option<u8> = term_value_val.parse().ok();
+                                            if parsed_term_value.is_none() || parsed_term_value.unwrap() > 100 {
+                                                toast.error("Term Value is required and must be 0-100");
+                                                return;
+                                            }
 
-                                                    update_settings(UpdateProgramSettings {
-                                                        program_id: prog_id,
-                                                        start_x: start_x.get().parse().ok(),
-                                                        start_y: start_y.get().parse().ok(),
-                                                        start_z: start_z.get().parse().ok(),
-                                                        start_w: start_w.get().parse().ok(),
-                                                        start_p: start_p.get().parse().ok(),
-                                                        start_r: start_r.get().parse().ok(),
-                                                        end_x: end_x.get().parse().ok(),
-                                                        end_y: end_y.get().parse().ok(),
-                                                        end_z: end_z.get().parse().ok(),
-                                                        end_w: end_w.get().parse().ok(),
-                                                        end_p: end_p.get().parse().ok(),
-                                                        end_r: end_r.get().parse().ok(),
-                                                        move_speed: parsed_move_speed,
-                                                        default_term_type: Some(term_type_val),
-                                                        default_term_value: parsed_term_value,
-                                                    });
-                                                    set_settings_modified.set(false);
-                                                }
-                                            >
-                                                "Save Settings"
-                                            </button>
+                                            update_settings.with_value(|f| f(UpdateProgramSettings {
+                                                program_id: prog_id,
+                                                start_x: start_x.get().parse().ok(),
+                                                start_y: start_y.get().parse().ok(),
+                                                start_z: start_z.get().parse().ok(),
+                                                start_w: start_w.get().parse().ok(),
+                                                start_p: start_p.get().parse().ok(),
+                                                start_r: start_r.get().parse().ok(),
+                                                end_x: end_x.get().parse().ok(),
+                                                end_y: end_y.get().parse().ok(),
+                                                end_z: end_z.get().parse().ok(),
+                                                end_w: end_w.get().parse().ok(),
+                                                end_p: end_p.get().parse().ok(),
+                                                end_r: end_r.get().parse().ok(),
+                                                move_speed: parsed_move_speed,
+                                                default_term_type: Some(term_type_val),
+                                                default_term_value: parsed_term_value,
+                                            }));
+                                            set_settings_modified.set(false);
                                         }
-                                    }
+                                    >
+                                        "Save Settings"
+                                    </button>
                                 </Show>
                             </div>
 

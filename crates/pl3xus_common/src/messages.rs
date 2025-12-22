@@ -190,6 +190,41 @@ pub trait RequestMessage: Pl3xusMessage + Clone + Debug {
     }
 }
 
+/// Trait for request types whose response can be constructed as an error.
+///
+/// This is used by authorization middleware to send error responses when
+/// a request is denied, rather than silently dropping the request and
+/// leaving the client waiting for a timeout.
+///
+/// # Example
+///
+/// ```ignore
+/// use pl3xus_common::{RequestMessage, ErrorResponse, Pl3xusMessage};
+///
+/// #[derive(Serialize, Deserialize, Clone, Debug)]
+/// struct SetSpeedOverride { speed: u8 }
+///
+/// #[derive(Serialize, Deserialize, Clone, Debug)]
+/// struct SetSpeedOverrideResponse {
+///     success: bool,
+///     error: Option<String>,
+/// }
+///
+/// impl RequestMessage for SetSpeedOverride {
+///     type ResponseMessage = SetSpeedOverrideResponse;
+/// }
+///
+/// impl ErrorResponse for SetSpeedOverride {
+///     fn error_response(error: String) -> Self::ResponseMessage {
+///         SetSpeedOverrideResponse { success: false, error: Some(error) }
+///     }
+/// }
+/// ```
+pub trait ErrorResponse: RequestMessage {
+    /// Construct an error response with the given error message.
+    fn error_response(error: String) -> Self::ResponseMessage;
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(bound = "T: Pl3xusMessage")]
 pub struct TargetedMessage<T: Pl3xusMessage> {

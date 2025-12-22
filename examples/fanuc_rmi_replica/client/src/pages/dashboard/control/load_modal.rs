@@ -6,7 +6,7 @@
 //! synced ExecutionState.
 
 use leptos::prelude::*;
-use pl3xus_client::use_request;
+use pl3xus_client::{use_request, use_request_with_handler};
 use fanuc_replica_types::*;
 use crate::components::{use_toast, ToastType};
 
@@ -23,10 +23,26 @@ where
 {
     let toast = use_toast();
     let (list_programs, programs_state) = use_request::<ListPrograms>();
-    let (load_program_fn, load_state) = use_request::<LoadProgram>();
     let (selected_id, set_selected_id) = signal::<Option<i64>>(None);
     let (loading, set_loading) = signal(false);
     let (has_loaded, set_has_loaded) = signal(false);
+    let on_close_load = on_close.clone();
+
+    // LoadProgram with handler - shows toasts and closes modal on success
+    let load_program_fn = use_request_with_handler::<LoadProgram, _>(move |result| {
+        set_loading.set(false);
+        match result {
+            Ok(r) if r.success => {
+                if let Some(program) = &r.program {
+                    toast.show(&format!("Loaded '{}'", program.name), ToastType::Success);
+                    on_close_load();
+                }
+            }
+            Ok(r) => toast.show(r.error.as_deref().unwrap_or("Load failed"), ToastType::Error),
+            Err(e) => toast.show(e, ToastType::Error),
+        }
+    });
+    let load_program_fn = StoredValue::new(load_program_fn);
 
     // Fetch programs on mount - with guard to prevent infinite loop
     Effect::new(move |_| {
@@ -48,29 +64,6 @@ where
 
     let on_close_header = on_close.clone();
     let on_close_cancel = on_close.clone();
-    let on_close_load = on_close.clone();
-
-    // Store load_program_fn for use in effect
-    let load_program_fn = StoredValue::new(load_program_fn);
-
-    // Handle load response
-    // NOTE: We do NOT update client-side state here. The server updates
-    // ExecutionState which is automatically synced to all clients.
-    Effect::new(move |_| {
-        let state = load_state.get();
-        if let Some(response) = state.data {
-            set_loading.set(false);
-            if response.success {
-                if let Some(program) = &response.program {
-                    // Just show toast and close - server has already updated ExecutionState
-                    toast.show(&format!("Loaded program '{}'", program.name), ToastType::Success);
-                    on_close_load();
-                }
-            } else if let Some(error) = response.error {
-                toast.show(&error, ToastType::Error);
-            }
-        }
-    });
 
     // Load selected program - sends request to server
     let load_program = move |_| {

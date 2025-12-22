@@ -312,6 +312,25 @@ impl<T: RequestMessage> Request<T> {
         &self.source
     }
 
+    /// Get the request ID for async response handling.
+    #[inline(always)]
+    pub fn request_id(&self) -> u64 {
+        self.request_id
+    }
+
+    /// Take the responder for async response handling.
+    ///
+    /// This consumes the request and returns a `DeferredResponder` that can be
+    /// used to send the response later (e.g., from an async task).
+    pub fn take_responder(self) -> DeferredResponder<T::ResponseMessage> {
+        DeferredResponder {
+            source: self.source,
+            request_id: self.request_id,
+            response_tx: self.response_tx,
+            _marker: PhantomData,
+        }
+    }
+
     /// Consume the request and automatically send the response back to the client.
     pub fn respond(self, response: T::ResponseMessage) -> Result<(), NetworkError> {
         let data = bincode::serde::encode_to_vec(
@@ -333,6 +352,61 @@ impl<T: RequestMessage> Request<T> {
         let packet = NetworkPacket {
             type_name: ResponseInternal::<T::ResponseMessage>::type_name().to_string(),
             schema_hash: ResponseInternal::<T::ResponseMessage>::schema_hash(),
+            data,
+        };
+
+        self.response_tx
+            .try_send(packet)
+            .map_err(|_| NetworkError::SendError)
+    }
+}
+
+/// A deferred responder for async response handling.
+///
+/// This is returned by `Request::take_responder()` and can be used to send
+/// a response from an async context (e.g., a Tokio task).
+#[derive(Debug, Clone)]
+pub struct DeferredResponder<R: Pl3xusMessage + Clone + Debug> {
+    source: ConnectionId,
+    request_id: u64,
+    response_tx: Sender<NetworkPacket>,
+    _marker: PhantomData<R>,
+}
+
+impl<R: Pl3xusMessage + Clone + Debug> DeferredResponder<R> {
+    /// Get the source connection ID.
+    #[inline(always)]
+    pub fn source(&self) -> &ConnectionId {
+        &self.source
+    }
+
+    /// Get the request ID.
+    #[inline(always)]
+    pub fn request_id(&self) -> u64 {
+        self.request_id
+    }
+
+    /// Send the response back to the client.
+    pub fn respond(self, response: R) -> Result<(), NetworkError> {
+        let data = bincode::serde::encode_to_vec(
+            &ResponseInternal {
+                response_id: self.request_id,
+                response,
+            },
+            bincode::config::standard()
+        )
+        .map_err(|_| NetworkError::Serialization)?;
+
+        debug!(
+            "Sending deferred response: type={}, request_id={}, data_len={}",
+            ResponseInternal::<R>::type_name(),
+            self.request_id,
+            data.len()
+        );
+
+        let packet = NetworkPacket {
+            type_name: ResponseInternal::<R>::type_name().to_string(),
+            schema_hash: ResponseInternal::<R>::schema_hash(),
             data,
         };
 

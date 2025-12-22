@@ -12,7 +12,7 @@ use crate::traits::SyncComponent;
 #[cfg(feature = "stores")]
 use reactive_stores::Store;
 
-/// Hook to subscribe to a component type.
+/// Hook to subscribe to all entities with a component type.
 ///
 /// This returns a signal containing a HashMap of entity_id -> component.
 /// The subscription is automatically managed - it will be created when the
@@ -28,7 +28,7 @@ use reactive_stores::Store;
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::{use_sync_component, SyncComponent};
+/// use pl3xus_client::{use_components, SyncComponent};
 /// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Clone, Default, Serialize, Deserialize)]
@@ -41,7 +41,7 @@ use reactive_stores::Store;
 ///
 /// #[component]
 /// fn PositionList() -> impl IntoView {
-///     let positions = use_sync_component::<Position>();
+///     let positions = use_components::<Position>();
 ///
 ///     view! {
 ///         <ul>
@@ -58,9 +58,15 @@ use reactive_stores::Store;
 ///     }
 /// }
 /// ```
-pub fn use_sync_component<T: SyncComponent + Clone + Default + 'static>() -> ReadSignal<HashMap<u64, T>> {
+pub fn use_components<T: SyncComponent + Clone + Default + 'static>() -> ReadSignal<HashMap<u64, T>> {
     let ctx = expect_context::<SyncContext>();
     ctx.subscribe_component::<T>()
+}
+
+/// Deprecated: Use [`use_components`] instead.
+#[deprecated(since = "0.2.0", note = "Use use_components instead")]
+pub fn use_sync_component<T: SyncComponent + Clone + Default + 'static>() -> ReadSignal<HashMap<u64, T>> {
+    use_components::<T>()
 }
 
 /// Hook to subscribe to a component type with client-side filtering.
@@ -89,7 +95,7 @@ pub fn use_sync_component<T: SyncComponent + Clone + Default + 'static>() -> Rea
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::{use_sync_component_where, SyncComponent};
+/// use pl3xus_client::{use_components_where, SyncComponent};
 /// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Clone, Default, Serialize, Deserialize)]
@@ -101,7 +107,7 @@ pub fn use_sync_component<T: SyncComponent + Clone + Default + 'static>() -> Rea
 /// #[component]
 /// fn FilteredPositionList() -> impl IntoView {
 ///     // Only show positions where x > 100.0
-///     let filtered_positions = use_sync_component_where::<Position, _>(
+///     let filtered_positions = use_components_where::<Position, _>(
 ///         |_entity_id, pos| pos.x > 100.0
 ///     );
 ///
@@ -123,7 +129,7 @@ pub fn use_sync_component<T: SyncComponent + Clone + Default + 'static>() -> Rea
 /// #[component]
 /// fn SpecificEntityPosition(target_id: u64) -> impl IntoView {
 ///     // Filter by specific entity ID
-///     let position = use_sync_component_where::<Position, _>(
+///     let position = use_components_where::<Position, _>(
 ///         move |entity_id, _| entity_id == target_id
 ///     );
 ///
@@ -132,14 +138,14 @@ pub fn use_sync_component<T: SyncComponent + Clone + Default + 'static>() -> Rea
 ///     }
 /// }
 /// ```
-pub fn use_sync_component_where<T, F>(
+pub fn use_components_where<T, F>(
     filter: F,
 ) -> Signal<HashMap<u64, T>>
 where
     T: SyncComponent + Clone + Default + 'static,
     F: Fn(u64, &T) -> bool + Send + Sync + 'static,
 {
-    let all_components = use_sync_component::<T>();
+    let all_components = use_components::<T>();
 
     Signal::derive(move || {
         all_components.get()
@@ -149,14 +155,26 @@ where
     })
 }
 
-/// Hook to subscribe to a single entity's component.
+/// Deprecated: Use [`use_components_where`] instead.
+#[deprecated(since = "0.2.0", note = "Use use_components_where instead")]
+pub fn use_sync_component_where<T, F>(
+    filter: F,
+) -> Signal<HashMap<u64, T>>
+where
+    T: SyncComponent + Clone + Default + 'static,
+    F: Fn(u64, &T) -> bool + Send + Sync + 'static,
+{
+    use_components_where(filter)
+}
+
+/// Hook to subscribe to a single entity's component by static entity ID.
 ///
 /// This is a convenience helper that creates a derived signal for accessing
 /// a specific entity's component. It's useful when you know the entity ID
 /// and want to reactively access its component data.
 ///
 /// This is equivalent to manually creating a derived signal from
-/// `use_sync_component`, but more ergonomic.
+/// `use_components`, but more ergonomic.
 ///
 /// # Panics
 ///
@@ -165,7 +183,7 @@ where
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::{use_sync_entity, use_sync_context, SyncComponent};
+/// use pl3xus_client::{use_entity, use_sync_context, SyncComponent};
 /// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Clone, Default, Serialize, Deserialize)]
@@ -177,7 +195,7 @@ where
 /// #[component]
 /// fn MicrowaveControls(entity_id: u64) -> impl IntoView {
 ///     let ctx = use_sync_context();
-///     let server_config = use_sync_entity::<MicrowaveConfig>(entity_id);
+///     let server_config = use_entity::<MicrowaveConfig>(entity_id);
 ///
 ///     // Toggle power using direct mutation
 ///     let toggle_power = move |_| {
@@ -200,19 +218,27 @@ where
 ///     }
 /// }
 /// ```
-pub fn use_sync_entity<T: SyncComponent + Clone + Default + 'static>(
+pub fn use_entity<T: SyncComponent + Clone + Default + 'static>(
     entity_id: u64,
 ) -> Signal<Option<T>> {
-    let all_components = use_sync_component::<T>();
+    let all_components = use_components::<T>();
 
     Signal::derive(move || {
         all_components.get().get(&entity_id).cloned()
     })
 }
 
+/// Deprecated: Use [`use_entity`] instead.
+#[deprecated(since = "0.2.0", note = "Use use_entity instead")]
+pub fn use_sync_entity<T: SyncComponent + Clone + Default + 'static>(
+    entity_id: u64,
+) -> Signal<Option<T>> {
+    use_entity::<T>(entity_id)
+}
+
 /// Hook to subscribe to a single entity's component with a reactive entity ID.
 ///
-/// This is similar to [`use_sync_entity`], but accepts a reactive getter for the
+/// This is similar to [`use_entity`], but accepts a reactive getter for the
 /// entity ID instead of a static value. This is useful when the target entity
 /// can change at runtime (e.g., currently selected robot).
 ///
@@ -228,7 +254,7 @@ pub fn use_sync_entity<T: SyncComponent + Clone + Default + 'static>(
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::{use_sync_entity_reactive, SyncComponent};
+/// use pl3xus_client::{use_entity_reactive, SyncComponent};
 /// use leptos::prelude::*;
 /// use serde::{Deserialize, Serialize};
 ///
@@ -246,7 +272,7 @@ pub fn use_sync_entity<T: SyncComponent + Clone + Default + 'static>(
 ///         .expect("selected_robot_id in context");
 ///
 ///     // Reactively get position for the currently selected robot
-///     let position = use_sync_entity_reactive::<RobotPosition, _>(
+///     let position = use_entity_reactive::<RobotPosition, _>(
 ///         move || selected_robot_id.get()
 ///     );
 ///
@@ -264,6 +290,22 @@ pub fn use_sync_entity<T: SyncComponent + Clone + Default + 'static>(
 ///     }
 /// }
 /// ```
+pub fn use_entity_reactive<T, F>(
+    entity_id_fn: F,
+) -> Signal<Option<T>>
+where
+    T: SyncComponent + Clone + Default + 'static,
+    F: Fn() -> Option<u64> + Send + Sync + 'static,
+{
+    let all_components = use_components::<T>();
+
+    Signal::derive(move || {
+        entity_id_fn().and_then(|id| all_components.get().get(&id).cloned())
+    })
+}
+
+/// Deprecated: Use [`use_entity_reactive`] instead.
+#[deprecated(since = "0.2.0", note = "Use use_entity_reactive instead")]
 pub fn use_sync_entity_reactive<T, F>(
     entity_id_fn: F,
 ) -> Signal<Option<T>>
@@ -271,11 +313,7 @@ where
     T: SyncComponent + Clone + Default + 'static,
     F: Fn() -> Option<u64> + Send + Sync + 'static,
 {
-    let all_components = use_sync_component::<T>();
-
-    Signal::derive(move || {
-        entity_id_fn().and_then(|id| all_components.get().get(&id).cloned())
-    })
+    use_entity_reactive(entity_id_fn)
 }
 
 /// Hook to access the WebSocket connection control interface.
@@ -290,12 +328,12 @@ where
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::use_sync_connection;
+/// use pl3xus_client::use_connection;
 /// use leptos_use::core::ConnectionReadyState;
 ///
 /// #[component]
 /// fn ConnectionStatus() -> impl IntoView {
-///     let connection = use_sync_connection();
+///     let connection = use_connection();
 ///
 ///     let status_text = move || {
 ///         match connection.ready_state.get() {
@@ -329,9 +367,15 @@ where
 ///     }
 /// }
 /// ```
-pub fn use_sync_connection() -> SyncConnection {
+pub fn use_connection() -> SyncConnection {
     let ctx = expect_context::<SyncContext>();
     ctx.connection()
+}
+
+/// Deprecated: Use [`use_connection`] instead.
+#[deprecated(since = "0.2.0", note = "Use use_connection instead")]
+pub fn use_sync_connection() -> SyncConnection {
+    use_connection()
 }
 
 /// Hook to subscribe to a component type with fine-grained reactivity using stores.
@@ -353,7 +397,7 @@ pub fn use_sync_connection() -> SyncConnection {
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::{use_sync_component_store, SyncComponent};
+/// use pl3xus_client::{use_component_store, SyncComponent};
 /// use reactive_stores::Store;
 /// use serde::{Deserialize, Serialize};
 ///
@@ -367,7 +411,7 @@ pub fn use_sync_connection() -> SyncConnection {
 ///
 /// #[component]
 /// fn PositionList() -> impl IntoView {
-///     let positions = use_sync_component_store::<Position>();
+///     let positions = use_component_store::<Position>();
 ///
 ///     view! {
 ///         <For
@@ -387,14 +431,21 @@ pub fn use_sync_connection() -> SyncConnection {
 /// }
 /// ```
 #[cfg(feature = "stores")]
-pub fn use_sync_component_store<T: SyncComponent + Clone + Default + 'static>() -> Store<HashMap<u64, T>> {
+pub fn use_component_store<T: SyncComponent + Clone + Default + 'static>() -> Store<HashMap<u64, T>> {
     let ctx = expect_context::<SyncContext>();
     ctx.subscribe_component_store::<T>()
 }
 
+/// Deprecated: Use [`use_component_store`] instead.
+#[cfg(feature = "stores")]
+#[deprecated(since = "0.2.0", note = "Use use_component_store instead")]
+pub fn use_sync_component_store<T: SyncComponent + Clone + Default + 'static>() -> Store<HashMap<u64, T>> {
+    use_component_store::<T>()
+}
+
 /// Hook to subscribe to a specific entity's component as a signal.
 ///
-/// Unlike `use_sync_component` which returns all entities as a HashMap, this returns
+/// Unlike `use_components` which returns all entities as a HashMap, this returns
 /// a signal for a single entity's component. The entity ID can be reactive (a closure),
 /// allowing you to switch which entity you're tracking.
 ///
@@ -409,22 +460,22 @@ pub fn use_sync_component_store<T: SyncComponent + Clone + Default + 'static>() 
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::use_sync_entity_component;
+/// use pl3xus_client::use_entity_component;
 ///
 /// // Fixed entity ID (singleton pattern)
-/// let (exec, exists) = use_sync_entity_component::<ExecutionState>(|| Some(SYSTEM_ENTITY_ID));
+/// let (exec, exists) = use_entity_component::<ExecutionState>(|| Some(SYSTEM_ENTITY_ID));
 ///
 /// // Reactive entity ID from signal
 /// let selected_robot: RwSignal<Option<u64>> = ...;
-/// let (position, exists) = use_sync_entity_component::<Position>(move || selected_robot.get());
+/// let (position, exists) = use_entity_component::<Position>(move || selected_robot.get());
 ///
 /// // First entity of a type (true singleton)
-/// let entities = use_sync_component::<ExecutionState>();
-/// let (exec, exists) = use_sync_entity_component::<ExecutionState>(move || {
+/// let entities = use_components::<ExecutionState>();
+/// let (exec, exists) = use_entity_component::<ExecutionState>(move || {
 ///     entities.get().keys().next().copied()
 /// });
 /// ```
-pub fn use_sync_entity_component<T, F>(entity_id_fn: F) -> (ReadSignal<T>, ReadSignal<bool>)
+pub fn use_entity_component<T, F>(entity_id_fn: F) -> (ReadSignal<T>, ReadSignal<bool>)
 where
     T: SyncComponent + Clone + Default + 'static,
     F: Fn() -> Option<u64> + Clone + 'static,
@@ -433,9 +484,19 @@ where
     ctx.subscribe_entity_component::<T, F>(entity_id_fn)
 }
 
+/// Deprecated: Use [`use_entity_component`] instead.
+#[deprecated(since = "0.2.0", note = "Use use_entity_component instead")]
+pub fn use_sync_entity_component<T, F>(entity_id_fn: F) -> (ReadSignal<T>, ReadSignal<bool>)
+where
+    T: SyncComponent + Clone + Default + 'static,
+    F: Fn() -> Option<u64> + Clone + 'static,
+{
+    use_entity_component(entity_id_fn)
+}
+
 /// Hook to subscribe to a specific entity's component as a Store for fine-grained reactivity.
 ///
-/// Unlike `use_sync_component_store` which returns `Store<HashMap<u64, T>>`, this returns
+/// Unlike `use_component_store` which returns `Store<HashMap<u64, T>>`, this returns
 /// `Store<T>` directly for a single entity, enabling fine-grained field-level reactivity
 /// using the `reactive_stores` crate.
 ///
@@ -450,7 +511,7 @@ where
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::use_sync_entity_component_store;
+/// use pl3xus_client::use_entity_component_store;
 /// use reactive_stores::Store;
 ///
 /// #[derive(Clone, Default, Serialize, Deserialize, Store)]
@@ -462,8 +523,8 @@ where
 /// }
 ///
 /// // Subscribe to the first (and only) ExecutionState entity
-/// let entities = use_sync_component::<ExecutionState>();
-/// let (exec, exists) = use_sync_entity_component_store::<ExecutionState, _>(move || {
+/// let entities = use_components::<ExecutionState>();
+/// let (exec, exists) = use_entity_component_store::<ExecutionState, _>(move || {
 ///     entities.get().keys().next().copied()
 /// });
 ///
@@ -472,7 +533,7 @@ where
 /// let can_pause = move || exec.can_pause().get();
 /// ```
 #[cfg(feature = "stores")]
-pub fn use_sync_entity_component_store<T, F>(entity_id_fn: F) -> (Store<T>, ReadSignal<bool>)
+pub fn use_entity_component_store<T, F>(entity_id_fn: F) -> (Store<T>, ReadSignal<bool>)
 where
     T: SyncComponent + Clone + Default + 'static,
     F: Fn() -> Option<u64> + Clone + 'static,
@@ -481,11 +542,22 @@ where
     ctx.subscribe_entity_component_store::<T, F>(entity_id_fn)
 }
 
+/// Deprecated: Use [`use_entity_component_store`] instead.
+#[cfg(feature = "stores")]
+#[deprecated(since = "0.2.0", note = "Use use_entity_component_store instead")]
+pub fn use_sync_entity_component_store<T, F>(entity_id_fn: F) -> (Store<T>, ReadSignal<bool>)
+where
+    T: SyncComponent + Clone + Default + 'static,
+    F: Fn() -> Option<u64> + Clone + 'static,
+{
+    use_entity_component_store(entity_id_fn)
+}
+
 /// Hook to access the SyncContext directly.
 ///
 /// This provides access to the full SyncContext API, including mutation methods.
-/// Most users should use the more specific hooks like `use_sync_component` or
-/// `use_sync_mutations` instead.
+/// Most users should use the more specific hooks like `use_components` or
+/// `use_mutations` instead.
 ///
 /// # Panics
 ///
@@ -518,7 +590,7 @@ pub fn use_sync_context() -> SyncContext {
 ///
 /// This returns a callback that sends a message wrapped in `TargetedMessage<T>`.
 /// On the server, the message will be processed by the authorization middleware
-/// and converted to an `AuthorizedMessage<T>` if the client has control of the
+/// and converted to an `AuthorizedTargetedMessage<T>` if the client has control of the
 /// target entity.
 ///
 /// # Type Parameters
@@ -581,13 +653,13 @@ where
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::{use_sync_context, use_sync_mutations};
+/// use pl3xus_client::{use_sync_context, use_mutations};
 /// use pl3xus_sync::MutationStatus;
 ///
 /// #[component]
 /// fn MutateWithFeedback() -> impl IntoView {
 ///     let ctx = use_sync_context();
-///     let mutations = use_sync_mutations();
+///     let mutations = use_mutations();
 ///     let (last_request_id, set_last_request_id) = signal(None::<u64>);
 ///
 ///     let update_position = move |_| {
@@ -616,9 +688,15 @@ where
 ///     }
 /// }
 /// ```
-pub fn use_sync_mutations() -> ReadSignal<HashMap<u64, MutationState>> {
+pub fn use_mutations() -> ReadSignal<HashMap<u64, MutationState>> {
     let ctx = expect_context::<SyncContext>();
     ctx.mutations()
+}
+
+/// Deprecated: Use [`use_mutations`] instead.
+#[deprecated(since = "0.2.0", note = "Use use_mutations instead")]
+pub fn use_sync_mutations() -> ReadSignal<HashMap<u64, MutationState>> {
+    use_mutations()
 }
 
 /// Hook for creating editable fields with Enter-to-apply, blur-to-revert UX.
@@ -657,7 +735,7 @@ pub fn use_sync_mutations() -> ReadSignal<HashMap<u64, MutationState>> {
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::{use_sync_field_editor, SyncComponent};
+/// use pl3xus_client::{use_field_editor, SyncComponent};
 /// use leptos::prelude::*;
 /// use serde::{Deserialize, Serialize};
 ///
@@ -672,7 +750,7 @@ pub fn use_sync_mutations() -> ReadSignal<HashMap<u64, MutationState>> {
 /// #[component]
 /// fn PositionEditor(entity_id: u64) -> impl IntoView {
 ///     let (input_ref, is_focused, initial_value, on_keydown, on_blur_handler) =
-///         use_sync_field_editor(
+///         use_field_editor(
 ///             entity_id,
 ///             |pos: &Position| pos.x,
 ///             |pos: &Position, new_x: f32| Position { x: new_x, y: pos.y },
@@ -693,7 +771,7 @@ pub fn use_sync_mutations() -> ReadSignal<HashMap<u64, MutationState>> {
 ///     }
 /// }
 /// ```
-pub fn use_sync_field_editor<T, F, A, M>(
+pub fn use_field_editor<T, F, A, M>(
     entity_id: u64,
     field_accessor: A,
     field_mutator: M,
@@ -713,7 +791,7 @@ where
     let ctx = expect_context::<SyncContext>();
 
     // Subscribe to all instances of this component type
-    let all_components = use_sync_component::<T>();
+    let all_components = use_components::<T>();
 
     // Create NodeRef for direct DOM access
     let input_ref = NodeRef::<Input>::new();
@@ -803,6 +881,28 @@ where
     )
 }
 
+/// Deprecated: Use [`use_field_editor`] instead.
+#[deprecated(since = "0.2.0", note = "Use use_field_editor instead")]
+pub fn use_sync_field_editor<T, F, A, M>(
+    entity_id: u64,
+    field_accessor: A,
+    field_mutator: M,
+) -> (
+    NodeRef<Input>,
+    RwSignal<bool>,
+    String,
+    impl Fn(web_sys::KeyboardEvent) + Clone,
+    impl Fn() + Clone,
+)
+where
+    T: SyncComponent + Clone + Default + 'static,
+    F: Display + FromStr + Clone + PartialEq + 'static,
+    A: Fn(&T) -> F + Clone + 'static,
+    M: Fn(&T, F) -> T + Clone + 'static,
+{
+    use_field_editor(entity_id, field_accessor, field_mutator)
+}
+
 /// Hook for "untracked" synchronization pattern.
 ///
 /// This hook implements the pattern where:
@@ -836,7 +936,7 @@ where
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::{use_sync_untracked, SyncComponent};
+/// use pl3xus_client::{use_untracked, SyncComponent};
 /// use serde::{Deserialize, Serialize};
 /// use std::collections::VecDeque;
 ///
@@ -854,7 +954,7 @@ where
 ///
 /// #[component]
 /// fn LogViewer() -> impl IntoView {
-///     let (full_log, latest_message) = use_sync_untracked::<ServerLog, ServerLogMessage>(
+///     let (full_log, latest_message) = use_untracked::<ServerLog, ServerLogMessage>(
 ///         |log, msg| log.messages.push_back(msg),
 ///     );
 ///
@@ -880,7 +980,7 @@ where
 ///     }
 /// }
 /// ```
-pub fn use_sync_untracked<TFull, TIncremental, F>(
+pub fn use_untracked<TFull, TIncremental, F>(
     append_fn: F,
 ) -> (Signal<TFull>, Signal<Option<TIncremental>>)
 where
@@ -889,10 +989,10 @@ where
     F: Fn(&mut TFull, TIncremental) + Send + Sync + Clone + 'static,
 {
     // Subscribe to full state (HashMap<u64, TFull>)
-    let full_components = use_sync_component::<TFull>();
+    let full_components = use_components::<TFull>();
 
     // Subscribe to incremental updates (HashMap<u64, TIncremental>)
-    let incremental_components = use_sync_component::<TIncremental>();
+    let incremental_components = use_components::<TIncremental>();
 
     // Create local state for the full data
     let local_full = RwSignal::new(TFull::default());
@@ -937,6 +1037,19 @@ where
     (local_full.into(), latest_incremental.into())
 }
 
+/// Deprecated: Use [`use_untracked`] instead.
+#[deprecated(since = "0.2.0", note = "Use use_untracked instead")]
+pub fn use_sync_untracked<TFull, TIncremental, F>(
+    append_fn: F,
+) -> (Signal<TFull>, Signal<Option<TIncremental>>)
+where
+    TFull: SyncComponent + Clone + Default + 'static,
+    TIncremental: SyncComponent + Clone + Default + 'static,
+    F: Fn(&mut TFull, TIncremental) + Send + Sync + Clone + 'static,
+{
+    use_untracked(append_fn)
+}
+
 /// Hook to subscribe to arbitrary Pl3xusMessage broadcasts from the server.
 ///
 /// This is for one-way broadcast messages (e.g., notifications, events, video frames)
@@ -958,7 +1071,7 @@ where
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::use_sync_message;
+/// use pl3xus_client::use_message;
 /// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Clone, Default, Serialize, Deserialize)]
@@ -969,7 +1082,7 @@ where
 ///
 /// #[component]
 /// fn NotificationBanner() -> impl IntoView {
-///     let notification = use_sync_message::<Notification>();
+///     let notification = use_message::<Notification>();
 ///
 ///     view! {
 ///         <div class="notification">
@@ -978,7 +1091,7 @@ where
 ///     }
 /// }
 /// ```
-pub fn use_sync_message<T>() -> ReadSignal<T>
+pub fn use_message<T>() -> ReadSignal<T>
 where
     T: SyncComponent + Clone + Default + 'static,
 {
@@ -986,10 +1099,19 @@ where
     ctx.subscribe_message::<T>()
 }
 
+/// Deprecated: Use [`use_message`] instead.
+#[deprecated(since = "0.2.0", note = "Use use_message instead")]
+pub fn use_sync_message<T>() -> ReadSignal<T>
+where
+    T: SyncComponent + Clone + Default + 'static,
+{
+    use_message::<T>()
+}
+
 /// Hook to subscribe to arbitrary Pl3xusMessage broadcasts using a Store.
 ///
 /// This provides fine-grained reactivity for message fields, similar to
-/// `use_sync_component_store` but for broadcast messages.
+/// `use_component_store` but for broadcast messages.
 ///
 /// # Type Parameters
 ///
@@ -1006,7 +1128,7 @@ where
 /// # Example
 ///
 /// ```rust,ignore
-/// use pl3xus_client::use_sync_message_store;
+/// use pl3xus_client::use_message_store;
 /// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Clone, Default, Serialize, Deserialize)]
@@ -1018,7 +1140,7 @@ where
 ///
 /// #[component]
 /// fn StatsDisplay() -> impl IntoView {
-///     let stats = use_sync_message_store::<ServerStats>();
+///     let stats = use_message_store::<ServerStats>();
 ///
 ///     view! {
 ///         <div>
@@ -1030,12 +1152,22 @@ where
 /// }
 /// ```
 #[cfg(feature = "stores")]
-pub fn use_sync_message_store<T>() -> Store<T>
+pub fn use_message_store<T>() -> Store<T>
 where
     T: SyncComponent + Clone + Default + 'static,
 {
     let ctx = expect_context::<SyncContext>();
     ctx.subscribe_message_store::<T>()
+}
+
+/// Deprecated: Use [`use_message_store`] instead.
+#[cfg(feature = "stores")]
+#[deprecated(since = "0.2.0", note = "Use use_message_store instead")]
+pub fn use_sync_message_store<T>() -> Store<T>
+where
+    T: SyncComponent + Clone + Default + 'static,
+{
+    use_message_store::<T>()
 }
 
 
@@ -1180,6 +1312,11 @@ impl<T> UseRequestState<T> {
         self.is_loading
     }
 
+    /// Returns true if no request has been made yet (initial state).
+    pub fn is_idle(&self) -> bool {
+        !self.is_loading && self.data.is_none() && self.error.is_none()
+    }
+
     /// Returns true if the request completed successfully.
     pub fn is_success(&self) -> bool {
         self.data.is_some()
@@ -1202,4 +1339,266 @@ impl<T> UseRequestState<T> {
 pub fn use_request_state() -> ReadSignal<HashMap<u64, RequestState>> {
     let ctx = expect_context::<SyncContext>();
     ctx.requests()
+}
+
+/// Hook for sending requests with a response handler callback.
+///
+/// This is a convenience hook that wraps `use_request` and sets up
+/// an Effect that calls your handler exactly once per response.
+/// The handler receives `Result<&ResponseMessage, &str>`.
+///
+/// Returns just the send function (not the state signal).
+///
+/// # Panics
+///
+/// Panics if called outside of a `SyncProvider` context.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let load = use_request_with_handler::<LoadProgram, _>(move |result| {
+///     match result {
+///         Ok(r) if r.success => toast.success("Program loaded"),
+///         Ok(r) => toast.error(format!("Failed: {}", r.error.as_deref().unwrap_or(""))),
+///         Err(e) => toast.error(format!("Error: {e}")),
+///     }
+/// });
+///
+/// load(LoadProgram { program_id: 42 });
+/// ```
+pub fn use_request_with_handler<R, F>(handler: F) -> impl Fn(R) + Clone
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+    F: Fn(Result<&R::ResponseMessage, &str>) + Clone + 'static,
+{
+    let (send, state) = use_request::<R>();
+
+    // Track whether the current response has been processed
+    let processed = RwSignal::new(false);
+
+    // Set up the Effect that calls the handler exactly once per response
+    Effect::new(move |_| {
+        let current_state = state.get();
+
+        // Reset processed flag when a new request starts loading
+        if current_state.is_loading() {
+            processed.set(false);
+            return;
+        }
+
+        // Skip if idle (no request made yet) or already processed
+        if current_state.is_idle() || processed.get_untracked() {
+            return;
+        }
+
+        // Mark as processed before calling handler
+        processed.set(true);
+
+        // Call the handler with the result
+        if let Some(ref error) = current_state.error {
+            handler(Err(error.as_str()));
+        } else if let Some(ref data) = current_state.data {
+            handler(Ok(data));
+        }
+    });
+
+    send
+}
+
+/// Hook for sending targeted requests to specific entities.
+///
+/// Returns a tuple of:
+/// - A function to send the request (takes entity_bits and request)
+/// - A reactive signal containing the current request state
+///
+/// This is similar to `use_request` but for targeted requests that are
+/// directed at a specific entity. The server will authorize the request
+/// based on whether the client has control of the target entity.
+///
+/// # Panics
+///
+/// Panics if called outside of a `SyncProvider` context.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_targeted_request;
+/// use pl3xus_common::RequestMessage;
+///
+/// #[derive(Clone, Serialize, Deserialize, Debug)]
+/// struct SetSpeedOverride { value: f32 }
+///
+/// #[derive(Clone, Serialize, Deserialize, Debug)]
+/// struct SetSpeedOverrideResponse { success: bool }
+///
+/// impl RequestMessage for SetSpeedOverride {
+///     type ResponseMessage = SetSpeedOverrideResponse;
+/// }
+///
+/// #[component]
+/// fn SpeedControl(entity_bits: u64) -> impl IntoView {
+///     let (send, state) = use_targeted_request::<SetSpeedOverride>();
+///
+///     let set_speed = move |_| {
+///         send(entity_bits, SetSpeedOverride { value: 50.0 });
+///     };
+///
+///     view! {
+///         <button on:click=set_speed disabled=move || state.get().is_loading>
+///             "Set Speed"
+///         </button>
+///         <Show when=move || state.get().is_success()>
+///             <p>"Speed updated!"</p>
+///         </Show>
+///     }
+/// }
+/// ```
+pub fn use_targeted_request<R>() -> (
+    impl Fn(u64, R) + Clone,
+    Signal<UseRequestState<R::ResponseMessage>>,
+)
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    let ctx = expect_context::<SyncContext>();
+
+    // Track the current request ID
+    let current_request_id = RwSignal::new(None::<u64>);
+
+    // Derive state from the context's request tracking
+    let state = {
+        let ctx = ctx.clone();
+        Signal::derive(move || {
+            let request_id = current_request_id.get();
+
+            match request_id {
+                None => UseRequestState {
+                    is_loading: false,
+                    data: None,
+                    error: None,
+                },
+                Some(id) => {
+                    let requests = ctx.requests.get();
+                    match requests.get(&id) {
+                        None => UseRequestState {
+                            is_loading: false,
+                            data: None,
+                            error: Some("Request not found".to_string()),
+                        },
+                        Some(req_state) => {
+                            match &req_state.status {
+                                RequestStatus::Pending => UseRequestState {
+                                    is_loading: true,
+                                    data: None,
+                                    error: None,
+                                },
+                                RequestStatus::Success => {
+                                    let data = ctx.get_response::<R>(id);
+                                    UseRequestState {
+                                        is_loading: false,
+                                        data,
+                                        error: None,
+                                    }
+                                }
+                                RequestStatus::Error(e) => UseRequestState {
+                                    is_loading: false,
+                                    data: None,
+                                    error: Some(e.clone()),
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    };
+
+    // Create the send function
+    let send = move |entity_bits: u64, request: R| {
+        #[cfg(target_arch = "wasm32")]
+        leptos::logging::log!(
+            "[use_targeted_request] sending request type: {} to entity: {}",
+            R::request_name(),
+            entity_bits
+        );
+        let id = ctx.targeted_request(entity_bits, request);
+        #[cfg(target_arch = "wasm32")]
+        leptos::logging::log!("[use_targeted_request] request sent with id: {}", id);
+        current_request_id.set(Some(id));
+    };
+
+    (send, state)
+}
+
+/// Hook for sending targeted requests with a response handler callback.
+///
+/// This is a convenience wrapper around `use_targeted_request` that automatically
+/// sets up response handling with proper deduplication. The handler is called
+/// exactly once per response, avoiding duplicate processing when Effects re-run.
+///
+/// # Arguments
+///
+/// * `handler` - A callback that receives `Result<&ResponseMessage, &str>` where:
+///   - `Ok(response)` - The request succeeded (transport-level), check `response.success` for business logic
+///   - `Err(error)` - Transport-level error message
+///
+/// # Returns
+///
+/// A send function that takes `(entity_id: u64, request: R)`.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_targeted_request_with_handler;
+///
+/// let toast = use_toast();
+///
+/// let send_abort = use_targeted_request_with_handler::<AbortMotion, _>(move |result| {
+///     match result {
+///         Ok(response) if response.success => toast.warning("Motion aborted"),
+///         Ok(response) => toast.error(format!("Denied: {}", response.error.as_deref().unwrap_or(""))),
+///         Err(e) => toast.error(format!("Failed: {}", e)),
+///     }
+/// });
+///
+/// // Later, send the request:
+/// send_abort(entity_id, AbortMotion);
+/// ```
+pub fn use_targeted_request_with_handler<R, F>(handler: F) -> impl Fn(u64, R) + Clone
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+    F: Fn(Result<&R::ResponseMessage, &str>) + Clone + 'static,
+{
+    let (send, state) = use_targeted_request::<R>();
+
+    // Track whether the current response has been processed
+    let processed = RwSignal::new(false);
+
+    // Set up the Effect that calls the handler exactly once per response
+    Effect::new(move |_| {
+        let current_state = state.get();
+
+        // Reset processed flag when a new request starts loading
+        if current_state.is_loading() {
+            processed.set(false);
+            return;
+        }
+
+        // Skip if idle (no request made yet) or already processed
+        if current_state.is_idle() || processed.get_untracked() {
+            return;
+        }
+
+        // Mark as processed before calling handler
+        processed.set(true);
+
+        // Call the handler with the result
+        if let Some(ref error) = current_state.error {
+            handler(Err(error.as_str()));
+        } else if let Some(ref data) = current_state.data {
+            handler(Ok(data));
+        }
+    });
+
+    send
 }

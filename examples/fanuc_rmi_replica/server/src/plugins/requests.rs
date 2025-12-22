@@ -8,6 +8,7 @@ use pl3xus::managers::network_request::{AppNetworkRequestMessage, Request};
 use pl3xus::Network;
 use pl3xus_websockets::WebSocketProvider;
 use pl3xus_sync::control::EntityControl;
+use pl3xus_sync::AuthorizedRequest;
 use fanuc_replica_types::*;
 
 use bevy_tokio_tasks::TokioTasksRuntime;
@@ -15,7 +16,7 @@ use crate::database::DatabaseResource;
 use crate::plugins::connection::{FanucRobot, RmiDriver, RobotConnectionState};
 use crate::plugins::execution::{ProgramExecutor, LoadedProgramData, ExecutorRunState};
 use crate::plugins::program::{Program, ProgramState, ProgramDefaults, ApproachRetreat, ExecutionBuffer, console_entry as program_console_entry};
-use crate::plugins::system::SystemMarker;
+use crate::plugins::system::ActiveSystem;
 use fanuc_rmi::packets::PacketPriority;
 
 pub struct RequestHandlerPlugin;
@@ -42,11 +43,8 @@ impl Plugin for RequestHandlerPlugin {
         app.listen_for_request_message::<UpdateProgramSettings, WebSocketProvider>();
         app.listen_for_request_message::<UploadCsv, WebSocketProvider>();
         app.listen_for_request_message::<LoadProgram, WebSocketProvider>();
-        app.listen_for_request_message::<UnloadProgram, WebSocketProvider>();
-        app.listen_for_request_message::<StartProgram, WebSocketProvider>();
-        app.listen_for_request_message::<PauseProgram, WebSocketProvider>();
-        app.listen_for_request_message::<ResumeProgram, WebSocketProvider>();
-        app.listen_for_request_message::<StopProgram, WebSocketProvider>();
+        // Note: StartProgram, PauseProgram, ResumeProgram, StopProgram, UnloadProgram are registered
+        // as targeted requests in sync.rs with authorization middleware
 
         // Register request listeners - Frame/Tool
         app.listen_for_request_message::<GetActiveFrameTool, WebSocketProvider>();
@@ -831,7 +829,7 @@ fn handle_load_program(
     mut commands: Commands,
     mut requests: MessageReader<Request<LoadProgram>>,
     db: Option<Res<DatabaseResource>>,
-    system_query: Query<(Entity, &EntityControl), With<SystemMarker>>,
+    system_query: Query<(Entity, &EntityControl), With<ActiveSystem>>,
     robots: Query<(Entity, &RobotConnectionState), With<FanucRobot>>,
     mut execution_states: Query<&mut ExecutionState>,
     mut executor: ResMut<ProgramExecutor>,
@@ -1096,42 +1094,30 @@ fn handle_load_program(
 
 /// Handle UnloadProgram request - unloads the currently loaded program.
 ///
-/// REQUIRES: Client must have control of the System entity.
+/// Authorization is handled by middleware - no manual control check needed.
+/// This is a targeted request that targets the System entity.
 fn handle_unload_program(
     mut commands: Commands,
-    mut requests: MessageReader<Request<UnloadProgram>>,
-    system_query: Query<(Entity, &EntityControl), With<SystemMarker>>,
-    program_query: Query<&Program, With<SystemMarker>>,
+    mut requests: MessageReader<AuthorizedRequest<UnloadProgram>>,
+    system_query: Query<Entity, With<ActiveSystem>>,
+    program_query: Query<&Program, With<ActiveSystem>>,
     mut executor: ResMut<ProgramExecutor>,
     mut execution_states: Query<&mut ExecutionState>,
     mut robots: Query<Option<&mut ExecutionBuffer>, With<FanucRobot>>,
 ) {
     for request in requests.read() {
+        let request = request.clone();
         let client_id = request.source();
         info!("📋 Handling UnloadProgram request from {:?}", client_id);
 
-        // Check control on System entity
-        let system_entity = match system_query.single() {
-            Ok((entity, system_control)) => {
-                if system_control.client_id != *client_id {
-                    warn!("UnloadProgram rejected: client {:?} does not have control", client_id);
-                    let response = UnloadProgramResponse {
-                        success: false,
-                        error: Some("You do not have control of the apparatus".to_string()),
-                    };
-                    let _ = request.clone().respond(response);
-                    continue;
-                }
-                entity
-            }
-            Err(_) => {
-                let response = UnloadProgramResponse {
-                    success: false,
-                    error: Some("System not ready".to_string()),
-                };
-                let _ = request.clone().respond(response);
-                continue;
-            }
+        // Get the system entity
+        let Ok(system_entity) = system_query.single() else {
+            let response = UnloadProgramResponse {
+                success: false,
+                error: Some("System not ready".to_string()),
+            };
+            let _ = request.respond(response);
+            continue;
         };
 
         // Remove Program component from System entity
@@ -1177,7 +1163,7 @@ fn handle_unload_program(
         info!("📡 Unloaded program - ExecutionState cleared and synced to all clients");
         let response = UnloadProgramResponse { success: true, error: None };
 
-        if let Err(e) = request.clone().respond(response) {
+        if let Err(e) = request.respond(response) {
             error!("Failed to send response: {:?}", e);
         }
     }
@@ -1186,43 +1172,21 @@ fn handle_unload_program(
 /// Handle StartProgram request - starts executing the currently loaded program.
 /// A program must be loaded first via LoadProgram.
 ///
-/// REQUIRES: Client must have control of the System entity.
+/// Authorization is handled by middleware - no manual control check needed.
+/// This is a targeted request that targets the System entity.
 ///
 /// NEW ARCHITECTURE: This handler just sets the Program state to Running.
 /// The orchestrator system (in program.rs) handles the actual instruction dispatch.
 fn handle_start_program(
-    mut requests: MessageReader<Request<StartProgram>>,
-    system_control_query: Query<&EntityControl, With<SystemMarker>>,
-    mut systems: Query<&mut Program, With<SystemMarker>>,
+    mut requests: MessageReader<AuthorizedRequest<StartProgram>>,
+    mut systems: Query<&mut Program, With<ActiveSystem>>,
     robots: Query<&RobotConnectionState, With<FanucRobot>>,
     net: Res<Network<WebSocketProvider>>,
 ) {
     for request in requests.read() {
+        let request = request.clone();
         let client_id = request.source();
         info!("📋 Handling StartProgram request from {:?}", client_id);
-
-        // Check control on System entity
-        match system_control_query.single() {
-            Ok(system_control) => {
-                if system_control.client_id != *client_id {
-                    warn!("StartProgram rejected: client {:?} does not have control", client_id);
-                    let response = StartProgramResponse {
-                        success: false,
-                        error: Some("You do not have control of the apparatus".to_string()),
-                    };
-                    let _ = request.clone().respond(response);
-                    continue;
-                }
-            }
-            Err(_) => {
-                let response = StartProgramResponse {
-                    success: false,
-                    error: Some("System not ready".to_string()),
-                };
-                let _ = request.clone().respond(response);
-                continue;
-            }
-        };
 
         // Check if a program is loaded (Program component exists on System)
         let Ok(mut program) = systems.single_mut() else {
@@ -1230,7 +1194,7 @@ fn handle_start_program(
                 success: false,
                 error: Some("No program loaded. Use LoadProgram first.".to_string()),
             };
-            let _ = request.clone().respond(response);
+            let _ = request.respond(response);
             continue;
         };
 
@@ -1240,7 +1204,7 @@ fn handle_start_program(
                 success: false,
                 error: Some("Program has no instructions".to_string()),
             };
-            let _ = request.clone().respond(response);
+            let _ = request.respond(response);
             continue;
         }
 
@@ -1251,7 +1215,7 @@ fn handle_start_program(
                 success: false,
                 error: Some("Robot not connected".to_string()),
             };
-            let _ = request.clone().respond(response);
+            let _ = request.respond(response);
             continue;
         }
 
@@ -1261,7 +1225,7 @@ fn handle_start_program(
                 success: false,
                 error: Some("Program is already running".to_string()),
             };
-            let _ = request.clone().respond(response);
+            let _ = request.respond(response);
             continue;
         }
 
@@ -1284,7 +1248,7 @@ fn handle_start_program(
         net.broadcast(console_msg);
 
         let response = StartProgramResponse { success: true, error: None };
-        if let Err(e) = request.clone().respond(response) {
+        if let Err(e) = request.respond(response) {
             error!("Failed to send response: {:?}", e);
         }
     }
@@ -1292,230 +1256,181 @@ fn handle_start_program(
 
 /// Handle PauseProgram request - pauses program execution.
 ///
-/// REQUIRES: Client must have control of the System entity.
+/// Authorization is handled by middleware - no manual control check needed.
+/// This is a targeted request that targets the System entity.
 fn handle_pause_program(
     tokio_runtime: Res<TokioTasksRuntime>,
-    mut requests: MessageReader<Request<PauseProgram>>,
-    system_control_query: Query<&EntityControl, With<SystemMarker>>,
-    mut systems: Query<&mut Program, With<SystemMarker>>,
+    mut requests: MessageReader<AuthorizedRequest<PauseProgram>>,
+    mut systems: Query<&mut Program, With<ActiveSystem>>,
     robots: Query<(&RmiDriver, &RobotConnectionState), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
     for request in requests.read() {
+        let request = request.clone();
         let client_id = request.source();
         info!("📋 Handling PauseProgram request from {:?}", client_id);
 
-        // Check control on System entity
-        match system_control_query.single() {
-            Ok(system_control) => {
-                if system_control.client_id != *client_id {
-                    warn!("PauseProgram rejected: client {:?} does not have control", client_id);
-                    let response = PauseProgramResponse {
-                        success: false,
-                        error: Some("You do not have control of the apparatus".to_string()),
-                    };
-                    let _ = request.clone().respond(response);
-                    continue;
-                }
-            }
-            Err(_) => {
-                let response = PauseProgramResponse {
-                    success: false,
-                    error: Some("System not ready".to_string()),
-                };
-                let _ = request.clone().respond(response);
-                continue;
-            }
-        };
-
         let Ok(mut program) = systems.single_mut() else {
             let response = PauseProgramResponse { success: false, error: Some("No program loaded".to_string()) };
-            let _ = request.clone().respond(response);
+            let _ = request.respond(response);
             continue;
         };
 
         if program.state != ProgramState::Running {
             let response = PauseProgramResponse { success: false, error: Some("No program running".to_string()) };
-            let _ = request.clone().respond(response);
+            let _ = request.respond(response);
             continue;
         }
 
-        // Send pause command to robot
-        let mut sent_pause = false;
-        for (driver, state) in robots.iter() {
-            if *state == RobotConnectionState::Connected {
-                // Send FRC_Pause packet (unit variant)
-                let pause_packet = fanuc_rmi::packets::SendPacket::Command(
-                    fanuc_rmi::packets::Command::FrcPause
-                );
-                info!("📤 Sending FRC_Pause to robot");
-                if let Err(e) = driver.0.send_packet(pause_packet, PacketPriority::High) {
-                    error!("❌ Failed to send pause command: {}", e);
-                    let response = PauseProgramResponse { success: false, error: Some(format!("Failed to pause: {}", e)) };
-                    let _ = request.clone().respond(response);
-                    continue;
+        // Send pause command to robot - find connected robot first
+        let connected_robot = robots.iter()
+            .find(|(_, state)| **state == RobotConnectionState::Connected);
+
+        let pause_result = if let Some((driver, _)) = connected_robot {
+            // Send FRC_Pause packet (unit variant)
+            let pause_packet = fanuc_rmi::packets::SendPacket::Command(
+                fanuc_rmi::packets::Command::FrcPause
+            );
+            info!("📤 Sending FRC_Pause to robot");
+            match driver.0.send_packet(pause_packet, PacketPriority::High) {
+                Ok(_) => {
+                    info!("✅ FRC_Pause sent successfully");
+                    Ok(())
                 }
-                info!("✅ FRC_Pause sent successfully");
-                sent_pause = true;
-                break;
+                Err(e) => {
+                    error!("❌ Failed to send pause command: {}", e);
+                    Err(format!("Failed to pause: {}", e))
+                }
             }
-        }
-
-        if !sent_pause {
+        } else {
             warn!("⚠️ No connected robot found to send FRC_Pause");
-        }
+            // Still allow pause to succeed even without robot connection
+            Ok(())
+        };
 
-        program.state = ProgramState::Paused;
-        info!("⏸ Program '{}' paused", program.name);
-        let response = PauseProgramResponse { success: true, error: None };
-        if let Err(e) = request.clone().respond(response) {
-            error!("Failed to send response: {:?}", e);
+        match pause_result {
+            Ok(()) => {
+                program.state = ProgramState::Paused;
+                info!("⏸ Program '{}' paused", program.name);
+                let response = PauseProgramResponse { success: true, error: None };
+                if let Err(e) = request.respond(response) {
+                    error!("Failed to send response: {:?}", e);
+                }
+            }
+            Err(err) => {
+                let response = PauseProgramResponse { success: false, error: Some(err) };
+                let _ = request.respond(response);
+            }
         }
     }
 }
 
 /// Handle ResumeProgram request - resumes program execution.
 ///
-/// REQUIRES: Client must have control of the System entity.
+/// Authorization is handled by middleware - no manual control check needed.
+/// This is a targeted request that targets the System entity.
 fn handle_resume_program(
     tokio_runtime: Res<TokioTasksRuntime>,
-    mut requests: MessageReader<Request<ResumeProgram>>,
-    system_control_query: Query<&EntityControl, With<SystemMarker>>,
-    mut systems: Query<&mut Program, With<SystemMarker>>,
+    mut requests: MessageReader<AuthorizedRequest<ResumeProgram>>,
+    mut systems: Query<&mut Program, With<ActiveSystem>>,
     robots: Query<(&RmiDriver, &RobotConnectionState), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
     for request in requests.read() {
+        let request = request.clone();
         let client_id = request.source();
         info!("📋 Handling ResumeProgram request from {:?}", client_id);
 
-        // Check control on System entity
-        match system_control_query.single() {
-            Ok(system_control) => {
-                if system_control.client_id != *client_id {
-                    warn!("ResumeProgram rejected: client {:?} does not have control", client_id);
-                    let response = ResumeProgramResponse {
-                        success: false,
-                        error: Some("You do not have control of the apparatus".to_string()),
-                    };
-                    let _ = request.clone().respond(response);
-                    continue;
-                }
-            }
-            Err(_) => {
-                let response = ResumeProgramResponse {
-                    success: false,
-                    error: Some("System not ready".to_string()),
-                };
-                let _ = request.clone().respond(response);
-                continue;
-            }
-        };
-
         let Ok(mut program) = systems.single_mut() else {
             let response = ResumeProgramResponse { success: false, error: Some("No program loaded".to_string()) };
-            let _ = request.clone().respond(response);
+            let _ = request.respond(response);
             continue;
         };
 
         if program.state != ProgramState::Paused {
             let response = ResumeProgramResponse { success: false, error: Some("Program not paused".to_string()) };
-            let _ = request.clone().respond(response);
+            let _ = request.respond(response);
             continue;
         }
 
-        // Send continue command to robot
-        let mut sent_continue = false;
-        for (driver, state) in robots.iter() {
-            if *state == RobotConnectionState::Connected {
-                // Send FRC_Continue packet (unit variant)
-                let continue_packet = fanuc_rmi::packets::SendPacket::Command(
-                    fanuc_rmi::packets::Command::FrcContinue
-                );
-                info!("📤 Sending FRC_Continue to robot");
-                if let Err(e) = driver.0.send_packet(continue_packet, PacketPriority::High) {
-                    error!("❌ Failed to send continue command: {}", e);
-                    let response = ResumeProgramResponse { success: false, error: Some(format!("Failed to resume: {}", e)) };
-                    let _ = request.clone().respond(response);
-                    continue;
+        // Send continue command to robot - find connected robot first
+        let connected_robot = robots.iter()
+            .find(|(_, state)| **state == RobotConnectionState::Connected);
+
+        let resume_result = if let Some((driver, _)) = connected_robot {
+            // Send FRC_Continue packet (unit variant)
+            let continue_packet = fanuc_rmi::packets::SendPacket::Command(
+                fanuc_rmi::packets::Command::FrcContinue
+            );
+            info!("📤 Sending FRC_Continue to robot");
+            match driver.0.send_packet(continue_packet, PacketPriority::High) {
+                Ok(_) => {
+                    info!("✅ FRC_Continue sent successfully");
+                    Ok(())
                 }
-                info!("✅ FRC_Continue sent successfully");
-                sent_continue = true;
-                break;
+                Err(e) => {
+                    error!("❌ Failed to send continue command: {}", e);
+                    Err(format!("Failed to resume: {}", e))
+                }
             }
-        }
-
-        if !sent_continue {
+        } else {
             warn!("⚠️ No connected robot found to send FRC_Continue");
-        }
+            // Still allow resume to succeed even without robot connection
+            Ok(())
+        };
 
-        program.state = ProgramState::Running;
-        info!("▶ Program '{}' resumed", program.name);
-        let response = ResumeProgramResponse { success: true, error: None };
-        if let Err(e) = request.clone().respond(response) {
-            error!("Failed to send response: {:?}", e);
+        match resume_result {
+            Ok(()) => {
+                program.state = ProgramState::Running;
+                info!("▶ Program '{}' resumed", program.name);
+                let response = ResumeProgramResponse { success: true, error: None };
+                if let Err(e) = request.respond(response) {
+                    error!("Failed to send response: {:?}", e);
+                }
+            }
+            Err(err) => {
+                let response = ResumeProgramResponse { success: false, error: Some(err) };
+                let _ = request.respond(response);
+            }
         }
     }
 }
 
 /// Handle StopProgram request - stops program execution.
 ///
-/// REQUIRES: Client must have control of the System entity.
+/// Authorization is handled by middleware - no manual control check needed.
+/// This is a targeted request that targets the System entity.
 fn handle_stop_program(
     tokio_runtime: Res<TokioTasksRuntime>,
-    mut requests: MessageReader<Request<StopProgram>>,
-    system_control_query: Query<&EntityControl, With<SystemMarker>>,
-    mut systems: Query<&mut Program, With<SystemMarker>>,
+    mut requests: MessageReader<AuthorizedRequest<StopProgram>>,
+    mut systems: Query<&mut Program, With<ActiveSystem>>,
     mut robots: Query<(&RmiDriver, &RobotConnectionState, Option<&mut ExecutionBuffer>), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
     for request in requests.read() {
+        let request = request.clone();
         let client_id = request.source();
         info!("📋 Handling StopProgram request from {:?}", client_id);
 
-        // Check control on System entity
-        match system_control_query.single() {
-            Ok(system_control) => {
-                if system_control.client_id != *client_id {
-                    warn!("StopProgram rejected: client {:?} does not have control", client_id);
-                    let response = StopProgramResponse {
-                        success: false,
-                        error: Some("You do not have control of the apparatus".to_string()),
-                    };
-                    let _ = request.clone().respond(response);
-                    continue;
-                }
-            }
-            Err(_) => {
-                let response = StopProgramResponse {
-                    success: false,
-                    error: Some("System not ready".to_string()),
-                };
-                let _ = request.clone().respond(response);
-                continue;
-            }
-        };
-
         let Ok(mut program) = systems.single_mut() else {
             let response = StopProgramResponse { success: false, error: Some("No program loaded".to_string()) };
-            let _ = request.clone().respond(response);
+            let _ = request.respond(response);
             continue;
         };
 
         if program.state == ProgramState::Idle {
             let response = StopProgramResponse { success: false, error: Some("No program running".to_string()) };
-            let _ = request.clone().respond(response);
+            let _ = request.respond(response);
             continue;
         }
 
         // Send abort command to robot and clear execution buffer
-        let mut sent_abort = false;
         for (driver, state, buffer_opt) in robots.iter_mut() {
             if *state == RobotConnectionState::Connected {
                 // Send FRC_Abort packet (unit variant)
@@ -1528,7 +1443,6 @@ fn handle_stop_program(
                     // Continue anyway to reset state
                 } else {
                     info!("✅ FRC_Abort sent successfully");
-                    sent_abort = true;
                 }
                 // Clear execution buffer to remove in-flight packet tracking
                 if let Some(mut buffer) = buffer_opt {
@@ -1539,10 +1453,6 @@ fn handle_stop_program(
             }
         }
 
-        if !sent_abort {
-            warn!("⚠️ No connected robot found to send FRC_Abort");
-        }
-
         let program_name = program.name.clone();
         // Reset to Idle state (program stays loaded for re-running)
         program.state = ProgramState::Idle;
@@ -1550,7 +1460,7 @@ fn handle_stop_program(
         program.completed_count = 0;
         info!("⏹ Program '{}' stopped (still loaded)", program_name);
         let response = StopProgramResponse { success: true, error: None };
-        if let Err(e) = request.clone().respond(response) {
+        if let Err(e) = request.respond(response) {
             error!("Failed to send response: {:?}", e);
         }
     }

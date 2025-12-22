@@ -18,7 +18,7 @@ use fanuc_rmi::drivers::{FanucDriver, FanucDriverConfig, LogLevel};
 use fanuc_replica_types::*;
 use crate::database::DatabaseResource;
 use super::execution::RmiSentInstructionChannel;
-use super::system::SystemMarker;
+use super::system::ActiveSystem;
 
 // ============================================================================
 // Components
@@ -108,7 +108,7 @@ fn handle_connect_requests(
     mut commands: Commands,
     db: Option<Res<DatabaseResource>>,
     mut connect_events: MessageReader<pl3xus::NetworkData<ConnectToRobot>>,
-    system_query: Query<(Entity, &EntityControl), With<SystemMarker>>,
+    system_query: Query<(Entity, &EntityControl), With<ActiveSystem>>,
     mut robots: Query<(Entity, &mut RobotConnectionState, &mut RobotConnectionDetails, &mut ConnectionState), With<FanucRobot>>,
 ) {
     for event in connect_events.read() {
@@ -191,6 +191,7 @@ fn handle_connect_requests(
             let robot_entity = commands.spawn((
                 Name::new("FANUC_Robot"),
                 FanucRobot,
+                ActiveRobot,  // Synced marker for client identification
                 connection_details,
                 RobotConnectionState::Connecting,
                 // Synced state components
@@ -371,7 +372,7 @@ fn handle_connecting_state(
 fn handle_disconnect_requests(
     tokio: Res<TokioTasksRuntime>,
     mut disconnect_events: MessageReader<pl3xus::NetworkData<DisconnectRobot>>,
-    system_query: Query<&EntityControl, With<SystemMarker>>,
+    system_query: Query<&EntityControl, With<ActiveSystem>>,
     mut robots: Query<(Entity, &RmiDriver, &mut RobotConnectionState, &mut ConnectionState), With<FanucRobot>>,
 ) {
     for event in disconnect_events.read() {

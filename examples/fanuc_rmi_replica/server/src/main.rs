@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use pl3xus::{Pl3xusRuntime, Network};
 use pl3xus_sync::{AppPl3xusSyncExt, Pl3xusSyncPlugin};
-use pl3xus_sync::control::{ExclusiveControlPlugin, EntityControl, AppExclusiveControlExt};
+use pl3xus_sync::control::{ExclusiveControlPlugin, EntityControl};
 use pl3xus_websockets::{NetworkSettings, WebSocketProvider};
 use bevy_tokio_tasks::TokioTasksPlugin;
 
@@ -54,22 +54,54 @@ fn main() {
     // ========================================================================
     // Exclusive Control (replaces custom RequestControl/ReleaseControl)
     // ========================================================================
-    app.add_plugins(ExclusiveControlPlugin::default());
-    app.add_exclusive_control_systems::<WebSocketProvider>();
+    app.add_plugins(
+        ExclusiveControlPlugin::<WebSocketProvider>::builder()
+            .timeout_seconds(1800.0)      // 30 minute timeout
+            .propagate_to_children(true)  // Control parent = control children
+            .build(),
+    );
     app.sync_component::<EntityControl>(None);
 
     // ========================================================================
     // Synced Components (pl3xus handles all sync automatically)
     // ========================================================================
-    app.sync_component::<SystemMarker>(None);  // System entity marker (for client to identify system entity)
-    app.sync_component::<RobotPosition>(None);
-    app.sync_component::<JointAngles>(None);
-    app.sync_component::<RobotStatus>(None);
-    app.sync_component::<IoStatus>(None);
-    app.sync_component::<ExecutionState>(None);
-    app.sync_component::<ConnectionState>(None);
-    app.sync_component::<ActiveConfigState>(None);
-    app.sync_component::<JogSettingsState>(None);
+    //
+    // Components are configured as either:
+    // - Read-only: Server is authoritative, clients cannot mutate directly
+    // - Mutable: Clients can mutate (with proper authorization)
+    //
+    // Read-only components provide custom error messages guiding users to the
+    // correct command-based API for modifying robot state.
+
+    use pl3xus_sync::ComponentSyncConfig;
+
+    // Marker components (read-only, no meaningful mutations)
+    app.sync_component::<ActiveSystem>(Some(ComponentSyncConfig::read_only()));
+    app.sync_component::<ActiveRobot>(Some(ComponentSyncConfig::read_only()));
+
+    // Robot status/state components (read-only, updated by server from robot)
+    app.sync_component::<RobotPosition>(Some(ComponentSyncConfig::read_only_with_message(
+        "RobotPosition is read-only. Robot position is controlled by the robot controller."
+    )));
+    app.sync_component::<JointAngles>(Some(ComponentSyncConfig::read_only_with_message(
+        "JointAngles is read-only. Joint positions are controlled by the robot controller."
+    )));
+    app.sync_component::<RobotStatus>(Some(ComponentSyncConfig::read_only_with_message(
+        "RobotStatus is read-only. Use SetSpeedOverride command to change speed."
+    )));
+    app.sync_component::<IoStatus>(Some(ComponentSyncConfig::read_only_with_message(
+        "IoStatus is read-only. Use SetDigitalOutput command to control outputs."
+    )));
+    app.sync_component::<ExecutionState>(Some(ComponentSyncConfig::read_only_with_message(
+        "ExecutionState is read-only. Use program execution commands (Start, Stop, Pause, etc)."
+    )));
+    app.sync_component::<ConnectionState>(Some(ComponentSyncConfig::read_only_with_message(
+        "ConnectionState is read-only. Use ConnectToRobot/DisconnectFromRobot commands."
+    )));
+
+    // User-configurable components (clients can mutate with proper authorization)
+    app.sync_component::<ActiveConfigState>(None);  // User can change active configuration
+    app.sync_component::<JogSettingsState>(None);   // User can change jog settings
 
     // ========================================================================
     // Database

@@ -1,14 +1,16 @@
 //! Active Configuration Panel - Shows loaded config and arm config.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_sync_component, use_request};
+use pl3xus_client::{use_components, use_request, use_request_with_handler};
 use fanuc_replica_types::{ConnectionState, ActiveConfigState, RobotConfiguration, GetRobotConfigurations, LoadConfiguration};
+use crate::components::use_toast;
 
 /// Active Configuration Panel - Shows loaded config and arm config (read-only display)
 #[component]
 pub fn ActiveConfigurationPanel() -> impl IntoView {
-    let connection_state = use_sync_component::<ConnectionState>();
-    let active_config = use_sync_component::<ActiveConfigState>();
+    let toast = use_toast();
+    let connection_state = use_components::<ConnectionState>();
+    let active_config = use_components::<ActiveConfigState>();
 
     let robot_connected = Memo::new(move |_| {
         connection_state.get().values().next()
@@ -18,7 +20,15 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
 
     // Get robot configurations from request
     let (get_configs, configs_response) = use_request::<GetRobotConfigurations>();
-    let (load_config, _) = use_request::<LoadConfiguration>();
+
+    // LoadConfiguration with error handling
+    let load_config = use_request_with_handler::<LoadConfiguration, _>(move |result| {
+        match result {
+            Ok(r) if r.success => {} // Silent success - config syncs automatically
+            Ok(r) => toast.error(format!("Load config failed: {}", r.error.as_deref().unwrap_or(""))),
+            Err(e) => toast.error(format!("Config error: {e}")),
+        }
+    });
     let load_config = StoredValue::new(load_config);
     let robot_configs: RwSignal<Vec<RobotConfiguration>> = RwSignal::new(Vec::new());
 

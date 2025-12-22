@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates:
 //! - Using SyncProvider to connect to a Bevy server
-//! - Using use_sync_component hook to subscribe to component updates
+//! - Using use_components hook to subscribe to component updates
 //! - Displaying real-time entity data
 //! - Integrating the DevTools widget
 //!
@@ -14,7 +14,7 @@
 //!   trunk serve --open
 
 use pl3xus_client::{
-    use_sync_component, use_sync_component_store, use_sync_connection, use_sync_context, use_sync_entity,
+    use_components, use_component_store, use_connection, use_sync_context, use_entity,
     ClientTypeRegistry, SyncProvider, MutationState,
 };
 
@@ -111,7 +111,7 @@ fn App() -> impl IntoView {
 
 #[component]
 fn Header() -> impl IntoView {
-    let connection = use_sync_connection();
+    let connection = use_connection();
     let ready_state = connection.ready_state;
 
     let status_text = move || match ready_state.get() {
@@ -146,9 +146,9 @@ fn Header() -> impl IntoView {
 #[component]
 fn EntityList() -> impl IntoView {
     // Subscribe to component updates
-    let positions = use_sync_component::<Position>();
-    let velocities = use_sync_component::<Velocity>();
-    let names = use_sync_component::<EntityName>();
+    let positions = use_components::<Position>();
+    let velocities = use_components::<Velocity>();
+    let names = use_components::<EntityName>();
 
     // Debug: Log positions signal content
     Effect::new(move |_| {
@@ -188,9 +188,9 @@ fn EntityList() -> impl IntoView {
 
 #[component]
 fn EntityCard(entity_id: u64) -> impl IntoView {
-    let positions = use_sync_component::<Position>();
-    let velocities = use_sync_component::<Velocity>();
-    let names = use_sync_component::<EntityName>();
+    let positions = use_components::<Position>();
+    let velocities = use_components::<Velocity>();
+    let names = use_components::<EntityName>();
 
     let position = move || positions.get().get(&entity_id).cloned();
     let velocity = move || velocities.get().get(&entity_id).cloned();
@@ -223,7 +223,7 @@ fn EntityCard(entity_id: u64) -> impl IntoView {
                 </div>
             </div>
 
-            /* Editable Position (demonstrates use_sync_component_write hook) */
+            /* Editable Position (demonstrates use_components_write hook) */
             <EditablePosition entity_id=entity_id />
 
             /* Visual representation */
@@ -251,9 +251,9 @@ fn EntityCard(entity_id: u64) -> impl IntoView {
 #[component]
 fn EntityListWithStores() -> impl IntoView {
     // Subscribe to component updates using stores for fine-grained reactivity
-    let positions = use_sync_component_store::<Position>();
-    let velocities = use_sync_component_store::<Velocity>();
-    let names = use_sync_component_store::<EntityName>();
+    let positions = use_component_store::<Position>();
+    let velocities = use_component_store::<Velocity>();
+    let names = use_component_store::<EntityName>();
 
     // Debug: Log when the store updates
     Effect::new(move |_| {
@@ -360,8 +360,8 @@ fn EditablePosition(entity_id: u64) -> impl IntoView {
     // Get the sync context for mutations
     let ctx = use_sync_context();
 
-    // Get the current position using use_sync_entity
-    let position = use_sync_entity::<Position>(entity_id);
+    // Get the current position using use_entity
+    let position = use_entity::<Position>(entity_id);
 
     // Local state for editing
     let (local_x, set_local_x) = signal(String::new());

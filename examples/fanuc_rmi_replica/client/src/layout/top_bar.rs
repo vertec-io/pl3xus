@@ -5,7 +5,7 @@
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
 
-use pl3xus_client::{use_sync_component, use_sync_context, use_sync_connection, use_request, use_sync_message, ControlRequest, ControlResponse, EntityControl, ConnectionReadyState};
+use pl3xus_client::{use_components, use_sync_context, use_connection, use_request, use_message, ControlRequest, ControlResponse, EntityControl, ConnectionReadyState};
 use fanuc_replica_types::*;
 use crate::pages::dashboard::use_system_entity;
 
@@ -13,8 +13,8 @@ use crate::pages::dashboard::use_system_entity;
 #[component]
 pub fn TopBar() -> impl IntoView {
     let _ctx = use_sync_context();
-    let connection = use_sync_connection();
-    let connection_state = use_sync_component::<ConnectionState>();
+    let connection = use_connection();
+    let connection_state = use_components::<ConnectionState>();
 
     // WebSocket connection state from connection
     let ws_connected = Signal::derive(move || connection.ready_state.get() == ConnectionReadyState::Open);
@@ -131,7 +131,7 @@ pub fn TopBar() -> impl IntoView {
 /// Connection dropdown - shows robot connection status and allows connecting.
 #[component]
 fn ConnectionDropdown() -> impl IntoView {
-    let connection_state = use_sync_component::<ConnectionState>();
+    let connection_state = use_components::<ConnectionState>();
     let (fetch_robots, robots_state) = use_request::<ListRobotConnections>();
     let (dropdown_open, set_dropdown_open) = signal(false);
 
@@ -288,7 +288,7 @@ fn WebSocketDropdown(
     ws_connecting: Signal<bool>,
     set_show_connection_menu: WriteSignal<bool>,
 ) -> impl IntoView {
-    let connection = use_sync_connection();
+    let connection = use_connection();
 
     view! {
         <div class="absolute right-0 top-full mt-1 w-56 bg-[#1a1a1a] border border-[#ffffff15] rounded shadow-lg z-50">
@@ -349,8 +349,8 @@ fn QuickSettingsButton() -> impl IntoView {
     let ctx = use_sync_context();
     let _navigate = use_navigate();
     let (fetch_robots, robots_state) = use_request::<ListRobotConnections>();
-    let connection_state = use_sync_component::<ConnectionState>();
-    let control_state = use_sync_component::<EntityControl>();
+    let connection_state = use_components::<ConnectionState>();
+    let control_state = use_components::<EntityControl>();
 
     let (show_popup, set_show_popup) = signal(false);
 
@@ -677,8 +677,9 @@ fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
     let system_ctx = use_system_entity();
 
     // Get the System entity ID from the context (provided by DesktopLayout)
+    // Control requests target the System entity
     let system_entity_bits = move || -> Option<u64> {
-        system_ctx.entity_id.get()
+        system_ctx.system_entity_id.get()
     };
 
     view! {
@@ -728,11 +729,12 @@ fn ControlButton() -> impl IntoView {
     let ctx = use_sync_context();
     let toast = crate::components::use_toast();
     let system_ctx = use_system_entity();
-    let control_state = use_sync_component::<EntityControl>();
+    let control_state = use_components::<EntityControl>();
 
     // Get the System entity ID from the context (provided by DesktopLayout)
+    // Control requests target the System entity
     let system_entity_bits = move || -> Option<u64> {
-        system_ctx.entity_id.get()
+        system_ctx.system_entity_id.get()
     };
 
     // Check if THIS client has control by comparing EntityControl.client_id with our own connection ID
@@ -835,7 +837,7 @@ pub fn ControlResponseHandler() -> impl IntoView {
     use pl3xus_common::ControlResponseKind;
 
     let toast = crate::components::use_toast();
-    let control_response = use_sync_message::<ControlResponse>();
+    let control_response = use_message::<ControlResponse>();
 
     // Track the last sequence number we processed to avoid duplicate toasts
     // Use StoredValue instead of RwSignal to avoid any reactive issues
@@ -897,7 +899,7 @@ pub fn ControlResponseHandler() -> impl IntoView {
 #[component]
 pub fn ConnectionStateHandler() -> impl IntoView {
     let toast = crate::components::use_toast();
-    let connection_state = use_sync_component::<ConnectionState>();
+    let connection_state = use_components::<ConnectionState>();
 
     // Track previous state to detect transitions
     // (was_connecting, was_connected, robot_name)
@@ -944,7 +946,7 @@ pub fn ProgramNotificationHandler() -> impl IntoView {
     use fanuc_replica_types::{ProgramNotification, ProgramNotificationKind};
 
     let toast = crate::components::use_toast();
-    let notification = use_sync_message::<ProgramNotification>();
+    let notification = use_message::<ProgramNotification>();
 
     // Track the last sequence number we processed to avoid duplicate toasts
     let last_sequence = StoredValue::new(0u64);
@@ -1002,7 +1004,7 @@ pub fn ConsoleLogHandler() -> impl IntoView {
     use crate::pages::dashboard::context::{WorkspaceContext, MessageDirection, MessageType, ConsoleMessage};
 
     let ctx = use_context::<WorkspaceContext>();
-    let console_entry = use_sync_message::<ConsoleLogEntry>();
+    let console_entry = use_message::<ConsoleLogEntry>();
 
     // Track the last timestamp_ms we processed to avoid duplicate entries
     let last_timestamp = StoredValue::new(0u64);
@@ -1079,7 +1081,7 @@ pub fn ServerNotificationHandler() -> impl IntoView {
     use crate::components::{use_toast, ToastType};
 
     let toast = use_toast();
-    let notification = use_sync_message::<ServerNotification>();
+    let notification = use_message::<ServerNotification>();
 
     // Track the last sequence number we processed to avoid duplicate toasts
     let last_sequence = StoredValue::new(0u64);

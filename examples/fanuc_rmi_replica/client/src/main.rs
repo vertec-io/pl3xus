@@ -3,7 +3,7 @@
 //! A demonstration client for the pl3xus real-time synchronization framework.
 //!
 //! # Key Features
-//! - **Zero boilerplate sync**: `use_sync_component::<T>()` handles subscription lifecycle
+//! - **Zero boilerplate sync**: `use_components::<T>()` handles subscription lifecycle
 //! - **Clean RPC**: `ctx.send(msg)` sends typed messages with automatic serialization
 //! - **Request/Response**: `use_request::<T>()` for database queries with React Query-style API
 

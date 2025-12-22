@@ -20,7 +20,7 @@ pub use composer::CommandComposerModal;
 pub use joint_jog::JointJogPanel;
 
 use leptos::prelude::*;
-use pl3xus_client::use_sync_component;
+use pl3xus_client::use_components;
 use fanuc_replica_types::*;
 use crate::pages::dashboard::context::WorkspaceContext;
 
@@ -33,7 +33,7 @@ pub fn ControlTab() -> impl IntoView {
     let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let show_composer = ctx.show_composer;
 
-    let connection_state = use_sync_component::<ConnectionState>();
+    let connection_state = use_components::<ConnectionState>();
     let robot_connected = Memo::new(move |_| {
         connection_state.get().values().next()
             .map(|s| s.robot_connected)

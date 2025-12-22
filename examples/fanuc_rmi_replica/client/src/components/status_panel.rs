@@ -2,15 +2,15 @@
 
 use leptos::prelude::*;
 
-use pl3xus_client::use_sync_component;
+use pl3xus_client::use_components;
 use fanuc_replica_types::*;
 
 /// Status panel showing robot status indicators.
 #[component]
 pub fn StatusPanel() -> impl IntoView {
-    let status = use_sync_component::<RobotStatus>();
-    let connection = use_sync_component::<ConnectionState>();
-    let frame_tool = use_sync_component::<FrameToolDataState>();
+    let status = use_components::<RobotStatus>();
+    let connection = use_components::<ConnectionState>();
+    let frame_tool = use_components::<FrameToolDataState>();
 
     let get_status = move || status.get().values().next().cloned().unwrap_or_default();
     let get_connection = move || connection.get().values().next().cloned().unwrap_or_default();

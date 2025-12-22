@@ -194,6 +194,7 @@ pub fn process_mutations<NP: NetworkProvider>(world: &mut World) {
 
     for mutation in pending.drain(..) {
         let mut status = Status::Ok;
+        let mut response_message: Option<String> = None;
 
         // Optional authorization step.
         if let Some(auth_res) = world.get_resource::<MutationAuthorizerResource>() {
@@ -202,36 +203,47 @@ pub fn process_mutations<NP: NetworkProvider>(world: &mut World) {
         }
 
         if let Status::Ok = status {
-            // Look up the per-type mutation handler based on the registered
-            // component type name.
-            let apply_fn = world
+            // Look up the per-type registration based on the component type name.
+            let registration = world
                 .get_resource::<SyncRegistry>()
                 .and_then(|registry| {
                     registry
                         .components
                         .iter()
                         .find(|reg| reg.type_name == mutation.component_type)
-                        .map(|reg| reg.apply_mutation)
                 });
 
-            match apply_fn {
+            match registration {
                 None => {
                     status = Status::NotFound;
                 }
-                Some(apply) => {
-                    // Ensure that panics while applying a mutation are contained
-                    // and reported back as an internal error rather than
-                    // crashing the entire app.
-                    let apply_result = std::panic::catch_unwind(
-                        std::panic::AssertUnwindSafe(|| apply(world, &mutation)),
-                    );
+                Some(reg) => {
+                    // Check if client mutations are allowed for this component type
+                    if !mutation.connection_id.is_server() && !reg.config.allow_client_mutations {
+                        status = Status::Forbidden;
+                        response_message = Some(
+                            reg.config.mutation_denied_message.clone()
+                                .unwrap_or_else(|| format!(
+                                    "{} is read-only and cannot be mutated directly",
+                                    mutation.component_type
+                                ))
+                        );
+                    } else {
+                        let apply = reg.apply_mutation;
+                        // Ensure that panics while applying a mutation are contained
+                        // and reported back as an internal error rather than
+                        // crashing the entire app.
+                        let apply_result = std::panic::catch_unwind(
+                            std::panic::AssertUnwindSafe(|| apply(world, &mutation)),
+                        );
 
-                    match apply_result {
-                        Ok(result_status) => {
-                            status = result_status;
-                        }
-                        Err(_) => {
-                            status = Status::InternalError;
+                        match apply_result {
+                            Ok(result_status) => {
+                                status = result_status;
+                            }
+                            Err(_) => {
+                                status = Status::InternalError;
+                            }
                         }
                     }
                 }
@@ -244,7 +256,7 @@ pub fn process_mutations<NP: NetworkProvider>(world: &mut World) {
             let response = MutationResponse {
                 request_id: mutation.request_id,
                 status: status.clone(),
-                message: None,
+                message: response_message,
             };
             let _ = net.send(
                 mutation.connection_id,

@@ -13,8 +13,24 @@
 //! - [`MutationAuthorizer`] / [`MutationAuthorizerResource`]: pluggable
 //!   authorization policies for client-driven mutations, plus a built-in
 //!   [`ServerOnlyMutationAuthorizer`] for "server-only" mutation deployments.
-//! - [`TargetedMessageAuthorizer`] / [`TargetedAuthorizerResource`]: pluggable
-//!   authorization policies for targeted messages (commands sent to specific entities).
+//!
+//! ## Message Authorization
+//!
+//! The authorization module provides a builder pattern for registering messages
+//! with optional authorization:
+//!
+//! ```rust,ignore
+//! use pl3xus_sync::{AppMessageRegistrationExt, EntityAccessPolicy};
+//!
+//! // Simple non-targeted message
+//! app.message::<Ping, NP>().register();
+//!
+//! // Targeted message with entity access authorization
+//! app.message::<SendPacket, NP>()
+//!    .targeted()
+//!    .with_entity_policy(EntityAccessPolicy::from_fn(|world, src, ent| Ok(())))
+//!    .register();
+//! ```
 
 mod messages;
 #[cfg(feature = "runtime")]
@@ -24,7 +40,7 @@ mod subscription;
 #[cfg(feature = "runtime")]
 mod systems;
 
-/// Pluggable authorization policies for targeted messages.
+/// Pluggable authorization policies for messages.
 #[cfg(feature = "runtime")]
 pub mod authorization;
 
@@ -54,15 +70,51 @@ pub use registry::{
 };
 #[cfg(feature = "runtime")]
 pub use subscription::*;
+
+// New authorization API (v0.2+)
 #[cfg(feature = "runtime")]
 pub use authorization::{
-    TargetedAuthContext,
-    TargetedAuthResult,
-    TargetedMessageAuthorizer,
-    TargetedAuthorizerResource,
+    // Authorization result
+    AuthResult,
+    // Entity access (for targeted messages)
+    EntityAccessContext,
+    EntityAccessAuthorizer,
+    EntityAccessPolicy,
+    EntityAccessPolicies,
+    DefaultEntityAccessPolicy,
+    // Message access (for non-targeted messages)
+    MessageAccessContext,
+    MessageAccessAuthorizer,
+    MessageAccessPolicy,
+    MessageAccessPolicies,
+    DefaultMessageAccessPolicy,
+    // Authorized message types (output of authorization middleware)
+    AuthorizedTargetedMessage,
     AuthorizedMessage,
-    AppAuthorizedMessageExt,
+    // Single message builder pattern
+    MessageRegistration,
+    AppMessageRegistrationExt,
+    // Batch message registration
+    BatchMessageConfig,
+    BatchMessageRegistration,
+    BatchRegisterMessages,
+    AppBatchMessageRegistrationExt,
+    // Request registration (request/response pattern)
+    TargetedRequest,
+    AuthorizedRequest,
+    RequestRegistration,
+    AppRequestRegistrationExt,
+    // Batch request registration
+    BatchRequestConfig,
+    BatchRequestRegistration,
+    BatchRegisterRequests,
+    BatchRegisterRequestsWithErrorResponse,
+    AppBatchRequestRegistrationExt,
 };
+
+// Re-export DeferredResponder for async request handling
+#[cfg(feature = "runtime")]
+pub use pl3xus::DeferredResponder;
 
 #[cfg(feature = "runtime")]
 use bevy::prelude::*;

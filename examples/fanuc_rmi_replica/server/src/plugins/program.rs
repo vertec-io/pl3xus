@@ -353,13 +353,13 @@ use bevy_tokio_tasks::TokioTasksRuntime;
 use pl3xus::Network;
 use pl3xus_websockets::WebSocketProvider;
 use super::execution::RmiSentInstructionChannel;
-use super::system::SystemMarker;
+use super::system::ActiveSystem;
 
 /// Orchestrator system - dispatches instructions from Program to Robot.
 /// Watches for Program in Running state and sends batches of instructions.
 fn orchestrator_dispatch(
     tokio_runtime: Res<TokioTasksRuntime>,
-    mut systems: Query<&mut Program, With<SystemMarker>>,
+    mut systems: Query<&mut Program, With<ActiveSystem>>,
     mut robots: Query<(&RmiDriver, &mut ExecutionBuffer, &RobotConnectionState), With<FanucRobot>>,
 ) {
     // Get the program (if any)
@@ -436,7 +436,7 @@ fn orchestrator_dispatch(
 /// Process instruction responses and update completion tracking.
 /// Uses RmiExecutionResponseChannel (separate from polling channel) to avoid contention.
 fn process_instruction_responses(
-    mut systems: Query<&mut Program, With<SystemMarker>>,
+    mut systems: Query<&mut Program, With<ActiveSystem>>,
     mut robots: Query<(&mut ExecutionBuffer, &mut RmiExecutionResponseChannel, Option<&mut RmiSentInstructionChannel>, &RobotConnectionState), With<FanucRobot>>,
     net: Res<Network<WebSocketProvider>>,
 ) {
@@ -532,7 +532,7 @@ fn process_instruction_responses(
 /// - Computes available actions based on state machine rules
 /// - Client simply reflects these values without any logic
 fn update_execution_state(
-    systems: Query<&Program, With<SystemMarker>>,
+    systems: Query<&Program, With<ActiveSystem>>,
     mut execution_states: Query<&mut ExecutionState>,
 ) {
     let Ok(program) = systems.single() else {
@@ -600,7 +600,7 @@ fn update_execution_state(
 /// Reset program state when robot disconnects.
 fn reset_on_disconnect(
     mut commands: Commands,
-    systems: Query<(Entity, &Program), With<SystemMarker>>,
+    systems: Query<(Entity, &Program), With<ActiveSystem>>,
     mut robots: Query<(&RobotConnectionState, Option<&mut ExecutionBuffer>), With<FanucRobot>>,
     mut execution_states: Query<&mut ExecutionState>,
 ) {

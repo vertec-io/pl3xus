@@ -255,7 +255,7 @@ impl SyncContext {
     ///
     /// This wraps the message in a `TargetedMessage<T>` with the entity's bits as the target_id.
     /// On the server, this will be processed by the authorization middleware and converted
-    /// to an `AuthorizedMessage<T>` if the client has control of the target entity.
+    /// to an `AuthorizedTargetedMessage<T>` if the client has control of the target entity.
     ///
     /// # Example
     ///
@@ -1237,6 +1237,149 @@ impl SyncContext {
             Err(_e) => {
                 #[cfg(target_arch = "wasm32")]
                 leptos::logging::error!("[SyncContext::request] Failed to serialize packet: {:?}", _e);
+
+                self.requests.update(|map| {
+                    if let Some(state) = map.get_mut(&request_id) {
+                        state.status = RequestStatus::Error("Packet serialization failed".to_string());
+                    }
+                });
+            }
+        }
+
+        request_id
+    }
+
+    /// Send a targeted request to the server for a specific entity.
+    ///
+    /// This wraps the request in a `TargetedRequest<R>` with the entity's bits as the target_id.
+    /// On the server, this will be processed by the authorization middleware and converted
+    /// to an `AuthorizedRequest<R>` if the client has control of the target entity.
+    ///
+    /// Returns a request ID that can be used to track the response.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use pl3xus_client::use_sync_context;
+    /// use serde::{Serialize, Deserialize};
+    /// use pl3xus_common::RequestMessage;
+    ///
+    /// #[derive(Clone, Serialize, Deserialize, Debug)]
+    /// struct SetSpeedOverride { value: f32 }
+    ///
+    /// #[derive(Clone, Serialize, Deserialize, Debug)]
+    /// struct SetSpeedOverrideResponse { success: bool }
+    ///
+    /// impl RequestMessage for SetSpeedOverride {
+    ///     type ResponseMessage = SetSpeedOverrideResponse;
+    /// }
+    ///
+    /// #[component]
+    /// fn SpeedControl(entity_bits: u64) -> impl IntoView {
+    ///     let ctx = use_sync_context();
+    ///
+    ///     let set_speed = move |_| {
+    ///         ctx.targeted_request(entity_bits, SetSpeedOverride { value: 50.0 });
+    ///     };
+    ///
+    ///     view! { <button on:click=set_speed>"Set Speed"</button> }
+    /// }
+    /// ```
+    pub fn targeted_request<R>(&self, entity_bits: u64, request: R) -> u64
+    where
+        R: pl3xus_common::RequestMessage,
+    {
+        use pl3xus_common::{NetworkPacket, Pl3xusMessage};
+        use serde::{Serialize, Deserialize};
+
+        // TargetedRequest wrapper (matches server-side TargetedRequest<T>)
+        #[derive(Serialize, Deserialize)]
+        struct TargetedRequest<T> {
+            target_id: String,
+            request: T,
+        }
+
+        // Internal wrapper for request with correlation ID
+        #[derive(Serialize, Deserialize)]
+        struct RequestInternal<T> {
+            id: u64,
+            request: T,
+        }
+
+        // Generate unique request ID
+        let request_id = {
+            let mut next_id = self.next_request_id.lock().unwrap();
+            *next_id += 1;
+            *next_id
+        };
+
+        // Track pending request
+        let response_type = format!("ResponseInternal<{}>", R::ResponseMessage::type_name());
+        self.requests.update(|map| {
+            map.insert(request_id, RequestState {
+                request_id,
+                response_type: response_type.clone(),
+                status: RequestStatus::Pending,
+                response_bytes: None,
+            });
+        });
+
+        // Wrap request in TargetedRequest
+        let targeted = TargetedRequest {
+            target_id: entity_bits.to_string(),
+            request,
+        };
+
+        // Wrap in RequestInternal with correlation ID
+        let wrapped = RequestInternal {
+            id: request_id,
+            request: targeted,
+        };
+
+        // Create NetworkPacket with the RequestInternal<TargetedRequest<R>> type name
+        // This matches how pl3xus server expects to receive targeted requests
+        let type_name = format!(
+            "pl3xus::managers::network_request::RequestInternal<pl3xus_sync::authorization::TargetedRequest<{}>>",
+            R::type_name()
+        );
+
+        let data = match bincode::serde::encode_to_vec(&wrapped, bincode::config::standard()) {
+            Ok(bytes) => bytes,
+            Err(_e) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::error!("[SyncContext::targeted_request] Failed to serialize request: {:?}", _e);
+
+                // Mark as error
+                self.requests.update(|map| {
+                    if let Some(state) = map.get_mut(&request_id) {
+                        state.status = RequestStatus::Error("Serialization failed".to_string());
+                    }
+                });
+                return request_id;
+            }
+        };
+
+        let packet = NetworkPacket {
+            type_name,
+            schema_hash: R::schema_hash(),
+            data,
+        };
+
+        match bincode::serde::encode_to_vec(&packet, bincode::config::standard()) {
+            Ok(bytes) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::log!(
+                    "[SyncContext::targeted_request] Sending targeted request '{}' to entity {} with id {} ({} bytes)",
+                    R::request_name(),
+                    entity_bits,
+                    request_id,
+                    bytes.len()
+                );
+                (self.send)(&bytes);
+            }
+            Err(_e) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::error!("[SyncContext::targeted_request] Failed to serialize packet: {:?}", _e);
 
                 self.requests.update(|map| {
                     if let Some(state) = map.get_mut(&request_id) {

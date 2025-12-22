@@ -20,16 +20,16 @@ pub use tool_display::MultiToolDisplay;
 pub use number_input::NumberInput;
 
 use leptos::prelude::*;
-use pl3xus_client::{use_sync_component, use_request};
+use pl3xus_client::{use_components, use_request};
 use fanuc_replica_types::{ConnectionState, GetFrameData, GetToolData, GetActiveFrameTool};
 
 /// Info tab showing frame, tool, and configuration data.
 ///
 /// Frame/tool panels read directly from synced FrameToolDataState component.
-/// No need to copy server state to context - components use use_sync_component directly.
+/// No need to copy server state to context - components use use_components directly.
 #[component]
 pub fn InfoTab() -> impl IntoView {
-    let connection_state = use_sync_component::<ConnectionState>();
+    let connection_state = use_components::<ConnectionState>();
 
     // Request hooks for loading frame/tool data
     let (get_frame_data, _) = use_request::<GetFrameData>();

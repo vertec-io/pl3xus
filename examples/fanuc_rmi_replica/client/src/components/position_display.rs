@@ -2,14 +2,14 @@
 
 use leptos::prelude::*;
 
-use pl3xus_client::use_sync_component;
+use pl3xus_client::use_components;
 use fanuc_replica_types::*;
 
 /// Position display showing XYZ and WPR values.
 #[component]
 pub fn PositionDisplay() -> impl IntoView {
-    let pos = use_sync_component::<RobotPosition>();
-    let joints = use_sync_component::<JointAngles>();
+    let pos = use_components::<RobotPosition>();
+    let joints = use_components::<JointAngles>();
     
     let get_pos = move || pos.get().values().next().cloned().unwrap_or_default();
     let get_joints = move || joints.get().values().next().cloned().unwrap_or_default();

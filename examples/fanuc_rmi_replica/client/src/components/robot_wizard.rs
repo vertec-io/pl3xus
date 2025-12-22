@@ -5,7 +5,7 @@
 
 use leptos::prelude::*;
 
-use pl3xus_client::use_request;
+use pl3xus_client::use_request_with_handler;
 use fanuc_replica_types::*;
 
 /// Wizard step enumeration
@@ -100,7 +100,17 @@ where
     let (config_turn5, set_config_turn5) = signal("0".to_string());
     let (config_turn6, set_config_turn6) = signal("0".to_string());
 
-    let (create_robot, create_state) = use_request::<CreateRobotConnection>();
+    // CreateRobotConnection with handler
+    let on_created_for_handler = on_created.clone();
+    let create_robot = use_request_with_handler::<CreateRobotConnection, _>(move |result| {
+        set_is_submitting.set(false);
+        match result {
+            Ok(r) if r.success => on_created_for_handler(r.robot_id),
+            Ok(r) => set_validation_error.set(r.error.clone()),
+            Err(e) => set_validation_error.set(Some(e.to_string())),
+        }
+    });
+    let create_robot = StoredValue::new(create_robot);
 
     // Validation helper
     let validate_current_step = move || -> Result<(), String> {
@@ -192,7 +202,7 @@ where
             set_current_step.set(WizardStep::DefaultConfiguration);
             set_is_submitting.set(true);
 
-            create_robot(CreateRobotConnection {
+            create_robot.with_value(|f| f(CreateRobotConnection {
                 name: robot_name.get(),
                 description: if robot_description.get().is_empty() { None } else { Some(robot_description.get()) },
                 ip_address: robot_ip.get(),
@@ -222,23 +232,9 @@ where
                     turn5: config_turn5.get().parse().unwrap(),
                     turn6: config_turn6.get().parse().unwrap(),
                 },
-            });
+            }));
         }
     };
-
-    // Watch for success response
-    let on_created_clone = on_created.clone();
-    Effect::new(move || {
-        let state = create_state.get();
-        if let Some(ref response) = state.data {
-            set_is_submitting.set(false);
-            if response.success {
-                on_created_clone(response.robot_id);
-            } else if let Some(ref err) = response.error {
-                set_validation_error.set(Some(err.clone()));
-            }
-        }
-    });
 
     view! {
         <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

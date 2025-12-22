@@ -9,13 +9,64 @@ use crate::messages::{MutationStatus, SerializableEntity, SyncItem};
 pub struct ComponentSyncConfig {
     /// Maximum number of updates per frame (per client); `None` means unlimited.
     pub max_updates_per_frame: Option<usize>,
+
+    /// Whether clients are allowed to mutate this component.
+    ///
+    /// When `false`, client mutations will be rejected with a `Forbidden` status.
+    /// This is useful for read-only status components that should only be updated
+    /// by the server (e.g., RobotStatus, IoStatus).
+    ///
+    /// Default: `true` (clients can mutate)
+    pub allow_client_mutations: bool,
+
+    /// Custom error message sent to clients when mutations are denied.
+    ///
+    /// This is used when `allow_client_mutations` is `false`, or can be set
+    /// to provide component-specific guidance like:
+    /// "RobotStatus is read-only. Use SetSpeedOverride command instead."
+    ///
+    /// If `None`, a generic "Mutations not allowed for this component" message is used.
+    pub mutation_denied_message: Option<String>,
 }
 
 impl Default for ComponentSyncConfig {
     fn default() -> Self {
         Self {
             max_updates_per_frame: None,
+            allow_client_mutations: true,
+            mutation_denied_message: None,
         }
+    }
+}
+
+impl ComponentSyncConfig {
+    /// Create a read-only config that denies all client mutations.
+    pub fn read_only() -> Self {
+        Self {
+            allow_client_mutations: false,
+            ..Default::default()
+        }
+    }
+
+    /// Create a read-only config with a custom denial message.
+    pub fn read_only_with_message(message: impl Into<String>) -> Self {
+        Self {
+            allow_client_mutations: false,
+            mutation_denied_message: Some(message.into()),
+            ..Default::default()
+        }
+    }
+
+    /// Set whether client mutations are allowed.
+    pub fn with_client_mutations(mut self, allowed: bool) -> Self {
+        self.allow_client_mutations = allowed;
+        self
+    }
+
+    /// Set a custom message for when mutations are denied.
+    pub fn with_denial_message(mut self, message: impl Into<String>) -> Self {
+        self.mutation_denied_message = Some(message.into());
+        self
     }
 }
 

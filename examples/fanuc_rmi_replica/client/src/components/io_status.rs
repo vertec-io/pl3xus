@@ -3,8 +3,9 @@
 use leptos::prelude::*;
 use leptos::web_sys;
 
-use pl3xus_client::{use_sync_component, use_request};
+use pl3xus_client::{use_components, use_request, use_request_with_handler};
 use fanuc_replica_types::*;
+use crate::components::use_toast;
 use crate::layout::LayoutContext;
 
 /// I/O status panel showing digital/analog/group inputs and outputs.
@@ -18,8 +19,8 @@ pub fn IoStatusPanel(
     show_popout: bool,
 ) -> impl IntoView {
     let layout_ctx = use_context::<LayoutContext>().expect("LayoutContext required");
-    let io_status = use_sync_component::<IoStatus>();
-    let io_config = use_sync_component::<IoConfigState>();
+    let io_status = use_components::<IoStatus>();
+    let io_config = use_components::<IoConfigState>();
     let get_io = move || io_status.get().values().next().cloned().unwrap_or_default();
     let get_config = move || io_config.get().values().next().cloned().unwrap_or_default();
 
@@ -280,16 +281,25 @@ fn IOButton(
     name: String,
     value: Signal<bool>,
 ) -> impl IntoView {
-    let (write_dout, _) = use_request::<WriteDout>();
+    let toast = use_toast();
     let display_name = name.clone();
     let title_name = name;
 
+    let write_dout = use_request_with_handler::<WriteDout, _>(move |result| {
+        match result {
+            Ok(r) if r.success => {} // Silent success
+            Ok(r) => toast.error(format!("DOUT write failed: {}", r.error.as_deref().unwrap_or(""))),
+            Err(e) => toast.error(format!("DOUT error: {e}")),
+        }
+    });
+    let write_dout = StoredValue::new(write_dout);
+
     let toggle = move |_| {
         let current = value.get();
-        write_dout(WriteDout {
+        write_dout.with_value(|f| f(WriteDout {
             port_number: port,
             port_value: !current,
-        });
+        }));
     };
 
     view! {
@@ -339,41 +349,44 @@ fn AnalogOutput(
     name: String,
     value: Signal<f64>,
 ) -> impl IntoView {
-    let (write_aout, _) = use_request::<WriteAout>();
+    let toast = use_toast();
     let (editing, set_editing) = signal(false);
     let (input_value, set_input_value) = signal(String::new());
     let display_name = name.clone();
     let title_name = name;
 
-    // Inline submit for blur
-    let do_blur_submit = {
-        let write_aout = write_aout.clone();
-        move |_| {
-            if let Ok(new_val) = input_value.get().parse::<f64>() {
-                write_aout(WriteAout {
-                    port_number: port,
-                    port_value: new_val,
-                });
-            }
-            set_editing.set(false);
+    let write_aout = use_request_with_handler::<WriteAout, _>(move |result| {
+        match result {
+            Ok(r) if r.success => {} // Silent success
+            Ok(r) => toast.error(format!("AOUT write failed: {}", r.error.as_deref().unwrap_or(""))),
+            Err(e) => toast.error(format!("AOUT error: {e}")),
         }
+    });
+    let write_aout = StoredValue::new(write_aout);
+
+    // Inline submit for blur
+    let do_blur_submit = move |_| {
+        if let Ok(new_val) = input_value.get().parse::<f64>() {
+            write_aout.with_value(|f| f(WriteAout {
+                port_number: port,
+                port_value: new_val,
+            }));
+        }
+        set_editing.set(false);
     };
 
     // For keydown
-    let do_key_submit = {
-        let write_aout = write_aout.clone();
-        move |ev: web_sys::KeyboardEvent| {
-            if ev.key() == "Enter" {
-                if let Ok(new_val) = input_value.get().parse::<f64>() {
-                    write_aout(WriteAout {
-                        port_number: port,
-                        port_value: new_val,
-                    });
-                }
-                set_editing.set(false);
+    let do_key_submit = move |ev: web_sys::KeyboardEvent| {
+        if ev.key() == "Enter" {
+            if let Ok(new_val) = input_value.get().parse::<f64>() {
+                write_aout.with_value(|f| f(WriteAout {
+                    port_number: port,
+                    port_value: new_val,
+                }));
             }
-            if ev.key() == "Escape" { set_editing.set(false); }
+            set_editing.set(false);
         }
+        if ev.key() == "Escape" { set_editing.set(false); }
     };
 
     view! {
@@ -442,41 +455,44 @@ fn GroupOutput(
     name: String,
     value: Signal<u32>,
 ) -> impl IntoView {
-    let (write_gout, _) = use_request::<WriteGout>();
+    let toast = use_toast();
     let (editing, set_editing) = signal(false);
     let (input_value, set_input_value) = signal(String::new());
     let display_name = name.clone();
     let title_name = name;
 
-    // Inline submit for blur
-    let do_blur_submit = {
-        let write_gout = write_gout.clone();
-        move |_| {
-            if let Ok(new_val) = input_value.get().parse::<u32>() {
-                write_gout(WriteGout {
-                    port_number: port,
-                    port_value: new_val,
-                });
-            }
-            set_editing.set(false);
+    let write_gout = use_request_with_handler::<WriteGout, _>(move |result| {
+        match result {
+            Ok(r) if r.success => {} // Silent success
+            Ok(r) => toast.error(format!("GOUT write failed: {}", r.error.as_deref().unwrap_or(""))),
+            Err(e) => toast.error(format!("GOUT error: {e}")),
         }
+    });
+    let write_gout = StoredValue::new(write_gout);
+
+    // Inline submit for blur
+    let do_blur_submit = move |_| {
+        if let Ok(new_val) = input_value.get().parse::<u32>() {
+            write_gout.with_value(|f| f(WriteGout {
+                port_number: port,
+                port_value: new_val,
+            }));
+        }
+        set_editing.set(false);
     };
 
     // For keydown
-    let do_key_submit = {
-        let write_gout = write_gout.clone();
-        move |ev: web_sys::KeyboardEvent| {
-            if ev.key() == "Enter" {
-                if let Ok(new_val) = input_value.get().parse::<u32>() {
-                    write_gout(WriteGout {
-                        port_number: port,
-                        port_value: new_val,
-                    });
-                }
-                set_editing.set(false);
+    let do_key_submit = move |ev: web_sys::KeyboardEvent| {
+        if ev.key() == "Enter" {
+            if let Ok(new_val) = input_value.get().parse::<u32>() {
+                write_gout.with_value(|f| f(WriteGout {
+                    port_number: port,
+                    port_value: new_val,
+                }));
             }
-            if ev.key() == "Escape" { set_editing.set(false); }
+            set_editing.set(false);
         }
+        if ev.key() == "Escape" { set_editing.set(false); }
     };
 
     view! {

@@ -2,18 +2,22 @@
 //!
 //! Provides up/down buttons for each joint (J1-J6) with configurable step and speed.
 //! Syncs with server-owned JogSettingsState for default values.
+//! Uses targeted messages with authorization for jog commands.
+//! Commands are sent to the System entity - server will route to the active robot.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_sync_context, use_sync_component};
+use pl3xus_client::{use_sync_context, use_components};
 use fanuc_replica_types::*;
+use crate::pages::dashboard::use_system_entity;
 
 /// Joint Jog Panel - Jog individual joints with up/down buttons.
 #[component]
 pub fn JointJogPanel() -> impl IntoView {
     let ctx = use_sync_context();
-    let joint_angles = use_sync_component::<JointAngles>();
-    let connection_state = use_sync_component::<ConnectionState>();
-    let jog_settings = use_sync_component::<JogSettingsState>();
+    let joint_angles = use_components::<JointAngles>();
+    let connection_state = use_components::<ConnectionState>();
+    let jog_settings = use_components::<JogSettingsState>();
+    let system_ctx = use_system_entity();
 
     // Local string state for inputs (initialized from server state)
     let (speed_str, set_speed_str) = signal(String::new());
@@ -39,6 +43,10 @@ pub fn JointJogPanel() -> impl IntoView {
             .unwrap_or(false)
     });
 
+    // Get the Robot entity bits (for targeted robot commands)
+    // Jog commands target the Robot entity, not the System
+    let robot_entity_bits = move || system_ctx.robot_entity_id.get();
+
     // Controls disabled when not connected
     let controls_disabled = move || !robot_connected.get();
 
@@ -54,8 +62,12 @@ pub fn JointJogPanel() -> impl IntoView {
             if controls_disabled() {
                 return;
             }
+            let Some(entity_bits) = robot_entity_bits() else {
+                leptos::logging::warn!("Cannot jog: Robot entity not found");
+                return;
+            };
             let step: f32 = step_str.get_untracked().parse().unwrap_or(1.0) * direction;
-            
+
             // Create jog command for the specific joint
             let axis = match joint_index {
                 0 => JogAxis::J1,
@@ -66,8 +78,8 @@ pub fn JointJogPanel() -> impl IntoView {
                 5 => JogAxis::J6,
                 _ => return,
             };
-            
-            ctx.send(JogRobot {
+
+            ctx.send_targeted(entity_bits, JogRobot {
                 axis,
                 distance: step,
                 speed: speed_str.get_untracked().parse().unwrap_or(10.0),

@@ -1,15 +1,15 @@
 //! Jog Defaults Panel - Configure per-robot jog speed and step defaults.
 
 use leptos::prelude::*;
-use pl3xus_client::use_sync_component;
+use pl3xus_client::use_components;
 use fanuc_replica_types::{ConnectionState, JogSettingsState};
 use super::NumberInput;
 
 /// Jog Defaults Panel - Configure per-robot jog speed and step defaults
 #[component]
 pub fn JogDefaultsPanel() -> impl IntoView {
-    let connection_state = use_sync_component::<ConnectionState>();
-    let jog_settings = use_sync_component::<JogSettingsState>();
+    let connection_state = use_components::<ConnectionState>();
+    let jog_settings = use_components::<JogSettingsState>();
 
     let robot_connected = Memo::new(move |_| {
         connection_state.get().values().next()

@@ -1,7 +1,7 @@
 //! Multi Tool Display - Accordion showing detailed tool data.
 
 use leptos::prelude::*;
-use pl3xus_client::use_sync_component;
+use pl3xus_client::use_components;
 use fanuc_replica_types::{ConnectionState, FrameToolDataState};
 use crate::pages::dashboard::context::WorkspaceContext;
 
@@ -9,8 +9,8 @@ use crate::pages::dashboard::context::WorkspaceContext;
 #[component]
 pub fn MultiToolDisplay() -> impl IntoView {
     let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
-    let connection_state = use_sync_component::<ConnectionState>();
-    let frame_tool_data = use_sync_component::<FrameToolDataState>();
+    let connection_state = use_components::<ConnectionState>();
+    let frame_tool_data = use_components::<FrameToolDataState>();
     let expanded_tools = ctx.expanded_tools;
 
     let robot_connected = Memo::new(move |_| {

@@ -128,11 +128,24 @@ pub enum ControlResponseKind {
 /// Applications can also define their own control components with additional fields.
 ///
 /// When the `ecs` feature is enabled, this type also derives `Component`.
+///
+/// # Sub-connections
+///
+/// Clients can have "sub-connections" - related connections like additional browser tabs
+/// or related services that should share the same control permissions. When a client takes
+/// control of an entity, their sub-connections are also authorized to send commands.
+///
+/// Use `AssociateSubConnection` to register a sub-connection with a parent connection.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "ecs", derive(bevy::prelude::Component))]
 pub struct EntityControl {
     /// The client that currently has control.
     pub client_id: ConnectionId,
+    /// Sub-connections that share control with the primary client.
+    /// These are related connections (like additional browser tabs) that
+    /// are authorized to send commands on behalf of the controlling client.
+    #[serde(default)]
+    pub sub_connection_ids: Vec<ConnectionId>,
     /// Timestamp of last activity (for timeout detection).
     pub last_activity: f32,
 }
@@ -141,9 +154,63 @@ impl Default for EntityControl {
     fn default() -> Self {
         Self {
             client_id: ConnectionId { id: 0 },
+            sub_connection_ids: Vec::new(),
             last_activity: 0.0,
         }
     }
+}
+
+impl EntityControl {
+    /// Check if the given connection has control (either as primary or sub-connection).
+    pub fn has_control(&self, connection_id: ConnectionId) -> bool {
+        // client_id 0 means "no controller" - nobody has control
+        if self.client_id.id == 0 {
+            return false;
+        }
+        self.client_id == connection_id || self.sub_connection_ids.contains(&connection_id)
+    }
+
+    /// Check if any client has control of this entity.
+    pub fn is_controlled(&self) -> bool {
+        self.client_id.id != 0
+    }
+}
+
+// ============================================================================
+// Sub-Connection Types (for related connections like multiple browser tabs)
+// ============================================================================
+
+/// Request to associate a sub-connection with a parent connection.
+///
+/// When a client opens a related connection (like a second browser tab),
+/// it can associate itself with the parent connection to share control
+/// permissions. Messages from sub-connections are authorized as if they
+/// came from the parent connection.
+///
+/// # Example Flow
+///
+/// 1. User opens main app in Tab 1, gets ConnectionId 5
+/// 2. User opens a second tab (Tab 2), gets ConnectionId 7
+/// 3. Tab 2 sends `AssociateSubConnection { parent_connection_id: 5 }`
+/// 4. Server updates SubConnections resource for connection 5 to include 7
+/// 5. When Tab 1 takes control of an entity, Tab 2 can also send commands
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "ecs", derive(bevy::prelude::Message))]
+pub struct AssociateSubConnection {
+    /// The parent connection that this sub-connection should be associated with.
+    pub parent_connection_id: ConnectionId,
+}
+
+/// Response to a sub-connection association request.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "ecs", derive(bevy::prelude::Message))]
+pub struct AssociateSubConnectionResponse {
+    /// Whether the association was successful.
+    pub success: bool,
+    /// Error message if the association failed.
+    pub error: Option<String>,
+    /// The parent connection that was associated with.
+    pub parent_connection_id: ConnectionId,
 }
 
 // ============================================================================

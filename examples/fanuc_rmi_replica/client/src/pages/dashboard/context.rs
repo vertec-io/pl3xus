@@ -10,13 +10,13 @@
 //!
 //! Server-owned state (program execution, robot position, connection status,
 //! active frame/tool, etc.) should be read directly from synced components
-//! using use_sync_component<T>(). See ARCHITECTURE_SPECIFICATION.md for details.
+//! using use_components<T>(). See ARCHITECTURE_SPECIFICATION.md for details.
 //!
 //! Examples of server-owned state (DO NOT put in this context):
-//! - Active UFrame/UTool -> use_sync_component::<FrameToolDataState>()
-//! - Program execution -> use_sync_component::<ExecutionState>()
-//! - Robot position -> use_sync_component::<RobotPosition>()
-//! - Connection state -> use_sync_component::<ConnectionState>()
+//! - Active UFrame/UTool -> use_components::<FrameToolDataState>()
+//! - Program execution -> use_components::<ExecutionState>()
+//! - Robot position -> use_components::<RobotPosition>()
+//! - Connection state -> use_components::<ConnectionState>()
 
 use leptos::prelude::*;
 use std::collections::HashSet;
@@ -26,36 +26,59 @@ use js_sys;
 // System Entity Context
 // ============================================================================
 
-/// Context providing the System entity ID.
+/// Context providing entity IDs for the System and Robot.
 ///
-/// This is provided at the layout level by subscribing to `SystemMarker` components.
-/// Child components can use this to subscribe to entity-specific components without
-/// needing to look up the entity ID themselves.
+/// This is provided at the layout level by subscribing to `ActiveSystem` and `ActiveRobot`
+/// components. Child components can use this to:
+/// - Subscribe to entity-specific components without looking up entity IDs
+/// - Send targeted messages to the correct entity (System vs Robot)
+///
+/// # Entity Hierarchy
+///
+/// ```text
+/// System (ActiveSystem) ← Control requests, connect/disconnect
+///   └── Robot (ActiveRobot) ← Robot commands, jog, speed override
+///         └── (future: sensors, PLCs, etc.)
+/// ```
 ///
 /// # Example
 ///
 /// ```rust,ignore
 /// // At layout level (provided automatically by DesktopLayout)
-/// let systems = use_sync_component::<SystemMarker>();
-/// let system_entity_id = Signal::derive(move || systems.get().keys().next().copied());
-/// provide_context(SystemEntityContext { entity_id: system_entity_id });
+/// let systems = use_components::<ActiveSystem>();
+/// let robots = use_components::<ActiveRobot>();
+/// let system_entity_id = Memo::new(move |_| systems.get().keys().next().copied());
+/// let robot_entity_id = Memo::new(move |_| robots.get().keys().next().copied());
+/// provide_context(SystemEntityContext::new(system_entity_id.into(), robot_entity_id.into()));
 ///
-/// // In child components
-/// let system_ctx = expect_context::<SystemEntityContext>();
-/// let (exec, exists) = use_sync_entity_component_store::<ExecutionState, _>(
-///     move || system_ctx.entity_id.get()
-/// );
+/// // In child components - target system for control
+/// let ctx = use_system_entity();
+/// ctx.send_targeted(ctx.system_entity_id.get(), ControlRequest::Take(...));
+///
+/// // In child components - target robot for commands
+/// let ctx = use_system_entity();
+/// ctx.send_targeted(ctx.robot_entity_id.get(), SetSpeedOverride { value: 50 });
 /// ```
 #[derive(Clone, Copy)]
 pub struct SystemEntityContext {
     /// The reactive entity ID of the System. Returns `None` if no system exists yet.
-    pub entity_id: Signal<Option<u64>>,
+    /// Use this for control requests, connect/disconnect.
+    pub system_entity_id: Signal<Option<u64>>,
+    /// The reactive entity ID of the Robot. Returns `None` if no robot is spawned.
+    /// Use this for robot commands like jog, speed override, initialize, etc.
+    pub robot_entity_id: Signal<Option<u64>>,
 }
 
 impl SystemEntityContext {
-    /// Create a new SystemEntityContext with the given reactive entity ID.
-    pub fn new(entity_id: Signal<Option<u64>>) -> Self {
-        Self { entity_id }
+    /// Create a new SystemEntityContext with the given reactive entity IDs.
+    pub fn new(
+        system_entity_id: Signal<Option<u64>>,
+        robot_entity_id: Signal<Option<u64>>,
+    ) -> Self {
+        Self {
+            system_entity_id,
+            robot_entity_id,
+        }
     }
 }
 

@@ -1,31 +1,34 @@
 //! Quick Commands panel for robot control (Initialize, Reset, Abort, Continue).
+//!
+//! Uses targeted requests with authorization for robot commands.
+//! Commands are sent to the Robot entity and return responses.
+//!
+//! ## Server-Driven Response Handling
+//!
+//! All robot commands use the targeted request pattern which requires control.
+//! The server sends responses indicating success or failure, and the client
+//! displays appropriate toast notifications based on those responses.
+//!
+//! The UI never lies to the user - it only shows success when the server confirms.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_sync_context, use_sync_component};
+use pl3xus_client::{use_targeted_request, use_targeted_request_with_handler, use_components};
 use fanuc_replica_types::*;
+use crate::components::use_toast;
 use crate::pages::dashboard::context::{WorkspaceContext, MessageDirection, MessageType};
-use wasm_bindgen::prelude::*;
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = Date)]
-    fn now() -> f64;
-}
+use crate::pages::dashboard::use_system_entity;
 
 /// Quick Commands panel for robot control (Initialize, Reset, Abort, Continue).
 #[component]
 pub fn QuickCommandsPanel() -> impl IntoView {
-    let ctx = use_sync_context();
     let ws_ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
-    let status = use_sync_component::<RobotStatus>();
-    let connection_state = use_sync_component::<ConnectionState>();
+    let toast = use_toast();
+    let status = use_components::<RobotStatus>();
+    let connection_state = use_components::<ConnectionState>();
+    let system_ctx = use_system_entity();
 
-    // Local signal for slider value (synced with robot status when available)
-    let (speed_override, set_speed_override) = signal(100u32);
-
-    // Track when user is actively changing the value
+    // Track when user is actively dragging the slider
     let (user_editing, set_user_editing) = signal(false);
-    let (last_edit_time, set_last_edit_time) = signal(0.0f64);
 
     // Robot connected state
     let robot_connected = Memo::new(move |_| {
@@ -34,51 +37,152 @@ pub fn QuickCommandsPanel() -> impl IntoView {
             .unwrap_or(false)
     });
 
-    // Sync with robot status when it changes
+    // Get the Robot entity bits (for targeted robot commands)
+    let robot_entity_bits = move || system_ctx.robot_entity_id.get();
+
+    // Read speed override directly from synced RobotStatus component
+    let (pending_speed, set_pending_speed) = signal::<Option<u32>>(None);
+
+    // Get server speed value
+    let server_speed = move || {
+        status.get().values().next()
+            .map(|s| s.speed_override as u32)
+            .unwrap_or(100)
+    };
+
+    // Display value: use pending value while editing or waiting for sync, otherwise use server value
+    let display_speed = move || {
+        if user_editing.get() {
+            if let Some(pending) = pending_speed.get() {
+                return pending;
+            }
+        }
+        if let Some(pending) = pending_speed.get() {
+            return pending;
+        }
+        server_speed()
+    };
+
+    // =========================================================================
+    // Targeted Request Hooks with Handlers
+    //
+    // use_targeted_request_with_handler handles response deduplication internally
+    // - The handler is called exactly once per response
+    // - No manual Effect boilerplate needed
+    // =========================================================================
+
+    // SetSpeedOverride - needs raw hook since we also manage pending_speed
+    let (send_speed_override, status_speed_override) = use_targeted_request::<SetSpeedOverride>();
+    let (speed_processed, set_speed_processed) = signal::<Option<bool>>(None);
+
     Effect::new(move |_| {
-        if let Some(s) = status.get().values().next() {
-            if user_editing.get() {
-                return;
+        let state = status_speed_override.get();
+        if state.is_loading() { set_speed_processed.set(None); return; }
+        if state.is_idle() || speed_processed.get_untracked().is_some() { return; }
+
+        if state.is_error() {
+            set_pending_speed.set(None);
+            set_speed_processed.set(Some(false));
+            toast.error(format!("Failed to set speed: {}", state.error.clone().unwrap_or_default()));
+            return;
+        }
+
+        if let Some(ref response) = state.data {
+            set_speed_processed.set(Some(response.success));
+            if !response.success {
+                set_pending_speed.set(None);
+                toast.error(format!("Speed denied: {}", response.error.as_deref().unwrap_or("No control")));
             }
-            let now_time = now();
-            if now_time - last_edit_time.get() < 1000.0 {
-                return;
-            }
-            set_speed_override.set(s.speed_override as u32);
         }
     });
 
-    // Send override command when slider changes
-    let send_override = {
-        let ctx = ctx.clone();
-        move |value: u32| {
-            let clamped = value.min(100) as u8;
-            set_last_edit_time.set(now());
-            ctx.send(SetSpeedOverride { speed: clamped });
+    // InitializeRobot - use the clean handler API
+    let send_initialize = use_targeted_request_with_handler::<InitializeRobot, _>(move |result| {
+        match result {
+            Ok(r) if r.success => {
+                toast.success("Robot initialized");
+                ws_ctx.add_console_message("Robot initialized".to_string(), MessageDirection::Received, MessageType::Response);
+            }
+            Ok(r) => toast.error(format!("Initialize denied: {}", r.error.as_deref().unwrap_or("No control"))),
+            Err(e) => toast.error(format!("Initialize failed: {e}")),
         }
+    });
+
+    // ResetRobot
+    let send_reset = use_targeted_request_with_handler::<ResetRobot, _>(move |result| {
+        match result {
+            Ok(r) if r.success => {
+                toast.success("Robot reset");
+                ws_ctx.add_console_message("Robot reset".to_string(), MessageDirection::Received, MessageType::Response);
+            }
+            Ok(r) => toast.error(format!("Reset denied: {}", r.error.as_deref().unwrap_or("No control"))),
+            Err(e) => toast.error(format!("Reset failed: {e}")),
+        }
+    });
+
+    // AbortMotion
+    let send_abort = use_targeted_request_with_handler::<AbortMotion, _>(move |result| {
+        match result {
+            Ok(r) if r.success => {
+                toast.warning("Motion aborted");
+                ws_ctx.add_console_message("Motion aborted".to_string(), MessageDirection::Received, MessageType::Response);
+            }
+            Ok(r) => toast.error(format!("Abort denied: {}", r.error.as_deref().unwrap_or("No control"))),
+            Err(e) => toast.error(format!("Abort failed: {e}")),
+        }
+    });
+
+    // Effect to clear pending value when server catches up
+    Effect::new(move |_| {
+        let server = server_speed();
+        let pending = pending_speed.get_untracked();
+        if let Some(pending_val) = pending {
+            if server == pending_val {
+                set_pending_speed.set(None);
+            }
+        }
+    });
+
+    // Store in StoredValue for use in closures
+    let send_speed_override = StoredValue::new(send_speed_override);
+    let send_initialize = StoredValue::new(send_initialize);
+    let send_reset = StoredValue::new(send_reset);
+    let send_abort = StoredValue::new(send_abort);
+
+    // Send override command when slider changes
+    let send_override = move |value: u32| {
+        let Some(entity_bits) = robot_entity_bits() else {
+            toast.error("Cannot send speed: Robot not found");
+            return;
+        };
+        let clamped = value.min(100) as u8;
+        send_speed_override.with_value(|f| f(entity_bits, SetSpeedOverride { speed: clamped }));
     };
     let send_override = StoredValue::new(send_override);
 
-    let init_click = {
-        let ctx = ctx.clone();
-        move |_| {
-            ws_ctx.add_console_message("Initialize Robot".to_string(), MessageDirection::Sent, MessageType::Command);
-            ctx.send(InitializeRobot { group_mask: Some(1) });
-        }
+    let init_click = move |_| {
+        let Some(entity_bits) = robot_entity_bits() else {
+            toast.error("Cannot initialize: Robot not found");
+            return;
+        };
+        ws_ctx.add_console_message("Initialize Robot".to_string(), MessageDirection::Sent, MessageType::Command);
+        send_initialize.with_value(|f| f(entity_bits, InitializeRobot { group_mask: Some(1) }));
     };
-    let reset_click = {
-        let ctx = ctx.clone();
-        move |_| {
-            ws_ctx.add_console_message("Reset Robot".to_string(), MessageDirection::Sent, MessageType::Command);
-            ctx.send(ResetRobot);
-        }
+    let reset_click = move |_| {
+        let Some(entity_bits) = robot_entity_bits() else {
+            toast.error("Cannot reset: Robot not found");
+            return;
+        };
+        ws_ctx.add_console_message("Reset Robot".to_string(), MessageDirection::Sent, MessageType::Command);
+        send_reset.with_value(|f| f(entity_bits, ResetRobot));
     };
-    let abort_click = {
-        let ctx = ctx.clone();
-        move |_| {
-            ws_ctx.add_console_message("Abort Motion".to_string(), MessageDirection::Sent, MessageType::Command);
-            ctx.send(AbortMotion);
-        }
+    let abort_click = move |_| {
+        let Some(entity_bits) = robot_entity_bits() else {
+            toast.error("Cannot abort: Robot not found");
+            return;
+        };
+        ws_ctx.add_console_message("Abort Motion".to_string(), MessageDirection::Sent, MessageType::Command);
+        send_abort.with_value(|f| f(entity_bits, AbortMotion));
     };
 
     view! {
@@ -136,25 +240,30 @@ pub fn QuickCommandsPanel() -> impl IntoView {
                         max="100"
                         step="5"
                         class="w-20 h-1 bg-[#333] rounded-lg appearance-none cursor-pointer accent-[#00d9ff]"
-                        prop:value=move || speed_override.get()
+                        prop:value=move || display_speed()
                         disabled=move || !robot_connected.get()
                         on:mousedown=move |_| set_user_editing.set(true)
                         on:touchstart=move |_| set_user_editing.set(true)
                         on:input=move |ev| {
-                            set_last_edit_time.set(now());
+                            // While dragging, update pending value for smooth visual feedback
                             if let Ok(val) = event_target_value(&ev).parse::<u32>() {
-                                set_speed_override.set(val);
+                                set_pending_speed.set(Some(val));
                             }
                         }
                         on:change=move |ev| {
+                            // On release, send command and clear pending state
+                            // The display will revert to server value (synced component)
+                            // If command succeeds, server will update the synced component
+                            // If command fails (e.g., no control), slider shows server value
                             set_user_editing.set(false);
+                            // set_pending_speed.set(None);
                             if let Ok(val) = event_target_value(&ev).parse::<u32>() {
                                 send_override.with_value(|f| f(val));
                             }
                         }
                     />
                     <span class="text-[10px] text-[#00d9ff] font-mono w-8 text-right">
-                        {move || format!("{}%", speed_override.get())}
+                        {move || format!("{}%", display_speed())}
                     </span>
                 </div>
             </div>

@@ -4,8 +4,9 @@
 //! Server is the single source of truth for active frame/tool.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_sync_component, use_request};
+use pl3xus_client::{use_components, use_request_with_handler};
 use fanuc_replica_types::{ConnectionState, FrameToolDataState, SetActiveFrameTool};
+use crate::components::use_toast;
 
 /// Frame Management Panel - Frame selector with Apply button
 ///
@@ -13,8 +14,9 @@ use fanuc_replica_types::{ConnectionState, FrameToolDataState, SetActiveFrameToo
 /// is UI-local state for the selection before "Apply" is clicked.
 #[component]
 pub fn FrameManagementPanel() -> impl IntoView {
-    let connection_state = use_sync_component::<ConnectionState>();
-    let frame_tool_state = use_sync_component::<FrameToolDataState>();
+    let toast = use_toast();
+    let connection_state = use_components::<ConnectionState>();
+    let frame_tool_state = use_components::<FrameToolDataState>();
 
     // Derive active frame/tool from synced server state
     let active_frame = Memo::new(move |_| {
@@ -28,9 +30,14 @@ pub fn FrameManagementPanel() -> impl IntoView {
             .unwrap_or(1)
     });
 
-    // Request hook for setting active frame/tool
-    let (set_frame_tool, _set_frame_tool_state) = use_request::<SetActiveFrameTool>();
-    // Store the function so it can be used in multiple closures
+    // Request hook for setting active frame/tool with error handling
+    let set_frame_tool = use_request_with_handler::<SetActiveFrameTool, _>(move |result| {
+        match result {
+            Ok(r) if r.success => {} // Silent success - UI updates from synced state
+            Ok(r) => toast.error(format!("Frame change failed: {}", r.error.as_deref().unwrap_or(""))),
+            Err(e) => toast.error(format!("Frame error: {e}")),
+        }
+    });
     let set_frame_tool = StoredValue::new(set_frame_tool);
 
     let robot_connected = Memo::new(move |_| {

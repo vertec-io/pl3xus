@@ -3,15 +3,18 @@
 //! Matches the original Fanuc_RMI_API web application implementation exactly.
 //! Uses fanuc_rmi::dto types directly for sending commands.
 //! Gets arm configuration from server-synced ActiveConfigState.
+//! Uses targeted messages with authorization for motion commands.
+//! Commands are sent to the System entity - server will route to the active robot.
 
 use leptos::prelude::*;
 use leptos::web_sys;
 use wasm_bindgen::JsCast;
-use pl3xus_client::{use_sync_context, use_sync_component};
+use pl3xus_client::{use_sync_context, use_components};
 use fanuc_replica_types::*;
 use fanuc_rmi::dto::{SendPacket, Instruction, FrcLinearMotion, FrcLinearRelative, FrcJointMotion, Position, Configuration};
 use fanuc_rmi::{SpeedType, TermType};
 use crate::pages::dashboard::context::{WorkspaceContext, RecentCommand};
+use crate::pages::dashboard::use_system_entity;
 
 /// Instruction types available in the composer
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -55,9 +58,14 @@ impl InstructionType {
 pub fn CommandComposerModal() -> impl IntoView {
     let ctx = use_context::<WorkspaceContext>().expect("WorkspaceContext not found");
     let sync_ctx = use_sync_context();
-    let current_position = use_sync_component::<RobotPosition>();
-    let current_joints = use_sync_component::<JointAngles>();
-    let active_config = use_sync_component::<ActiveConfigState>();
+    let current_position = use_components::<RobotPosition>();
+    let current_joints = use_components::<JointAngles>();
+    let active_config = use_components::<ActiveConfigState>();
+    let system_ctx = use_system_entity();
+
+    // Get the Robot entity bits (for targeted motion commands)
+    // Motion commands target the Robot entity
+    let robot_entity_bits = move || system_ctx.robot_entity_id.get();
 
     // Instruction type - default to LinearRelative (matching original)
     let (instr_type, set_instr_type) = signal(InstructionType::LinearRelative);
@@ -260,12 +268,17 @@ pub fn CommandComposerModal() -> impl IntoView {
     let execute_command = {
         let sync_ctx = sync_ctx.clone();
         move || {
+            let Some(entity_bits) = robot_entity_bits() else {
+                leptos::logging::warn!("Cannot execute command: Robot entity not found");
+                return;
+            };
+
             // First apply (add to recent + select)
             apply_command.get_value()();
 
             // Send the DTO packet directly to server - pl3xus handles serialization
             let packet = create_packet();
-            sync_ctx.send(packet);
+            sync_ctx.send_targeted(entity_bits, packet);
         }
     };
 

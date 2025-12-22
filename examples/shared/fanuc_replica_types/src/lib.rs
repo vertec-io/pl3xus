@@ -18,23 +18,40 @@ use reactive_stores::Store;
 // Re-export FANUC DTO types for easy access
 pub use fanuc_rmi::dto;
 
-// Re-export RequestMessage trait for implementing request types
-pub use pl3xus_common::RequestMessage;
+// Re-export RequestMessage and ErrorResponse traits for implementing request types
+pub use pl3xus_common::{RequestMessage, ErrorResponse};
 
 // ============================================================================
 //                          SYNCED COMPONENTS (Wrapped DTOs)
 // ============================================================================
 
-/// Marker component for the root System/Apparatus entity.
+/// Marker component for the active/current System entity.
 ///
 /// This entity is the control root - clients request control of this entity
 /// to gain control over the entire apparatus including all child robots, sensors, controllers, etc.
 ///
-/// On the server, query with `With<SystemMarker>` to find the system entity.
-/// On the client, use `use_sync_component::<SystemMarker>()` to get the system entity ID.
+/// On the server, query with `With<ActiveSystem>` to find the system entity.
+/// On the client, use `use_components::<ActiveSystem>()` to get the system entity ID.
+///
+/// When multiple systems exist, this marker can be moved to whichever is currently active.
 #[cfg_attr(feature = "server", derive(Component))]
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct SystemMarker;
+pub struct ActiveSystem;
+
+/// Marker component for the active/current robot entity.
+///
+/// This is the shared marker for identifying the currently active robot on both server and client.
+/// On the server, the `FanucRobot` component is server-only and used for queries.
+/// This marker is synced to clients so they can identify the active robot entity.
+///
+/// When multiple robots exist, this marker can be moved to whichever is currently active/connected.
+/// The client sync will automatically update to track the new entity.
+///
+/// On the server, add this marker when spawning/connecting robot entities.
+/// On the client, use `use_components::<ActiveRobot>()` to get the active robot entity ID.
+#[cfg_attr(feature = "server", derive(Component))]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct ActiveRobot;
 
 /// Robot cartesian position (Synced 1-way: Server -> Client)
 #[cfg_attr(feature = "server", derive(Component))]
@@ -804,6 +821,12 @@ impl RequestMessage for UnloadProgram {
     type ResponseMessage = UnloadProgramResponse;
 }
 
+impl ErrorResponse for UnloadProgram {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        UnloadProgramResponse { success: false, error: Some(error) }
+    }
+}
+
 /// Request to list all saved robot connections from the database.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ListRobotConnections;
@@ -889,17 +912,67 @@ pub struct UpdateJogSettings {
 //                    ADDITIONAL NETWORK MESSAGES (Complete API)
 // ============================================================================
 
-// Robot Control Commands
+// Robot Control Commands (Targeted Requests)
+// These are sent to a specific robot entity and require authorization.
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InitializeRobot {
     pub group_mask: Option<u8>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct InitializeRobotResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for InitializeRobot {
+    type ResponseMessage = InitializeRobotResponse;
+}
+
+impl ErrorResponse for InitializeRobot {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        InitializeRobotResponse { success: false, error: Some(error) }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ResetRobot;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ResetRobotResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for ResetRobot {
+    type ResponseMessage = ResetRobotResponse;
+}
+
+impl ErrorResponse for ResetRobot {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        ResetRobotResponse { success: false, error: Some(error) }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AbortMotion;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AbortMotionResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for AbortMotion {
+    type ResponseMessage = AbortMotionResponse;
+}
+
+impl ErrorResponse for AbortMotion {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        AbortMotionResponse { success: false, error: Some(error) }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SetSpeedOverride {
@@ -907,7 +980,54 @@ pub struct SetSpeedOverride {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SetSpeedOverrideResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for SetSpeedOverride {
+    type ResponseMessage = SetSpeedOverrideResponse;
+}
+
+impl ErrorResponse for SetSpeedOverride {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        SetSpeedOverrideResponse { success: false, error: Some(error) }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ContinueMotion;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ContinueMotionResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for ContinueMotion {
+    type ResponseMessage = ContinueMotionResponse;
+}
+
+// ConnectToRobot is also a targeted request (targets the system entity)
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ConnectToRobotResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for ConnectToRobot {
+    type ResponseMessage = ConnectToRobotResponse;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DisconnectRobotResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for DisconnectRobot {
+    type ResponseMessage = DisconnectRobotResponse;
+}
 
 // Motion Commands (Command Composer)
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -1058,6 +1178,12 @@ impl RequestMessage for StartProgram {
     type ResponseMessage = StartProgramResponse;
 }
 
+impl ErrorResponse for StartProgram {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        StartProgramResponse { success: false, error: Some(error) }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PauseProgram;
 
@@ -1069,6 +1195,12 @@ pub struct PauseProgramResponse {
 
 impl RequestMessage for PauseProgram {
     type ResponseMessage = PauseProgramResponse;
+}
+
+impl ErrorResponse for PauseProgram {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        PauseProgramResponse { success: false, error: Some(error) }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -1084,6 +1216,12 @@ impl RequestMessage for ResumeProgram {
     type ResponseMessage = ResumeProgramResponse;
 }
 
+impl ErrorResponse for ResumeProgram {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        ResumeProgramResponse { success: false, error: Some(error) }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StopProgram;
 
@@ -1095,6 +1233,12 @@ pub struct StopProgramResponse {
 
 impl RequestMessage for StopProgram {
     type ResponseMessage = StopProgramResponse;
+}
+
+impl ErrorResponse for StopProgram {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        StopProgramResponse { success: false, error: Some(error) }
+    }
 }
 
 // Frame/Tool Management

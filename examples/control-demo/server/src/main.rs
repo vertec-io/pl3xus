@@ -9,9 +9,9 @@
 use bevy::prelude::*;
 use bevy::tasks::{TaskPool, TaskPoolBuilder};
 use control_demo_types::{MoveCommand, Robot, RobotStatus};
-use pl3xus::{AppNetworkMessage, Pl3xusPlugin, Pl3xusRuntime};
-use pl3xus_sync::control::{AppExclusiveControlExt, EntityControl, ExclusiveControlConfig, ExclusiveControlPlugin};
-use pl3xus_sync::{AppPl3xusSyncExt, Pl3xusSyncPlugin};
+use pl3xus::{Pl3xusPlugin, Pl3xusRuntime};
+use pl3xus_sync::control::{EntityControl, ExclusiveControlPlugin};
+use pl3xus_sync::{AppPl3xusSyncExt, Pl3xusSyncPlugin, AppMessageRegistrationExt, AuthorizedTargetedMessage};
 use pl3xus_websockets::{NetworkSettings, WebSocketProvider};
 
 fn main() {
@@ -30,22 +30,26 @@ fn main() {
     // Add pl3xus_sync plugin for component synchronization
     app.add_plugins(Pl3xusSyncPlugin::<WebSocketProvider>::default());
 
-    // Add the ExclusiveControlPlugin
-    app.add_plugins(ExclusiveControlPlugin::new(ExclusiveControlConfig {
-        timeout_seconds: Some(30.0),  // 30 second timeout
-        propagate_to_children: true,   // Control parent = control children
-    }));
-
-    // Add the control systems for WebSocket provider
-    app.add_exclusive_control_systems::<WebSocketProvider>();
+    // Add the ExclusiveControlPlugin with builder pattern
+    // This automatically registers control systems and messages
+    app.add_plugins(
+        ExclusiveControlPlugin::<WebSocketProvider>::builder()
+            .timeout_seconds(30.0)       // 30 second timeout
+            .propagate_to_children(true) // Control parent = control children
+            .build(),
+    );
 
     // Register components for synchronization
     app.sync_component::<Robot>(None);
     app.sync_component::<RobotStatus>(None);
     app.sync_component::<EntityControl>(None); // Sync control state to clients
 
-    // Register messages
-    app.register_network_message::<MoveCommand, WebSocketProvider>();
+    // Register messages with authorization
+    // MoveCommand is a targeted message that requires entity control
+    app.message::<MoveCommand, WebSocketProvider>()
+        .targeted()
+        .with_default_entity_policy()
+        .register();
 
     // Add application systems
     app.add_systems(Startup, spawn_robots);
@@ -99,29 +103,23 @@ fn spawn_robots(mut commands: Commands) {
 }
 
 /// Handle move commands from clients
+///
+/// Authorization is handled by middleware - no manual control check needed.
 fn handle_move_commands(
-    mut message_reader: bevy::ecs::message::MessageReader<pl3xus::NetworkData<MoveCommand>>,
+    mut message_reader: bevy::ecs::message::MessageReader<AuthorizedTargetedMessage<MoveCommand>>,
     mut robots: Query<(Entity, &mut Robot, &mut RobotStatus, &mut EntityControl)>,
     time: Res<Time>,
 ) {
-    for cmd in message_reader.read() {
-        let client_id = *cmd.source();
-        let entity = Entity::from_bits(cmd.entity_id);
+    for event in message_reader.read() {
+        let cmd = &event.message;
+        let target_entity = event.target_entity;
+        let client_id = event.source;
 
-        // Find the robot
-        let Ok((entity, mut robot, mut status, mut control)) = robots.get_mut(entity) else {
-            warn!("Client {:?} tried to move non-existent robot {:?}", client_id, entity);
+        // Find the robot - authorization already verified by middleware
+        let Ok((_entity, mut robot, mut status, mut control)) = robots.get_mut(target_entity) else {
+            warn!("Client {:?} tried to move non-existent robot {:?}", client_id, target_entity);
             continue;
         };
-
-        // Check if the client has control
-        if control.client_id != client_id {
-            warn!(
-                "Client {:?} tried to move robot {:?} but it's controlled by {:?}",
-                client_id, entity, control.client_id
-            );
-            continue;
-        }
 
         // Move the robot
         robot.x = cmd.target_x;

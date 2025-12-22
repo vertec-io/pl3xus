@@ -12,8 +12,8 @@ pub use floating::{FloatingJogControls, FloatingIOStatus};
 
 use leptos::prelude::*;
 use leptos_router::hooks::use_location;
-use pl3xus_client::use_sync_component;
-use fanuc_replica_types::SystemMarker;
+use pl3xus_client::use_components;
+use fanuc_replica_types::{ActiveSystem, ActiveRobot};
 
 use crate::pages::MainWorkspace;
 use crate::pages::dashboard::context::WorkspaceContext;
@@ -58,18 +58,25 @@ pub fn DesktopLayout() -> impl IntoView {
     let workspace_ctx = WorkspaceContext::new();
     provide_context(workspace_ctx);
 
-    // Subscribe to SystemMarker to get the System entity ID.
-    // The SystemMarker is synced from the server and only exists on the System entity.
-    // This provides child components with the entity ID for entity-specific subscriptions.
+    // Subscribe to ActiveSystem and ActiveRobot to get entity IDs.
+    // These markers are synced from the server and only exist on their respective entities.
+    // This provides child components with entity IDs for:
+    // - Entity-specific component subscriptions
+    // - Targeted messages to the correct entity (System vs Robot)
     //
     // IMPORTANT: We use Memo instead of Signal::derive because:
     // - Signal::derive re-notifies subscribers whenever the source signal changes
     // - Memo only notifies when the computed value actually changes
     // - Without Memo, updates would trigger all downstream Effects,
     //   even if the entity_id stayed the same, causing infinite reactivity loops
-    let system_markers = use_sync_component::<SystemMarker>();
-    let system_entity_id = Memo::new(move |_| system_markers.get().keys().next().copied());
-    provide_context(SystemEntityContext::new(system_entity_id.into()));
+    let active_systems = use_components::<ActiveSystem>();
+    let active_robots = use_components::<ActiveRobot>();
+    let system_entity_id = Memo::new(move |_| active_systems.get().keys().next().copied());
+    let robot_entity_id = Memo::new(move |_| active_robots.get().keys().next().copied());
+    provide_context(SystemEntityContext::new(
+        system_entity_id.into(),
+        robot_entity_id.into(),
+    ));
 
     // Get current location to determine if we're on dashboard
     let location = use_location();
@@ -100,7 +107,7 @@ pub fn DesktopLayout() -> impl IntoView {
 
         // NOTE: ExecutionStateHandler has been REMOVED as part of the architecture refactor.
         // UI components now read directly from the synced ExecutionState component using
-        // use_sync_component::<ExecutionState>(). This ensures all clients see the same state.
+        // use_components::<ExecutionState>(). This ensures all clients see the same state.
         // See ARCHITECTURE_SPECIFICATION.md for details.
     }
 }

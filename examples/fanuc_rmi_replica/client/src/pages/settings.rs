@@ -7,7 +7,8 @@
 use leptos::prelude::*;
 use leptos::web_sys;
 
-use pl3xus_client::{use_request, use_sync_context, ConnectionReadyState};
+use pl3xus_client::{use_request, use_request_with_handler, use_sync_context, ConnectionReadyState};
+use crate::components::use_toast;
 use fanuc_replica_types::*;
 use crate::components::RobotCreationWizard;
 
@@ -223,21 +224,23 @@ fn RobotBrowser(
 #[component]
 fn SystemSettingsPanel() -> impl IntoView {
     let (confirm_reset, set_confirm_reset) = signal(false);
-    let (reset_database, reset_state) = use_request::<ResetDatabase>();
-    let reset_database = StoredValue::new(reset_database);
+    let toast = use_toast();
 
-    // Watch for reset completion
-    Effect::new(move |_| {
-        if let Some(data) = reset_state.get().data.as_ref() {
-            if data.success {
+    // ResetDatabase with handler
+    let reset_database = use_request_with_handler::<ResetDatabase, _>(move |result| {
+        set_confirm_reset.set(false);
+        match result {
+            Ok(r) if r.success => {
                 // Reload the page to reflect database reset
                 if let Some(window) = web_sys::window() {
                     let _ = window.location().reload();
                 }
             }
-            set_confirm_reset.set(false);
+            Ok(r) => toast.error(format!("Reset failed: {}", r.error.as_deref().unwrap_or(""))),
+            Err(e) => toast.error(format!("Error: {e}")),
         }
     });
+    let reset_database = StoredValue::new(reset_database);
 
     view! {
         <div class="bg-[#0d0d0d] border border-[#ffffff08] rounded">
@@ -1273,8 +1276,24 @@ fn DeleteConfirmModal(
     selected_robot_id: ReadSignal<Option<i64>>,
     fetch_robots: impl Fn(ListRobotConnections) + Clone + Send + Sync + 'static,
 ) -> impl IntoView {
-    let (delete_robot, _delete_state) = use_request::<DeleteRobotConnection>();
     let (is_deleting, set_is_deleting) = signal(false);
+    let toast = use_toast();
+    let fetch_robots_stored = StoredValue::new(fetch_robots.clone());
+
+    // DeleteRobotConnection with handler
+    let delete_robot = use_request_with_handler::<DeleteRobotConnection, _>(move |result| {
+        set_is_deleting.set(false);
+        set_show_delete_confirm.set(false);
+        set_robot_to_delete.set(None);
+        match result {
+            Ok(r) if r.success => {
+                toast.success("Robot deleted");
+                fetch_robots_stored.with_value(|f| f(ListRobotConnections));
+            }
+            Ok(r) => toast.error(format!("Delete failed: {}", r.error.as_deref().unwrap_or(""))),
+            Err(e) => toast.error(format!("Error: {e}")),
+        }
+    });
 
     view! {
         <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -1300,24 +1319,15 @@ fn DeleteConfirmModal(
                     <button
                         class="flex-1 text-[10px] px-4 py-2 bg-[#ff4444] text-white rounded hover:bg-[#ff5555] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled=move || is_deleting.get()
-                        on:click={
-                            let fetch_robots = fetch_robots.clone();
-                            move |_| {
-                                if let Some((id, _)) = robot_to_delete.get() {
-                                    set_is_deleting.set(true);
-                                    delete_robot(DeleteRobotConnection { id });
+                        on:click=move |_| {
+                            if let Some((id, _)) = robot_to_delete.get() {
+                                set_is_deleting.set(true);
+                                delete_robot(DeleteRobotConnection { id });
 
-                                    // Clear selection if we deleted the selected robot
-                                    if selected_robot_id.get() == Some(id) {
-                                        set_selected_robot_id.set(None);
-                                    }
-
-                                    // Refresh the list
-                                    fetch_robots(ListRobotConnections);
+                                // Clear selection if we deleted the selected robot
+                                if selected_robot_id.get() == Some(id) {
+                                    set_selected_robot_id.set(None);
                                 }
-                                set_show_delete_confirm.set(false);
-                                set_robot_to_delete.set(None);
-                                set_is_deleting.set(false);
                             }
                         }
                     >

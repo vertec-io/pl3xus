@@ -12,18 +12,18 @@
 //! - Button visibility is driven by server-provided `can_*` flags
 //! - Actions are only allowed when the client has control
 //!
-//! ## Store-based Reactivity
+//! ## Response Handling
 //!
-//! This component uses `use_sync_component_store` to get a `Store<HashMap<u64, ExecutionState>>`
-//! and extracts the first entity's data. This provides a stable reactive pattern
-//! without the complexity of entity-specific Effect chains.
+//! All program commands use targeted requests which return responses.
+//! The client shows toast notifications based on server responses.
+//! The UI never lies to the user - success is only shown when the server confirms.
 //!
 //! NOTE: Program completion notifications are handled by ProgramNotificationHandler
 //! in the layout module, which receives server-broadcast ProgramNotification messages.
 //! This ensures all connected clients see the same notification simultaneously.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_request, use_sync_component, use_sync_context, EntityControl};
+use pl3xus_client::{use_targeted_request_with_handler, use_components, use_sync_context, EntityControl};
 use fanuc_replica_types::*;
 use super::LoadProgramModal;
 use crate::components::use_toast;
@@ -39,21 +39,23 @@ use crate::pages::dashboard::use_system_entity;
 #[component]
 pub fn ProgramVisualDisplay() -> impl IntoView {
     let ctx = use_sync_context();
-    let _toast = use_toast();
+    let toast = use_toast();
     let system_ctx = use_system_entity();
 
     // === Server-Driven State ===
     //
     // We subscribe to the full component signals and extract the first entity.
-    // Using use_sync_component (returns ReadSignal) for reliable reactivity.
-    let all_exec = use_sync_component::<ExecutionState>();
-    let all_control = use_sync_component::<EntityControl>();
+    // Using use_components (returns ReadSignal) for reliable reactivity.
+    let all_exec = use_components::<ExecutionState>();
+    let all_control = use_components::<EntityControl>();
 
     let (show_load_modal, set_show_load_modal) = signal(false);
 
-    // Get the System entity ID from the context (provided by DesktopLayout)
+    // Get the System entity ID for control checks
+    // Note: Program commands use the request/response pattern, not targeted messages.
+    // Authorization is handled in the server request handlers.
     let system_entity_bits = move || -> Option<u64> {
-        system_ctx.entity_id.get()
+        system_ctx.system_entity_id.get()
     };
 
     // Check if THIS client has control of the System entity
@@ -103,19 +105,58 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
         result
     };
 
-    // Request hooks for program control - store in StoredValue for use in multiple closures
-    let (start_program_fn, _) = use_request::<StartProgram>();
-    let (pause_program_fn, _) = use_request::<PauseProgram>();
-    let (resume_program_fn, _) = use_request::<ResumeProgram>();
-    let (stop_program_fn, _) = use_request::<StopProgram>();
-    let (unload_program_fn, _) = use_request::<UnloadProgram>();
+    // =========================================================================
+    // Targeted Request Hooks with Handlers
+    //
+    // use_targeted_request_with_handler handles response deduplication internally
+    // - The handler is called exactly once per response
+    // - No manual Effect boilerplate needed
+    // - Success cases: no toast (ExecutionState sync updates the UI)
+    // - Error cases: show error toast with reason
+    // =========================================================================
 
-    // Store in StoredValue so they can be accessed from multiple closures
-    let start_program = StoredValue::new(start_program_fn);
-    let pause_program = StoredValue::new(pause_program_fn);
-    let resume_program = StoredValue::new(resume_program_fn);
-    let stop_program = StoredValue::new(stop_program_fn);
-    let unload_program = StoredValue::new(unload_program_fn);
+    let start_program = StoredValue::new(use_targeted_request_with_handler::<StartProgram, _>(move |result| {
+        match result {
+            Ok(r) if r.success => { /* Success: no toast, UI updates via ExecutionState sync */ }
+            Ok(r) => toast.error(format!("Start denied: {}", r.error.as_deref().unwrap_or("No control"))),
+            Err(e) => toast.error(format!("Start failed: {e}")),
+        }
+    }));
+
+    let pause_program = StoredValue::new(use_targeted_request_with_handler::<PauseProgram, _>(move |result| {
+        match result {
+            Ok(r) if r.success => { /* Success: no toast */ }
+            Ok(r) => toast.error(format!("Pause denied: {}", r.error.as_deref().unwrap_or("No control"))),
+            Err(e) => toast.error(format!("Pause failed: {e}")),
+        }
+    }));
+
+    let resume_program = StoredValue::new(use_targeted_request_with_handler::<ResumeProgram, _>(move |result| {
+        match result {
+            Ok(r) if r.success => { /* Success: no toast */ }
+            Ok(r) => toast.error(format!("Resume denied: {}", r.error.as_deref().unwrap_or("No control"))),
+            Err(e) => toast.error(format!("Resume failed: {e}")),
+        }
+    }));
+
+    let stop_program = StoredValue::new(use_targeted_request_with_handler::<StopProgram, _>(move |result| {
+        match result {
+            Ok(r) if r.success => { /* Success: no toast */ }
+            Ok(r) => toast.error(format!("Stop denied: {}", r.error.as_deref().unwrap_or("No control"))),
+            Err(e) => toast.error(format!("Stop failed: {e}")),
+        }
+    }));
+
+    let unload_program = StoredValue::new(use_targeted_request_with_handler::<UnloadProgram, _>(move |result| {
+        match result {
+            Ok(r) if r.success => { /* Success: no toast */ }
+            Ok(r) => toast.error(format!("Unload denied: {}", r.error.as_deref().unwrap_or("No control"))),
+            Err(e) => toast.error(format!("Unload failed: {e}")),
+        }
+    }));
+
+    // Get the system entity ID for targeting
+    let system_entity_id = system_ctx.system_entity_id;
 
     view! {
         <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] flex flex-col overflow-hidden">
@@ -128,7 +169,6 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                 </h3>
                 // === Server-Driven Action Buttons ===
                 // Button visibility is determined entirely by server's can_* flags.
-                // No client-side state machine logic - just reflect what server authorizes
                 <div class="flex items-center gap-1">
                     <span class="text-[8px] text-[#666666] mr-1">
                         {move || format!("{} lines", lines().len())}
@@ -147,7 +187,9 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                         <button
                             class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
                             on:click=move |_| {
-                                start_program.with_value(|f| f(StartProgram));
+                                if let Some(entity_id) = system_entity_id.get() {
+                                    start_program.with_value(|f| f(entity_id, StartProgram));
+                                }
                             }
                         >
                             "▶ Run"
@@ -158,7 +200,9 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                         <button
                             class="bg-[#f59e0b20] border border-[#f59e0b40] text-[#f59e0b] text-[8px] px-2 py-0.5 rounded hover:bg-[#f59e0b30]"
                             on:click=move |_| {
-                                pause_program.with_value(|f| f(PauseProgram));
+                                if let Some(entity_id) = system_entity_id.get() {
+                                    pause_program.with_value(|f| f(entity_id, PauseProgram));
+                                }
                             }
                         >
                             "⏸ Pause"
@@ -169,7 +213,9 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                         <button
                             class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
                             on:click=move |_| {
-                                resume_program.with_value(|f| f(ResumeProgram));
+                                if let Some(entity_id) = system_entity_id.get() {
+                                    resume_program.with_value(|f| f(entity_id, ResumeProgram));
+                                }
                             }
                         >
                             "▶ Resume"
@@ -180,7 +226,9 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                         <button
                             class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430]"
                             on:click=move |_| {
-                                stop_program.with_value(|f| f(StopProgram));
+                                if let Some(entity_id) = system_entity_id.get() {
+                                    stop_program.with_value(|f| f(entity_id, StopProgram));
+                                }
                             }
                         >
                             "■ Stop"
@@ -191,7 +239,9 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                         <button
                             class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430] flex items-center gap-1"
                             on:click=move |_| {
-                                unload_program.with_value(|f| f(UnloadProgram));
+                                if let Some(entity_id) = system_entity_id.get() {
+                                    unload_program.with_value(|f| f(entity_id, UnloadProgram));
+                                }
                             }
                             title="Unload program"
                         >
@@ -233,11 +283,7 @@ fn ProgramTable(
     lines: Signal<Vec<ProgramLineInfo>>,
     executing: Signal<i32>,
 ) -> impl IntoView {
-    // Effect to log what the lines are:
-    // Effect::new(move |_| {
-    //     let lines = lines.get();
-    //     leptos::logging::log!("[ProgramTable::Effect] lines: {:?}", lines);
-    // });
+
     view! {
         <div class="flex-1 overflow-y-auto">
             <Show

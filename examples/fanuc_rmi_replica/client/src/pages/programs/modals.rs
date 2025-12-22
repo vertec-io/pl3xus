@@ -3,7 +3,7 @@
 use leptos::prelude::*;
 use leptos::either::Either;
 use leptos::web_sys;
-use pl3xus_client::use_request;
+use pl3xus_client::{use_request, use_request_with_handler};
 use fanuc_replica_types::{CreateProgram, UploadCsv, GetProgram, ProgramDetail};
 
 /// New Program Modal - Simple modal to create a program with name and description
@@ -15,32 +15,21 @@ pub fn NewProgramModal(
     let (program_name, set_program_name) = signal("".to_string());
     let (description, set_description) = signal("".to_string());
     let (error_message, set_error_message) = signal::<Option<String>>(None);
-    let (has_processed, set_has_processed) = signal(false);
+    let (is_creating, set_is_creating) = signal(false);
 
-    let (create_program, create_state) = use_request::<CreateProgram>();
-
-    // Watch for create response - with guard to prevent re-processing
-    let on_created_clone = on_created.clone();
-    Effect::new(move |_| {
-        // Only process once
-        if has_processed.get_untracked() {
-            return;
-        }
-        if let Some(response) = create_state.get().data {
-            set_has_processed.set(true);
-            if response.success {
-                if let Some(program_id) = response.program_id {
-                    on_created_clone(program_id);
+    // CreateProgram with handler
+    let create_program = use_request_with_handler::<CreateProgram, _>(move |result| {
+        set_is_creating.set(false);
+        match result {
+            Ok(r) if r.success => {
+                if let Some(program_id) = r.program_id {
+                    on_created(program_id);
                 }
-            } else {
-                set_error_message.set(response.error);
-                // Allow retrying after an error
-                set_has_processed.set(false);
             }
+            Ok(r) => set_error_message.set(r.error.clone()),
+            Err(e) => set_error_message.set(Some(e.to_string())),
         }
     });
-
-    let is_creating = Memo::new(move |_| create_state.get().is_loading);
 
     let on_close_clone = on_close.clone();
 
@@ -128,6 +117,7 @@ pub fn NewProgramModal(
                         )}
                         disabled=move || program_name.get().is_empty() || is_creating.get()
                         on:click=move |_| {
+                            set_is_creating.set(true);
                             let name = program_name.get();
                             let desc = description.get();
                             create_program(CreateProgram {
@@ -379,30 +369,18 @@ pub fn CSVUploadModal(
     let (file_name, set_file_name) = signal::<Option<String>>(None);
     let (csv_content, set_csv_content) = signal::<Option<String>>(None);
     let (error_message, set_error_message) = signal::<Option<String>>(None);
-    let (has_processed, set_has_processed) = signal(false);
+    let (is_uploading, set_is_uploading) = signal(false);
     let on_close_clone = on_close.clone();
 
-    let (upload_csv, upload_state) = use_request::<UploadCsv>();
-
-    // Watch for upload response - with guard to prevent re-processing
-    let on_uploaded_clone = on_uploaded.clone();
-    Effect::new(move |_| {
-        if has_processed.get_untracked() {
-            return;
-        }
-        if let Some(response) = upload_state.get().data {
-            set_has_processed.set(true);
-            if response.success {
-                on_uploaded_clone();
-            } else {
-                set_error_message.set(response.error);
-                // Allow retrying after an error
-                set_has_processed.set(false);
-            }
+    // UploadCsv with handler
+    let upload_csv = use_request_with_handler::<UploadCsv, _>(move |result| {
+        set_is_uploading.set(false);
+        match result {
+            Ok(r) if r.success => on_uploaded(),
+            Ok(r) => set_error_message.set(r.error.clone()),
+            Err(e) => set_error_message.set(Some(e.to_string())),
         }
     });
-
-    let is_uploading = Memo::new(move |_| upload_state.get().is_loading);
 
     view! {
         <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
@@ -505,6 +483,7 @@ pub fn CSVUploadModal(
                         disabled=move || csv_content.get().is_none() || is_uploading.get()
                         on:click=move |_| {
                             if let Some(content) = csv_content.get() {
+                                set_is_uploading.set(true);
                                 upload_csv(UploadCsv {
                                     program_id,
                                     csv_content: content,

@@ -12,8 +12,8 @@
 use bevy::prelude::*;
 use pl3xus_sync::control::EntityControl;
 
-// Re-export SystemMarker from shared types for use throughout the server
-pub use fanuc_replica_types::SystemMarker;
+// Re-export ActiveSystem from shared types for use throughout the server
+pub use fanuc_replica_types::ActiveSystem;
 
 // ============================================================================
 // Plugin
@@ -38,7 +38,7 @@ impl Plugin for SystemPlugin {
 fn spawn_system_entity(mut commands: Commands) {
     let entity = commands.spawn((
         Name::new("System"),
-        SystemMarker,
+        ActiveSystem,
         // EntityControl enables exclusive control management
         // Clients can request control via ControlRequest::Take(entity_bits)
         EntityControl::default(),

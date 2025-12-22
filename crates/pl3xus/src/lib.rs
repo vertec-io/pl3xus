@@ -141,6 +141,7 @@ Currently, Bevy's [TaskPool](bevy::tasks::TaskPool) is the default runtime used 
 pub mod managers;
 pub use managers::{Network, network::AppNetworkMessage};
 pub use managers::registration::{register_message, register_message_unscheduled};
+pub use managers::network_request::DeferredResponder;
 mod runtime;
 use managers::NetworkProvider;
 pub use runtime::Pl3xusRuntime;

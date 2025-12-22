@@ -5,9 +5,10 @@
 
 use leptos::prelude::*;
 
-use pl3xus_client::{use_sync_context, use_sync_component, EntityControl};
+use pl3xus_client::{use_sync_context, use_components, EntityControl};
 use fanuc_replica_types::*;
 use crate::components::use_toast;
+use crate::pages::dashboard::context::use_system_entity;
 
 /// Jog controls for robot manual movement.
 ///
@@ -19,8 +20,9 @@ use crate::components::use_toast;
 pub fn JogControls() -> impl IntoView {
     let ctx = use_sync_context();
     let toast = use_toast();
-    let control_state = use_sync_component::<EntityControl>();
-    let jog_settings = use_sync_component::<JogSettingsState>();
+    let system_ctx = use_system_entity();
+    let control_state = use_components::<EntityControl>();
+    let jog_settings = use_components::<JogSettingsState>();
 
     // Speed and step as string signals for text input (initialized from server state)
     let (speed_str, set_speed_str) = signal(String::new());
@@ -47,24 +49,24 @@ pub fn JogControls() -> impl IntoView {
         }
     });
 
-    // Get the System entity bits (for targeted messages)
-    // The EntityControl component is synced with entity_id as the key
-    let system_entity_bits = move || {
-        control_state.get().keys().next().copied()
-    };
+    // Get the Robot entity bits (for targeted jog commands)
+    // Jog commands target the Robot entity, not the System
+    let robot_entity_bits = move || system_ctx.robot_entity_id.get();
 
-    // Check if THIS client has control
+    // Check if THIS client has control (using System entity)
     let has_control = move || {
         let my_id = ctx.my_connection_id.get();
-        control_state.get().values().next()
+        let state = control_state.get();
+        system_ctx.system_entity_id.get()
+            .and_then(|sys_entity| state.get(&sys_entity))
             .map(|s| Some(s.client_id) == my_id)
             .unwrap_or(false)
     };
 
     let jog = move |axis: JogAxis, direction: JogDirection| {
-        // Get the target entity (System)
-        let Some(entity_bits) = system_entity_bits() else {
-            toast.error("Cannot jog: System entity not found.");
+        // Get the target entity (Robot)
+        let Some(entity_bits) = robot_entity_bits() else {
+            toast.error("Cannot jog: Robot entity not found.");
             return;
         };
 

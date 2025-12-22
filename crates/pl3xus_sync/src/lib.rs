@@ -167,3 +167,82 @@ impl AppPl3xusSyncExt for App {
     }
 }
 
+// =============================================================================
+// Query Invalidation API
+// =============================================================================
+
+/// Helper to broadcast query invalidations to all connected clients.
+///
+/// This should be called on the server when data changes that would affect
+/// cached query results. Clients will automatically refetch invalidated queries.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_sync::invalidate_queries;
+///
+/// // After creating a program, invalidate the list query
+/// fn handle_create_program<NP: NetworkProvider>(
+///     world: &mut World,
+///     // ... program creation logic ...
+/// ) {
+///     // Create program...
+///
+///     // Notify all clients to refetch their ListPrograms queries
+///     invalidate_queries::<NP>(world, &["ListPrograms"]);
+/// }
+/// ```
+#[cfg(feature = "runtime")]
+pub fn invalidate_queries<NP: NetworkProvider>(world: &World, query_types: &[&str]) {
+    if let Some(net) = world.get_resource::<pl3xus::Network<NP>>() {
+        let invalidation = QueryInvalidation {
+            query_types: query_types.iter().map(|s| s.to_string()).collect(),
+            keys: None,
+        };
+        net.broadcast(SyncServerMessage::QueryInvalidation(invalidation));
+    }
+}
+
+/// Helper to broadcast query invalidations for specific keys.
+///
+/// Use this when only specific instances of a keyed query need to be invalidated.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// // After updating a specific program
+/// invalidate_queries_with_keys::<NP>(
+///     world,
+///     &["GetProgram"],
+///     &[program_id.to_string()],
+/// );
+/// ```
+#[cfg(feature = "runtime")]
+pub fn invalidate_queries_with_keys<NP: NetworkProvider>(
+    world: &World,
+    query_types: &[&str],
+    keys: &[String],
+) {
+    if let Some(net) = world.get_resource::<pl3xus::Network<NP>>() {
+        let invalidation = QueryInvalidation {
+            query_types: query_types.iter().map(|s| s.to_string()).collect(),
+            keys: Some(keys.to_vec()),
+        };
+        net.broadcast(SyncServerMessage::QueryInvalidation(invalidation));
+    }
+}
+
+/// Helper to invalidate all queries on all clients.
+///
+/// Use sparingly - this forces a full refetch of all cached data.
+#[cfg(feature = "runtime")]
+pub fn invalidate_all_queries<NP: NetworkProvider>(world: &World) {
+    if let Some(net) = world.get_resource::<pl3xus::Network<NP>>() {
+        let invalidation = QueryInvalidation {
+            query_types: vec![],
+            keys: None,
+        };
+        net.broadcast(SyncServerMessage::QueryInvalidation(invalidation));
+    }
+}
+

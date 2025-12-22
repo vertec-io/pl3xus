@@ -1962,3 +1962,382 @@ where
 
     TargetedMutationHandle { send_fn, state }
 }
+
+// =============================================================================
+// QUERY API - TanStack Query-inspired read operations with server-side invalidation
+// =============================================================================
+
+/// State of a query.
+#[derive(Clone, Debug)]
+pub struct QueryState<T> {
+    /// The fetched data (if available)
+    pub data: Option<T>,
+    /// Error message (if the query failed)
+    pub error: Option<String>,
+    /// Whether the query is currently fetching
+    pub is_fetching: bool,
+    /// Whether data has ever been fetched (for showing stale data while refetching)
+    pub is_stale: bool,
+}
+
+impl<T: Clone> Default for QueryState<T> {
+    fn default() -> Self {
+        Self {
+            data: None,
+            error: None,
+            is_fetching: false,
+            is_stale: false,
+        }
+    }
+}
+
+impl<T: Clone> QueryState<T> {
+    /// Returns true if the query is loading for the first time (no data yet)
+    pub fn is_loading(&self) -> bool {
+        self.is_fetching && self.data.is_none()
+    }
+
+    /// Returns true if the query has succeeded at least once
+    pub fn is_success(&self) -> bool {
+        self.data.is_some() && self.error.is_none()
+    }
+
+    /// Returns true if the query is in an error state
+    pub fn is_error(&self) -> bool {
+        self.error.is_some()
+    }
+}
+
+/// Handle returned by `use_query` for manual control.
+///
+/// This handle is `Copy`, so it can be used directly in closures without cloning.
+#[derive(Clone)]
+pub struct QueryHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    /// Function to manually refetch the query
+    refetch_fn: StoredValue<Box<dyn Fn() + Send + Sync>>,
+    /// Current query state signal
+    pub state: Signal<QueryState<R::ResponseMessage>>,
+}
+
+impl<R> Copy for QueryHandle<R> where R: pl3xus_common::RequestMessage + Clone + 'static {}
+
+impl<R> QueryHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    /// Manually trigger a refetch of the query.
+    pub fn refetch(&self) {
+        self.refetch_fn.with_value(|f| f());
+    }
+
+    /// Returns true if the query is currently fetching.
+    pub fn is_fetching(&self) -> bool {
+        self.state.get().is_fetching
+    }
+
+    /// Returns true if the query is loading (fetching with no data).
+    pub fn is_loading(&self) -> bool {
+        self.state.get().is_loading()
+    }
+
+    /// Returns true if the query has data.
+    pub fn is_success(&self) -> bool {
+        self.state.get().is_success()
+    }
+
+    /// Returns true if the query is in an error state.
+    pub fn is_error(&self) -> bool {
+        self.state.get().is_error()
+    }
+
+    /// Get the current data, if available.
+    pub fn data(&self) -> Option<R::ResponseMessage> {
+        self.state.get().data
+    }
+
+    /// Get the current error, if any.
+    pub fn error(&self) -> Option<String> {
+        self.state.get().error
+    }
+}
+
+/// Hook for fetching data from the server with automatic caching and server-side invalidation.
+///
+/// This is a TanStack Query-inspired API for read operations. Unlike mutations, queries:
+/// - Cache their results
+/// - Automatically refetch when the server sends an invalidation
+/// - Show stale data while refetching (stale-while-revalidate pattern)
+///
+/// # Server-Side Invalidation
+///
+/// When the server sends a `QueryInvalidation` message for this query type,
+/// the query automatically refetches. This ensures the client always reflects
+/// the true server state.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_query;
+///
+/// // Fetch program list - auto-refetches when server invalidates
+/// let programs = use_query(ListPrograms);
+///
+/// view! {
+///     <Show when=move || programs.is_loading() fallback=|| ()>
+///         <span>"Loading..."</span>
+///     </Show>
+///     <Show when=move || programs.is_success() fallback=|| ()>
+///         <For
+///             each=move || programs.data().map(|d| d.programs).unwrap_or_default()
+///             key=|p| p.id
+///             let:program
+///         >
+///             <div>{program.name.clone()}</div>
+///         </For>
+///     </Show>
+/// }
+/// ```
+pub fn use_query<R>(request: R) -> QueryHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + 'static,
+{
+    let ctx = use_sync_context();
+    let query_type = std::any::type_name::<R>().to_string();
+
+    // The query state
+    let state = RwSignal::new(QueryState::<R::ResponseMessage>::default());
+
+    // Track the last invalidation counter we've seen
+    let last_invalidation = RwSignal::new(0u64);
+
+    // Use the underlying request hook for actual fetching
+    let (send, request_state) = use_request::<R>();
+
+    // Clone request for use in closures
+    let request_clone = request.clone();
+
+    // Refetch function
+    let do_fetch = move || {
+        state.update(|s| {
+            s.is_fetching = true;
+            if s.data.is_some() {
+                s.is_stale = true;
+            }
+        });
+        send(request_clone.clone());
+    };
+
+    // Store refetch function
+    let refetch_fn = StoredValue::new(Box::new(do_fetch.clone()) as Box<dyn Fn() + Send + Sync>);
+
+    // Initial fetch
+    Effect::new({
+        let do_fetch = do_fetch.clone();
+        move |_| {
+            // Only fetch on initial mount
+            if state.get_untracked().data.is_none() && !state.get_untracked().is_fetching {
+                do_fetch();
+            }
+        }
+    });
+
+    // Watch for request completion
+    Effect::new(move |_| {
+        let req_state = request_state.get();
+
+        if req_state.is_idle() || req_state.is_loading() {
+            return;
+        }
+
+        if let Some(ref error) = req_state.error {
+            state.update(|s| {
+                s.is_fetching = false;
+                s.error = Some(error.clone());
+            });
+        } else if let Some(ref data) = req_state.data {
+            state.update(|s| {
+                s.data = Some(data.clone());
+                s.error = None;
+                s.is_fetching = false;
+                s.is_stale = false;
+            });
+        }
+    });
+
+    // Watch for server-side invalidation
+    Effect::new({
+        let query_type = query_type.clone();
+        let do_fetch = do_fetch.clone();
+        move |_| {
+            let invalidations = ctx.query_invalidations.get();
+            if let Some(&counter) = invalidations.get(&query_type) {
+                let last = last_invalidation.get_untracked();
+                if counter > last {
+                    last_invalidation.set(counter);
+                    // Server invalidated this query, refetch
+                    #[cfg(target_arch = "wasm32")]
+                    leptos::logging::log!(
+                        "[use_query] Query '{}' invalidated, refetching...",
+                        query_type
+                    );
+                    do_fetch();
+                }
+            }
+        }
+    });
+
+    QueryHandle {
+        refetch_fn,
+        state: state.into(),
+    }
+}
+
+/// Hook for fetching data with a reactive key parameter.
+///
+/// Unlike `use_query`, this hook watches a signal for the request parameters.
+/// When the signal changes, the query automatically refetches with the new parameters.
+///
+/// # Server-Side Invalidation
+///
+/// When the server sends a `QueryInvalidation` message for this query type,
+/// the query automatically refetches.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_query_keyed;
+///
+/// // Selected robot ID (reactive)
+/// let selected_robot_id = signal(Some(1i64));
+///
+/// // Query configurations for the selected robot - auto-refetches when robot changes
+/// let configs = use_query_keyed(move || {
+///     selected_robot_id.get().map(|id| GetRobotConfigurations { robot_connection_id: id })
+/// });
+///
+/// view! {
+///     <Show when=move || configs.is_loading() fallback=|| ()>
+///         <span>"Loading..."</span>
+///     </Show>
+///     <Show when=move || configs.is_success() fallback=|| ()>
+///         <For
+///             each=move || configs.data().map(|d| d.configurations).unwrap_or_default()
+///             key=|c| c.id
+///             let:config
+///         >
+///             <div>{config.name.clone()}</div>
+///         </For>
+///     </Show>
+/// }
+/// ```
+pub fn use_query_keyed<R, F>(request_fn: F) -> QueryHandle<R>
+where
+    R: pl3xus_common::RequestMessage + Clone + PartialEq + 'static,
+    F: Fn() -> Option<R> + Clone + Send + Sync + 'static,
+{
+    let ctx = use_sync_context();
+    let query_type = std::any::type_name::<R>().to_string();
+
+    // The query state
+    let state = RwSignal::new(QueryState::<R::ResponseMessage>::default());
+
+    // Track the last invalidation counter we've seen
+    let last_invalidation = RwSignal::new(0u64);
+
+    // Use the underlying request hook for actual fetching
+    let (send, request_state) = use_request::<R>();
+
+    // Track the current request to detect changes
+    let current_request = Memo::new(move |_| request_fn());
+
+    // Fetch function
+    let do_fetch = {
+        let current_request = current_request;
+        move || {
+            if let Some(req) = current_request.get_untracked() {
+                state.update(|s| {
+                    s.is_fetching = true;
+                    if s.data.is_some() {
+                        s.is_stale = true;
+                    }
+                });
+                send(req);
+            } else {
+                // No request (e.g., no robot selected) - clear state
+                state.update(|s| {
+                    s.data = None;
+                    s.error = None;
+                    s.is_fetching = false;
+                    s.is_stale = false;
+                });
+            }
+        }
+    };
+
+    // Store refetch function
+    let refetch_fn = StoredValue::new(Box::new(do_fetch.clone()) as Box<dyn Fn() + Send + Sync>);
+
+    // Watch for request parameter changes and refetch
+    Effect::new({
+        let do_fetch = do_fetch.clone();
+        move |_| {
+            // Subscribe to the request signal
+            let _req = current_request.get();
+            // Fetch with new parameters
+            do_fetch();
+        }
+    });
+
+    // Watch for request completion
+    Effect::new(move |_| {
+        let req_state = request_state.get();
+
+        if req_state.is_idle() || req_state.is_loading() {
+            return;
+        }
+
+        if let Some(ref error) = req_state.error {
+            state.update(|s| {
+                s.is_fetching = false;
+                s.error = Some(error.clone());
+            });
+        } else if let Some(ref data) = req_state.data {
+            state.update(|s| {
+                s.data = Some(data.clone());
+                s.error = None;
+                s.is_fetching = false;
+                s.is_stale = false;
+            });
+        }
+    });
+
+    // Watch for server-side invalidation
+    Effect::new({
+        let query_type = query_type.clone();
+        let do_fetch = do_fetch.clone();
+        move |_| {
+            let invalidations = ctx.query_invalidations.get();
+            if let Some(&counter) = invalidations.get(&query_type) {
+                let last = last_invalidation.get_untracked();
+                if counter > last {
+                    last_invalidation.set(counter);
+                    // Server invalidated this query, refetch
+                    #[cfg(target_arch = "wasm32")]
+                    leptos::logging::log!(
+                        "[use_query_keyed] Query '{}' invalidated, refetching...",
+                        query_type
+                    );
+                    do_fetch();
+                }
+            }
+        }
+    });
+
+    QueryHandle {
+        refetch_fn,
+        state: state.into(),
+    }
+}

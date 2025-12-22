@@ -96,6 +96,10 @@ pub struct SyncContext {
     /// Request state tracking: request_id -> RequestState
     /// Tracks pending requests and their responses
     pub(crate) requests: RwSignal<HashMap<u64, RequestState>>,
+    /// Query invalidation signals: query_type -> invalidation_counter
+    /// When the server sends a QueryInvalidation, we increment the counter.
+    /// Query hooks watch their type's counter and refetch when it changes.
+    pub(crate) query_invalidations: RwSignal<HashMap<String, u64>>,
 }
 
 /// State tracking for a single request/response cycle.
@@ -150,6 +154,7 @@ impl SyncContext {
             next_request_id: Arc::new(Mutex::new(0)),
             incoming_messages: RwSignal::new(HashMap::new()),
             requests: RwSignal::new(HashMap::new()),
+            query_invalidations: RwSignal::new(HashMap::new()),
         }
     }
 
@@ -912,6 +917,47 @@ impl SyncContext {
                 response.status
             );
         }
+    }
+
+    /// Handle a query invalidation message from the server.
+    ///
+    /// This is called by the provider when a QueryInvalidation is received.
+    /// It increments the invalidation counter for each affected query type,
+    /// which triggers any watching query hooks to refetch.
+    pub(crate) fn handle_query_invalidation(&self, invalidation: &pl3xus_sync::QueryInvalidation) {
+        self.query_invalidations.update(|map| {
+            if invalidation.query_types.is_empty() {
+                // Empty query_types means invalidate ALL queries
+                for counter in map.values_mut() {
+                    *counter += 1;
+                }
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::log!("[SyncContext] Invalidated all queries");
+            } else {
+                // Invalidate specific query types
+                for query_type in &invalidation.query_types {
+                    let counter = map.entry(query_type.clone()).or_insert(0);
+                    *counter += 1;
+                    #[cfg(target_arch = "wasm32")]
+                    leptos::logging::log!(
+                        "[SyncContext] Invalidated query type '{}' (counter: {})",
+                        query_type,
+                        *counter
+                    );
+                }
+            }
+        });
+    }
+
+    /// Get the invalidation counter for a specific query type.
+    ///
+    /// Query hooks use this to track when they should refetch.
+    pub fn query_invalidation_counter(&self, query_type: &str) -> u64 {
+        self.query_invalidations
+            .get_untracked()
+            .get(query_type)
+            .copied()
+            .unwrap_or(0)
     }
 
     /// Get a read-only signal for tracking mutation states.

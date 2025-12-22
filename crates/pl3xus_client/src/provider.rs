@@ -260,6 +260,10 @@ fn handle_server_message(
         SyncServerMessage::QueryResponse(_response) => {
             // TODO: Handle query responses when we implement queries
         }
+        SyncServerMessage::QueryInvalidation(invalidation) => {
+            // Handle query cache invalidation
+            ctx.handle_query_invalidation(&invalidation);
+        }
     }
 }
 

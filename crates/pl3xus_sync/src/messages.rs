@@ -58,6 +58,34 @@ pub enum SyncServerMessage {
     MutationResponse(MutationResponse),
     /// Response to a query request.
     QueryResponse(QueryResponse),
+    /// Invalidate cached queries on the client.
+    /// This enables server-pushed cache invalidation for real-time accuracy.
+    QueryInvalidation(QueryInvalidation),
+}
+
+/// Invalidate one or more cached queries on the client.
+///
+/// This message is sent by the server when data changes that would affect
+/// cached query results. Clients should refetch invalidated queries.
+///
+/// # Example
+///
+/// When a new program is created, the server broadcasts:
+/// ```ignore
+/// QueryInvalidation {
+///     query_types: vec!["ListPrograms".to_string()],
+///     keys: None,
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryInvalidation {
+    /// Query type names to invalidate (e.g., "ListPrograms", "GetRobotConfigurations").
+    /// If empty, invalidates all queries.
+    pub query_types: Vec<String>,
+    /// Optional: specific keys within query types to invalidate.
+    /// For keyed queries (e.g., GetProgram with program_id), this allows
+    /// invalidating only specific instances rather than all cached results.
+    pub keys: Option<Vec<String>>,
 }
 
 /// Welcome message sent to newly connected clients.

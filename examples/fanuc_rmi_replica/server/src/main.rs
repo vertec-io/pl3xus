@@ -101,7 +101,11 @@ fn main() {
 
     // User-configurable components (clients can mutate with proper authorization)
     app.sync_component::<ActiveConfigState>(None);  // User can change active configuration
-    app.sync_component::<JogSettingsState>(None);   // User can change jog settings
+
+    // JogSettingsState uses a mutation handler for validation and logging
+    app.sync_component_builder::<JogSettingsState>()
+        .with_handler::<WebSocketProvider, _, _>(jogging::handle_jog_settings_mutation)
+        .build();
 
     // ========================================================================
     // Database

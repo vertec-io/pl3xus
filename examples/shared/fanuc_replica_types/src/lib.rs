@@ -636,12 +636,16 @@ pub enum JogAxis { X, Y, Z, W, P, R, J1, J2, J3, J4, J5, J6 }
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JogDirection { Positive, Negative }
 
+/// Jog command sent from client to server.
+///
+/// Only contains axis and direction - the server uses its own JogSettingsState
+/// component for speed and step values. This ensures jog settings are tied to
+/// the robot entity, not the client, so any client that takes control uses
+/// the same settings.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct JogCommand {
     pub axis: JogAxis,
     pub direction: JogDirection,
-    pub distance: f32,
-    pub speed: f32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

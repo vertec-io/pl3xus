@@ -1,7 +1,7 @@
 //! Jog Defaults Panel - Configure per-robot jog speed and step defaults.
 
 use leptos::prelude::*;
-use pl3xus_client::use_entity_component;
+use pl3xus_client::{use_entity_component, use_mut_component};
 use fanuc_replica_types::{ConnectionState, JogSettingsState};
 use super::NumberInput;
 use crate::pages::dashboard::use_system_entity;
@@ -14,7 +14,11 @@ pub fn JogDefaultsPanel() -> impl IntoView {
     // Subscribe to entity-specific components
     // All these components live on the robot entity
     let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
-    let (jog_settings, _) = use_entity_component::<JogSettingsState, _>(move || system_ctx.robot_entity_id.get());
+
+    // Use the new mutation hook for jog settings - provides read + write + mutation state
+    let jog_handle = use_mut_component::<JogSettingsState, _>(move || system_ctx.robot_entity_id.get());
+    // Extract the value signal for use in closures (ReadSignal is Copy)
+    let jog_value = jog_handle.value;
 
     let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
 
@@ -27,7 +31,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
 
     // Initialize from synced jog settings
     Effect::new(move || {
-        let settings = jog_settings.get();
+        let settings = jog_value.get();
         if settings.cartesian_jog_speed > 0.0 {
             set_cart_speed.set(format!("{:.1}", settings.cartesian_jog_speed));
             set_cart_step.set(format!("{:.1}", settings.cartesian_jog_step));
@@ -39,7 +43,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
 
     // Check if edited values differ from synced settings
     let check_changes = move || {
-        let settings = jog_settings.get_untracked();
+        let settings = jog_value.get_untracked();
         let cs = cart_speed.get().parse::<f64>().unwrap_or(0.0);
         let cst = cart_step.get().parse::<f64>().unwrap_or(0.0);
         let js = joint_speed.get().parse::<f64>().unwrap_or(0.0);
@@ -133,7 +137,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                             class="px-3 py-1 text-[9px] bg-[#1a1a1a] border border-[#ffffff08] text-[#888888] rounded hover:text-white"
                             on:click=move |_| {
                                 // Reset to synced settings
-                                let settings = jog_settings.get();
+                                let settings = jog_value.get();
                                 set_cart_speed.set(format!("{:.1}", settings.cartesian_jog_speed));
                                 set_cart_step.set(format!("{:.1}", settings.cartesian_jog_step));
                                 set_joint_speed.set(format!("{:.1}", settings.joint_jog_speed));
@@ -146,7 +150,18 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                         <button
                             class="px-3 py-1 text-[9px] bg-[#ffaa0020] text-[#ffaa00] border border-[#ffaa00] rounded hover:bg-[#ffaa0030]"
                             on:click=move |_| {
-                                // TODO: Send UpdateJogSettings message
+                                // Build new settings from edited values
+                                let current = jog_value.get();
+                                let new_settings = JogSettingsState {
+                                    cartesian_jog_speed: cart_speed.get().parse().unwrap_or(current.cartesian_jog_speed),
+                                    cartesian_jog_step: cart_step.get().parse().unwrap_or(current.cartesian_jog_step),
+                                    joint_jog_speed: joint_speed.get().parse().unwrap_or(current.joint_jog_speed),
+                                    joint_jog_step: joint_step.get().parse().unwrap_or(current.joint_jog_step),
+                                    rotation_jog_speed: current.rotation_jog_speed,
+                                    rotation_jog_step: current.rotation_jog_step,
+                                };
+                                // Send mutation to server
+                                jog_handle.mutate(new_settings);
                                 set_has_changes.set(false);
                             }
                             title="Apply these values to the active jog settings"

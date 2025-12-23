@@ -18,6 +18,8 @@ use crate::registry::{
     MutationAuthContext,
     MutationAuthorizerResource,
     MutationQueue,
+    MutationResponseQueue,
+    QueuedMutation,
     SnapshotQueue,
     SubscriptionManager,
     SyncRegistry,
@@ -53,6 +55,7 @@ pub(crate) fn install<NP: NetworkProvider>(app: &mut App) {
 
     app.init_resource::<SubscriptionManager>()
         .init_resource::<MutationQueue>()
+        .init_resource::<MutationResponseQueue>()
         .init_resource::<SnapshotQueue>()
         .add_message::<ComponentChangeEvent>()
         .add_message::<ComponentRemovedEvent>()
@@ -94,6 +97,11 @@ pub(crate) fn install<NP: NetworkProvider>(app: &mut App) {
         .add_systems(
             Update,
             process_mutations::<NP>.in_set(Pl3xusSyncSystems::Inbound),
+        )
+        // Send mutation responses from handlers (runs after handler systems in Inbound)
+        .add_systems(
+            Update,
+            send_mutation_responses::<NP>.in_set(Pl3xusSyncSystems::Observe),
         )
         // Process queued snapshot requests and send initial SyncBatch snapshots
         // back to subscribing clients.
@@ -175,6 +183,11 @@ fn handle_connection_events<NP: NetworkProvider>(
 
 /// Drain the global mutation queue, run authorization, apply mutations and
 /// emit `MutationResponse` messages back to the originating client.
+///
+/// For components with `has_mutation_handler = true`, mutations are routed to
+/// the registered handler system via `ComponentMutation<T>` events instead of
+/// being applied directly. The handler is responsible for responding via
+/// `MutationResponseQueue`.
 pub fn process_mutations<NP: NetworkProvider>(world: &mut World) {
     use crate::messages::MutationStatus as Status;
 
@@ -192,9 +205,13 @@ pub fn process_mutations<NP: NetworkProvider>(world: &mut World) {
         return;
     }
 
+    // Collect mutations that need to be routed to handlers
+    let mut handler_routed: Vec<(QueuedMutation, fn(&mut World, &QueuedMutation))> = Vec::new();
+
     for mutation in pending.drain(..) {
         let mut status = Status::Ok;
         let mut response_message: Option<String> = None;
+        let mut routed_to_handler = false;
 
         // Optional authorization step.
         if let Some(auth_res) = world.get_resource::<MutationAuthorizerResource>() {
@@ -211,6 +228,7 @@ pub fn process_mutations<NP: NetworkProvider>(world: &mut World) {
                         .components
                         .iter()
                         .find(|reg| reg.type_name == mutation.component_type)
+                        .cloned()
                 });
 
             match registration {
@@ -228,6 +246,19 @@ pub fn process_mutations<NP: NetworkProvider>(world: &mut World) {
                                     mutation.component_type
                                 ))
                         );
+                    } else if reg.config.has_mutation_handler {
+                        // Route to handler - the handler will respond via MutationResponseQueue
+                        if let Some(route_fn) = reg.route_to_handler {
+                            handler_routed.push((mutation.clone(), route_fn));
+                            routed_to_handler = true;
+                        } else {
+                            // Handler registered but no route function - this is a bug
+                            status = Status::InternalError;
+                            response_message = Some(format!(
+                                "Component {} has handler flag but no route function",
+                                mutation.component_type
+                            ));
+                        }
                     } else {
                         let apply = reg.apply_mutation;
                         // Ensure that panics while applying a mutation are contained
@@ -252,16 +283,54 @@ pub fn process_mutations<NP: NetworkProvider>(world: &mut World) {
 
         // Respond back to the originating client, if we have a network
         // provider for this plugin's `NetworkProvider` type.
-        if let Some(net) = world.get_resource::<Network<NP>>() {
-            let response = MutationResponse {
-                request_id: mutation.request_id,
-                status: status.clone(),
-                message: response_message,
+        // Skip if routed to handler - handler will respond via MutationResponseQueue.
+        if !routed_to_handler {
+            if let Some(net) = world.get_resource::<Network<NP>>() {
+                let response = MutationResponse {
+                    request_id: mutation.request_id,
+                    status: status.clone(),
+                    message: response_message,
+                };
+                let _ = net.send(
+                    mutation.connection_id,
+                    SyncServerMessage::MutationResponse(response),
+                );
+            }
+        }
+    }
+
+    // Route mutations to handlers (after we've released the registry borrow)
+    for (mutation, route_fn) in handler_routed {
+        route_fn(world, &mutation);
+    }
+}
+
+/// Drain the mutation response queue and send responses to clients.
+///
+/// This system runs after handler systems have processed `ComponentMutation<T>` events
+/// and queued their responses in `MutationResponseQueue`.
+pub fn send_mutation_responses<NP: NetworkProvider>(world: &mut World) {
+    // Take ownership of pending responses
+    let pending = {
+        if let Some(mut queue) = world.get_resource_mut::<MutationResponseQueue>() {
+            std::mem::take(&mut queue.pending)
+        } else {
+            return;
+        }
+    };
+
+    if pending.is_empty() {
+        return;
+    }
+
+    if let Some(net) = world.get_resource::<Network<NP>>() {
+        for response in pending {
+            let msg = MutationResponse {
+                request_id: response.request_id,
+                status: response.status,
+                message: response.message,
             };
-            let _ = net.send(
-                mutation.connection_id,
-                SyncServerMessage::MutationResponse(response),
-            );
+            let _ = net.send(response.connection_id, SyncServerMessage::MutationResponse(msg));
         }
     }
 }

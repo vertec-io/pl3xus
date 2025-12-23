@@ -1,7 +1,11 @@
 //! Jog controls component for manual robot movement.
 //!
-//! Syncs with server-owned JogSettingsState for default values.
-//! Uses targeted messages with authorization for jog commands.
+//! Displays the server's JogSettingsState values (read-only).
+//! Jog buttons only send axis/direction - the server uses its own JogSettingsState
+//! for speed and step values. This ensures jog settings are tied to the robot
+//! entity, not the client, so any client that takes control uses the same settings.
+//!
+//! To change jog settings, use the Configuration panel's Jog Defaults section.
 
 use leptos::prelude::*;
 
@@ -13,9 +17,12 @@ use crate::pages::dashboard::context::use_system_entity;
 /// Jog controls for robot manual movement.
 ///
 /// Uses the new targeted message pattern - jog commands are sent with the
-/// System entity as the target. The server's authorization middleware
-/// verifies that this client has control of the System entity before
-/// processing the command.
+/// Robot entity as the target. The server's authorization middleware
+/// verifies that this client has control before processing the command.
+///
+/// Speed and step values are displayed from the server's JogSettingsState
+/// but are read-only here. The server uses its own settings when processing
+/// jog commands. To change settings, use the Configuration panel.
 #[component]
 pub fn JogControls() -> impl IntoView {
     let ctx = use_sync_context();
@@ -26,32 +33,7 @@ pub fn JogControls() -> impl IntoView {
     let (control_state, _) = use_entity_component::<EntityControl, _>(move || system_ctx.system_entity_id.get());
     let (jog_settings, _) = use_entity_component::<JogSettingsState, _>(move || system_ctx.robot_entity_id.get());
 
-    // Speed and step as string signals for text input (initialized from server state)
-    let (speed_str, set_speed_str) = signal(String::new());
-    let (step_str, set_step_str) = signal(String::new());
-
-    // Rotation speed and step
-    let (rot_speed_str, set_rot_speed_str) = signal(String::new());
-    let (rot_step_str, set_rot_step_str) = signal(String::new());
-
-    // Track if we've initialized from server state
-    let (initialized, set_initialized) = signal(false);
-
-    // Initialize from server state when it becomes available
-    Effect::new(move |_| {
-        let settings = jog_settings.get();
-        // Only initialize once, don't overwrite user edits
-        if !initialized.get_untracked() && settings.cartesian_jog_speed > 0.0 {
-            set_speed_str.set(format!("{:.1}", settings.cartesian_jog_speed));
-            set_step_str.set(format!("{:.1}", settings.cartesian_jog_step));
-            set_rot_speed_str.set(format!("{:.1}", settings.rotation_jog_speed));
-            set_rot_step_str.set(format!("{:.1}", settings.rotation_jog_step));
-            set_initialized.set(true);
-        }
-    });
-
     // Get the Robot entity bits (for targeted jog commands)
-    // Jog commands target the Robot entity, not the System
     let robot_entity_bits = move || system_ctx.robot_entity_id.get();
 
     // Check if THIS client has control (using System entity)
@@ -75,26 +57,11 @@ pub fn JogControls() -> impl IntoView {
             return;
         }
 
-        // Parse speed and step from string signals
-        let (speed, step) = match axis {
-            JogAxis::W | JogAxis::P | JogAxis::R => {
-                let speed = rot_speed_str.get().parse::<f32>().unwrap_or(5.0);
-                let step = rot_step_str.get().parse::<f32>().unwrap_or(1.0);
-                (speed, step)
-            }
-            _ => {
-                let speed = speed_str.get().parse::<f32>().unwrap_or(50.0);
-                let step = step_str.get().parse::<f32>().unwrap_or(10.0);
-                (speed, step)
-            }
-        };
-
-        // Send targeted message - server will verify authorization
+        // Send targeted message with only axis and direction
+        // Server uses its own JogSettingsState for speed/step values
         ctx.send_targeted(entity_bits, JogCommand {
             axis,
             direction,
-            distance: step,
-            speed,
         });
     };
 
@@ -107,26 +74,16 @@ pub fn JogControls() -> impl IntoView {
                 </Show>
             </div>
 
-            // Cartesian Settings (X/Y/Z)
+            // Cartesian Settings (X/Y/Z) - Read-only display from server
             <div class="text-[8px] text-[#666666] mb-1">"Cartesian (X/Y/Z)"</div>
             <div class="grid grid-cols-2 gap-2 mb-2">
                 <div class="bg-[#111111] rounded p-1.5">
                     <div class="text-[8px] text-[#666666] mb-1">"Speed (mm/s)"</div>
-                    <NumberInput
-                        value=speed_str
-                        on_change=move |v| set_speed_str.set(v)
-                        min=0.1
-                        max=1000.0
-                    />
+                    <ReadOnlyValue value=Signal::derive(move || format!("{:.1}", jog_settings.get().cartesian_jog_speed)) />
                 </div>
                 <div class="bg-[#111111] rounded p-1.5">
                     <div class="text-[8px] text-[#666666] mb-1">"Step (mm)"</div>
-                    <NumberInput
-                        value=step_str
-                        on_change=move |v| set_step_str.set(v)
-                        min=0.1
-                        max=500.0
-                    />
+                    <ReadOnlyValue value=Signal::derive(move || format!("{:.1}", jog_settings.get().cartesian_jog_step)) />
                 </div>
             </div>
 
@@ -143,26 +100,16 @@ pub fn JogControls() -> impl IntoView {
                 <JogButton label="Z-" jog=jog.clone() axis=JogAxis::Z direction=JogDirection::Negative disabled=Signal::derive(move || !has_control()) />
             </div>
 
-            // Rotation Settings (W/P/R)
+            // Rotation Settings (W/P/R) - Read-only display from server
             <div class="text-[8px] text-[#666666] mb-1">"Rotation (W/P/R)"</div>
             <div class="grid grid-cols-2 gap-2 mb-2">
                 <div class="bg-[#111111] rounded p-1.5">
                     <div class="text-[8px] text-[#666666] mb-1">"Speed (°/s)"</div>
-                    <NumberInput
-                        value=rot_speed_str
-                        on_change=move |v| set_rot_speed_str.set(v)
-                        min=0.1
-                        max=100.0
-                    />
+                    <ReadOnlyValue value=Signal::derive(move || format!("{:.1}", jog_settings.get().rotation_jog_speed)) />
                 </div>
                 <div class="bg-[#111111] rounded p-1.5">
                     <div class="text-[8px] text-[#666666] mb-1">"Step (°)"</div>
-                    <NumberInput
-                        value=rot_step_str
-                        on_change=move |v| set_rot_step_str.set(v)
-                        min=0.1
-                        max=180.0
-                    />
+                    <ReadOnlyValue value=Signal::derive(move || format!("{:.1}", jog_settings.get().rotation_jog_step)) />
                 </div>
             </div>
 
@@ -175,49 +122,22 @@ pub fn JogControls() -> impl IntoView {
                 <JogButton label="P+" jog=jog.clone() axis=JogAxis::P direction=JogDirection::Positive disabled=Signal::derive(move || !has_control()) />
                 <JogButton label="R+" jog=jog.clone() axis=JogAxis::R direction=JogDirection::Positive disabled=Signal::derive(move || !has_control()) />
             </div>
+
+            // Link to Configuration panel
+            <div class="mt-2 text-center">
+                <a href="/dashboard/info" class="text-[8px] text-[#00d9ff] hover:underline">"Edit settings in Configuration →"</a>
+            </div>
         </div>
     }
 }
 
-/// Validated text input for numeric values.
-/// Uses type="text" to avoid issues with decimals and negative values.
+/// Read-only display of a value (styled like an input but not editable).
 #[component]
-fn NumberInput(
-    #[prop(into)] value: Signal<String>,
-    on_change: impl Fn(String) + 'static,
-    #[prop(default = 0.0)] min: f64,
-    #[prop(default = f64::MAX)] max: f64,
-) -> impl IntoView {
-    let is_valid = move || {
-        let v = value.get();
-        if v.is_empty() {
-            return true;
-        }
-        if let Ok(num) = v.parse::<f64>() {
-            num >= min && num <= max
-        } else {
-            // Allow intermediate states like "-" or "." during typing
-            v == "-" || v == "." || v == "-."
-        }
-    };
-
+fn ReadOnlyValue(#[prop(into)] value: Signal<String>) -> impl IntoView {
     view! {
-        <input
-            type="text"
-            inputmode="decimal"
-            class=move || format!(
-                "w-full bg-[#0a0a0a] rounded px-1.5 py-1 text-white text-[11px] focus:outline-none text-right font-mono {}",
-                if is_valid() {
-                    "border border-[#ffffff08] focus:border-[#00d9ff]"
-                } else {
-                    "border-2 border-[#ff4444]"
-                }
-            )
-            prop:value=value
-            on:change=move |ev| {
-                on_change(event_target_value(&ev));
-            }
-        />
+        <div class="w-full bg-[#0a0a0a] rounded px-1.5 py-1 text-white text-[11px] text-right font-mono border border-[#ffffff08]">
+            {value}
+        </div>
     }
 }
 

@@ -1,9 +1,11 @@
 //! Joint Jog Panel - Individual joint jogging controls.
 //!
-//! Provides up/down buttons for each joint (J1-J6) with configurable step and speed.
-//! Syncs with server-owned JogSettingsState for default values.
-//! Uses targeted messages with authorization for jog commands.
-//! Commands are sent to the System entity - server will route to the active robot.
+//! Displays the server's JogSettingsState values (read-only).
+//! Jog buttons only send axis/direction - the server uses its own JogSettingsState
+//! for speed and step values. This ensures jog settings are tied to the robot
+//! entity, not the client, so any client that takes control uses the same settings.
+//!
+//! To change jog settings, use the Configuration panel's Jog Defaults section.
 
 use leptos::prelude::*;
 use pl3xus_client::{use_sync_context, use_entity_component};
@@ -11,6 +13,10 @@ use fanuc_replica_types::*;
 use crate::pages::dashboard::use_system_entity;
 
 /// Joint Jog Panel - Jog individual joints with up/down buttons.
+///
+/// Speed and step values are displayed from the server's JogSettingsState
+/// but are read-only here. The server uses its own settings when processing
+/// jog commands. To change settings, use the Configuration panel.
 #[component]
 pub fn JointJogPanel() -> impl IntoView {
     let ctx = use_sync_context();
@@ -21,22 +27,6 @@ pub fn JointJogPanel() -> impl IntoView {
     let (joint_angles, _) = use_entity_component::<JointAngles, _>(move || system_ctx.robot_entity_id.get());
     let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
     let (jog_settings, _) = use_entity_component::<JogSettingsState, _>(move || system_ctx.robot_entity_id.get());
-
-    // Local string state for inputs (initialized from server state)
-    let (speed_str, set_speed_str) = signal(String::new());
-    let (step_str, set_step_str) = signal(String::new());
-    let (initialized, set_initialized) = signal(false);
-
-    // Initialize from server state when it becomes available
-    Effect::new(move |_| {
-        let settings = jog_settings.get();
-        // Only initialize once, don't overwrite user edits
-        if !initialized.get_untracked() && settings.joint_jog_speed > 0.0 {
-            set_speed_str.set(format!("{:.1}", settings.joint_jog_speed));
-            set_step_str.set(format!("{:.1}", settings.joint_jog_step));
-            set_initialized.set(true);
-        }
-    });
 
     // Robot connected state (only true if robot entity exists AND is connected)
     let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
@@ -52,9 +42,10 @@ pub fn JointJogPanel() -> impl IntoView {
     let get_angles = move || Some(joint_angles.get());
 
     // Send joint jog command for a specific joint
+    // Only sends axis and direction - server uses its own JogSettingsState for speed/step
     let send_joint_jog = {
         let ctx = ctx.clone();
-        move |joint_index: usize, direction: f32| {
+        move |joint_index: usize, direction: JogDirection| {
             if controls_disabled() {
                 return;
             }
@@ -62,7 +53,6 @@ pub fn JointJogPanel() -> impl IntoView {
                 leptos::logging::warn!("Cannot jog: Robot entity not found");
                 return;
             };
-            let step: f32 = step_str.get_untracked().parse().unwrap_or(1.0) * direction;
 
             // Create jog command for the specific joint
             let axis = match joint_index {
@@ -75,10 +65,11 @@ pub fn JointJogPanel() -> impl IntoView {
                 _ => return,
             };
 
-            ctx.send_targeted(entity_bits, JogRobot {
+            // Send targeted message with only axis and direction
+            // Server uses its own JogSettingsState for speed/step values
+            ctx.send_targeted(entity_bits, JogCommand {
                 axis,
-                distance: step,
-                speed: speed_str.get_untracked().parse().unwrap_or(10.0),
+                direction,
             });
         }
     };
@@ -93,28 +84,20 @@ pub fn JointJogPanel() -> impl IntoView {
                     </svg>
                     "Joint Jog"
                 </h3>
-                // Step and Speed inputs (text inputs for better decimal/negative handling)
+                // Step and Speed display (read-only from server's JogSettingsState)
                 <div class="flex items-center gap-2">
                     <div class="flex items-center gap-1">
-                        <label class="text-[8px] text-[#666666]">"Step:"</label>
-                        <input
-                            type="text"
-                            inputmode="decimal"
-                            class="w-12 bg-[#111111] border border-[#ffffff08] rounded px-1 py-0.5 text-white text-[9px] focus:border-[#00d9ff] focus:outline-none text-center"
-                            prop:value=move || step_str.get()
-                            on:input=move |ev| set_step_str.set(event_target_value(&ev))
-                        />
+                        <span class="text-[8px] text-[#666666]">"Step:"</span>
+                        <span class="w-12 bg-[#0a0a0a] border border-[#ffffff08] rounded px-1 py-0.5 text-white text-[9px] text-center font-mono">
+                            {move || format!("{:.1}", jog_settings.get().joint_jog_step)}
+                        </span>
                         <span class="text-[8px] text-[#666666]">"°"</span>
                     </div>
                     <div class="flex items-center gap-1">
-                        <label class="text-[8px] text-[#666666]">"Speed:"</label>
-                        <input
-                            type="text"
-                            inputmode="decimal"
-                            class="w-12 bg-[#111111] border border-[#ffffff08] rounded px-1 py-0.5 text-white text-[9px] focus:border-[#00d9ff] focus:outline-none text-center"
-                            prop:value=move || speed_str.get()
-                            on:input=move |ev| set_speed_str.set(event_target_value(&ev))
-                        />
+                        <span class="text-[8px] text-[#666666]">"Speed:"</span>
+                        <span class="w-12 bg-[#0a0a0a] border border-[#ffffff08] rounded px-1 py-0.5 text-white text-[9px] text-center font-mono">
+                            {move || format!("{:.1}", jog_settings.get().joint_jog_speed)}
+                        </span>
                         <span class="text-[8px] text-[#666666]">"°/s"</span>
                     </div>
                 </div>
@@ -152,6 +135,11 @@ pub fn JointJogPanel() -> impl IntoView {
                     }
                 }).collect_view()}
             </div>
+
+            // Link to Configuration panel
+            <div class="mt-2 text-center">
+                <a href="/dashboard/info" class="text-[8px] text-[#00d9ff] hover:underline">"Edit settings in Configuration →"</a>
+            </div>
         </div>
     }
 }
@@ -162,7 +150,7 @@ fn JointButton(
     joint_name: String,
     #[prop(into)] angle: Signal<f32>,
     #[prop(into)] disabled: Signal<bool>,
-    on_jog: impl Fn(f32) + 'static + Clone,
+    on_jog: impl Fn(JogDirection) + 'static + Clone,
 ) -> impl IntoView {
     let on_jog_up = on_jog.clone();
     let on_jog_down = on_jog;
@@ -180,7 +168,7 @@ fn JointButton(
             <button
                 class=button_class
                 disabled=disabled
-                on:click=move |_| on_jog_up(1.0)
+                on:click=move |_| on_jog_up(JogDirection::Positive)
                 title=format!("{} +", joint_name)
             >
                 "▲"
@@ -194,7 +182,7 @@ fn JointButton(
             <button
                 class=button_class
                 disabled=disabled
-                on:click=move |_| on_jog_down(-1.0)
+                on:click=move |_| on_jog_down(JogDirection::Negative)
                 title=format!("{} -", joint_name)
             >
                 "▼"

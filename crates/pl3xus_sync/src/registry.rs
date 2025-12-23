@@ -27,6 +27,13 @@ pub struct ComponentSyncConfig {
     ///
     /// If `None`, a generic "Mutations not allowed for this component" message is used.
     pub mutation_denied_message: Option<String>,
+
+    /// Whether this component has a custom mutation handler.
+    ///
+    /// When `true`, mutations are routed to a registered handler system instead of
+    /// being applied directly. The handler receives `ComponentMutation<T>` events
+    /// and is responsible for applying the mutation after any business logic.
+    pub has_mutation_handler: bool,
 }
 
 impl Default for ComponentSyncConfig {
@@ -35,6 +42,7 @@ impl Default for ComponentSyncConfig {
             max_updates_per_frame: None,
             allow_client_mutations: true,
             mutation_denied_message: None,
+            has_mutation_handler: false,
         }
     }
 }
@@ -66,6 +74,15 @@ impl ComponentSyncConfig {
     /// Set a custom message for when mutations are denied.
     pub fn with_denial_message(mut self, message: impl Into<String>) -> Self {
         self.mutation_denied_message = Some(message.into());
+        self
+    }
+
+    /// Mark this component as having a mutation handler.
+    ///
+    /// When enabled, mutations are routed to a handler system instead of
+    /// being applied directly.
+    pub fn with_mutation_handler(mut self) -> Self {
+        self.has_mutation_handler = true;
         self
     }
 }
@@ -202,6 +219,7 @@ impl ConflationQueue {
 }
 
 /// Per-type registration data stored in the [`SyncRegistry`].
+#[derive(Clone)]
 pub struct ComponentRegistration {
     pub type_id: std::any::TypeId,
     pub type_name: String,
@@ -213,6 +231,11 @@ pub struct ComponentRegistration {
     /// `(Entity, Component)` pairs for this component type, encoded as bincode
     /// bytes suitable for transmission over the wire.
     pub snapshot_all: fn(&mut World) -> Vec<(SerializableEntity, Vec<u8>)>,
+    /// Optional function to route mutations to a handler system.
+    ///
+    /// When `config.has_mutation_handler` is true, this function is called
+    /// to deserialize the mutation and send it as a `ComponentMutation<T>` event.
+    pub route_to_handler: Option<fn(&mut World, &QueuedMutation)>,
 }
 
 /// Registry of component types that participate in synchronization.
@@ -308,6 +331,147 @@ pub struct QueuedMutation {
     pub component_type: String,
     /// Full component value encoded as bincode bytes (v1 uses full replacement semantics).
     pub value: Vec<u8>,
+}
+
+// =============================================================================
+// Component Mutation Handlers
+// =============================================================================
+
+/// A typed component mutation event that can be read by handler systems.
+///
+/// When a component is registered with `with_handler()`, client mutations are
+/// routed to a handler system instead of being applied directly. The handler
+/// receives `ComponentMutation<T>` events and is responsible for:
+/// 1. Validating the mutation
+/// 2. Performing any side effects (e.g., calling external systems)
+/// 3. Applying the mutation to the component if appropriate
+/// 4. Responding to the client
+///
+/// # Example Handler
+///
+/// ```rust,ignore
+/// fn handle_frame_tool_mutation(
+///     mut mutations: MessageReader<ComponentMutation<FrameToolDataState>>,
+///     mut robots: Query<(&mut FrameToolDataState, &RobotDriver)>,
+/// ) {
+///     for mutation in mutations.read() {
+///         let new_state = mutation.new_value();
+///
+///         if let Ok((mut state, driver)) = robots.get_mut(mutation.entity()) {
+///             // Call external system
+///             if let Err(e) = driver.set_frame_tool(new_state.active_frame, new_state.active_tool) {
+///                 mutation.reject(&e.to_string());
+///                 continue;
+///             }
+///
+///             // Apply the mutation
+///             *state = new_state.clone();
+///             mutation.respond_ok();
+///         }
+///     }
+/// }
+/// ```
+#[derive(Clone, bevy::prelude::Message)]
+pub struct ComponentMutation<T: Component + Clone + Send + Sync + 'static> {
+    /// The connection that originated the mutation.
+    pub connection_id: pl3xus_common::ConnectionId,
+    /// Optional client-chosen correlation id for the response.
+    pub request_id: Option<u64>,
+    /// The target entity.
+    pub entity: Entity,
+    /// The new component value requested by the client.
+    pub new_value: T,
+}
+
+impl<T: Component + Clone + Send + Sync + 'static> ComponentMutation<T> {
+    /// Get the entity this mutation targets.
+    pub fn entity(&self) -> Entity {
+        self.entity
+    }
+
+    /// Get the new component value requested by the client.
+    pub fn new_value(&self) -> &T {
+        &self.new_value
+    }
+
+    /// Get the connection that originated this mutation.
+    pub fn connection_id(&self) -> pl3xus_common::ConnectionId {
+        self.connection_id
+    }
+
+    /// Get the request ID for correlation.
+    pub fn request_id(&self) -> Option<u64> {
+        self.request_id
+    }
+}
+
+/// Queue of pending component mutations that are routed to handlers.
+///
+/// Unlike `MutationQueue` which holds raw bytes for direct application,
+/// this holds typed mutations that have been deserialized and are waiting
+/// for a handler system to process them.
+#[derive(Resource, Default)]
+pub struct ComponentMutationQueue {
+    /// Pending handler-routed mutations stored as boxed trait objects.
+    /// Each entry is (component_type_name, boxed_mutation_data).
+    pub pending: Vec<(String, Box<dyn std::any::Any + Send + Sync>)>,
+}
+
+/// Pending mutation response that needs to be sent to the client.
+#[derive(Clone)]
+pub struct PendingMutationResponse {
+    pub connection_id: pl3xus_common::ConnectionId,
+    pub request_id: Option<u64>,
+    pub status: MutationStatus,
+    pub message: Option<String>,
+}
+
+/// Queue of mutation responses to be sent after handler processing.
+#[derive(Resource, Default)]
+pub struct MutationResponseQueue {
+    pub pending: Vec<PendingMutationResponse>,
+}
+
+impl MutationResponseQueue {
+    /// Queue a successful mutation response.
+    pub fn respond_ok(&mut self, connection_id: pl3xus_common::ConnectionId, request_id: Option<u64>) {
+        self.pending.push(PendingMutationResponse {
+            connection_id,
+            request_id,
+            status: MutationStatus::Ok,
+            message: None,
+        });
+    }
+
+    /// Queue an error mutation response.
+    pub fn respond_error(
+        &mut self,
+        connection_id: pl3xus_common::ConnectionId,
+        request_id: Option<u64>,
+        message: impl Into<String>,
+    ) {
+        self.pending.push(PendingMutationResponse {
+            connection_id,
+            request_id,
+            status: MutationStatus::ValidationError,
+            message: Some(message.into()),
+        });
+    }
+
+    /// Queue a forbidden mutation response.
+    pub fn respond_forbidden(
+        &mut self,
+        connection_id: pl3xus_common::ConnectionId,
+        request_id: Option<u64>,
+        message: impl Into<String>,
+    ) {
+        self.pending.push(PendingMutationResponse {
+            connection_id,
+            request_id,
+            status: MutationStatus::Forbidden,
+            message: Some(message.into()),
+        });
+    }
 }
 
 /// Context passed into a [`MutationAuthorizer`] when deciding whether to allow
@@ -540,6 +704,55 @@ where
         Err(_) => MutationStatus::NotFound,
     }
 }
+/// Route a mutation to a handler system by sending a `ComponentMutation<T>` event.
+///
+/// This function deserializes the mutation value and sends it as a typed event
+/// that handler systems can read via `MessageReader<ComponentMutation<T>>`.
+fn route_mutation_to_handler<T>(world: &mut World, mutation: &QueuedMutation)
+where
+    T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug + Clone,
+{
+    // Deserialize bincode bytes → concrete component type
+    let value: T = match bincode::serde::decode_from_slice(&mutation.value, bincode::config::standard()) {
+        Ok((v, _)) => v,
+        Err(err) => {
+            bevy::log::error!(
+                "[route_mutation_to_handler] Failed to deserialize {}: {:?}",
+                mutation.component_type,
+                err
+            );
+            // Queue an error response
+            if let Some(mut queue) = world.get_resource_mut::<MutationResponseQueue>() {
+                queue.respond_error(
+                    mutation.connection_id,
+                    mutation.request_id,
+                    format!("Failed to deserialize mutation: {:?}", err),
+                );
+            }
+            return;
+        }
+    };
+
+    let entity = mutation.entity.to_entity();
+
+    bevy::log::debug!(
+        "[route_mutation_to_handler] Routing mutation to handler: entity={:?}, type={}, value={:?}",
+        entity,
+        mutation.component_type,
+        value
+    );
+
+    // Send the typed mutation event
+    let event = ComponentMutation {
+        connection_id: mutation.connection_id,
+        request_id: mutation.request_id,
+        entity,
+        new_value: value,
+    };
+
+    world.write_message(event);
+}
+
 fn snapshot_typed<T>(world: &mut World) -> Vec<(SerializableEntity, Vec<u8>)>
 where
     T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
@@ -564,7 +777,7 @@ where
 #[cfg(feature = "runtime")]
 pub fn register_component<T>(app: &mut App, config: Option<ComponentSyncConfig>)
 where
-    T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug,
+    T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug + Clone,
 {
     // Register in SyncRegistry
     {
@@ -573,12 +786,19 @@ where
         // This ensures client and server use the same type identifier
         let full_type_name = std::any::type_name::<T>();
         let type_name = full_type_name.rsplit("::").next().unwrap_or(full_type_name).to_string();
+        let cfg = config.unwrap_or_default();
+        let has_handler = cfg.has_mutation_handler;
         registry.register_component(ComponentRegistration {
             type_id: std::any::TypeId::of::<T>(),
             type_name,
-            config: config.unwrap_or_default(),
+            config: cfg,
             apply_mutation: apply_typed_mutation::<T>,
             snapshot_all: snapshot_typed::<T>,
+            route_to_handler: if has_handler {
+                Some(route_mutation_to_handler::<T>)
+            } else {
+                None
+            },
         });
     }
 

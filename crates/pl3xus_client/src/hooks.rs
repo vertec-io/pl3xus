@@ -585,6 +585,163 @@ where
     use_entity_component_store(entity_id_fn)
 }
 
+// =============================================================================
+// Component Mutation Hooks
+// =============================================================================
+
+/// State of a component mutation request.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ComponentMutationState {
+    /// No mutation in progress.
+    Idle,
+    /// Mutation request sent, waiting for server response.
+    Pending,
+    /// Mutation succeeded.
+    Success,
+    /// Mutation failed with an error message.
+    Error(String),
+}
+
+/// Return type for `use_mut_component` hook.
+///
+/// This handle is `Copy`, so it can be used directly in multiple closures without cloning.
+pub struct MutComponentHandle<T: SyncComponent + Clone + Default + 'static> {
+    /// Current component value from server.
+    pub value: ReadSignal<T>,
+    /// Whether the entity exists.
+    pub exists: ReadSignal<bool>,
+    /// Current mutation state (as a Memo for derived reactivity).
+    pub mutation_state: Memo<ComponentMutationState>,
+    /// Stored mutate function (StoredValue is Copy).
+    mutate_fn: StoredValue<Box<dyn Fn(T) + Send + Sync>>,
+}
+
+impl<T: SyncComponent + Clone + Default + 'static> Clone for MutComponentHandle<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: SyncComponent + Clone + Default + 'static> Copy for MutComponentHandle<T> {}
+
+impl<T: SyncComponent + Clone + Default + 'static> MutComponentHandle<T> {
+    /// Send a mutation request to the server.
+    ///
+    /// The mutation will be processed by the server's mutation handler (if registered)
+    /// or applied directly. The `mutation_state` signal will update to reflect the
+    /// progress and result.
+    pub fn mutate(&self, new_value: T) {
+        self.mutate_fn.with_value(|f| f(new_value));
+    }
+}
+
+/// Hook to subscribe to a component with mutation capability.
+///
+/// This combines `use_entity_component` with mutation support, providing:
+/// - Current component value from server
+/// - Entity existence check
+/// - Mutation state tracking (Idle, Pending, Success, Error)
+/// - Mutation callback
+///
+/// # Type Parameters
+///
+/// - `T`: The component type (must implement `SyncComponent`)
+/// - `F`: Function returning the entity ID (reactive)
+///
+/// # Returns
+///
+/// A `MutComponentHandle<T>` with:
+/// - `value`: Current component value
+/// - `exists`: Whether the entity exists
+/// - `mutation_state`: Current mutation state
+/// - `mutate(new_value)`: Method to send mutation
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_client::use_mut_component;
+///
+/// #[component]
+/// fn JogSettingsEditor(robot_id: Signal<Option<u64>>) -> impl IntoView {
+///     let handle = use_mut_component::<JogSettings, _>(move || robot_id.get());
+///
+///     let on_apply = move |_| {
+///         let mut settings = handle.value.get();
+///         settings.speed = 50.0;
+///         handle.mutate(settings);
+///     };
+///
+///     view! {
+///         <Show when=move || handle.exists.get()>
+///             <div>"Speed: " {move || handle.value.get().speed}</div>
+///             <button
+///                 on:click=on_apply
+///                 disabled=move || matches!(handle.mutation_state.get(), ComponentMutationState::Pending)
+///             >
+///                 {move || match handle.mutation_state.get() {
+///                     ComponentMutationState::Pending => "Applying...".to_string(),
+///                     ComponentMutationState::Error(e) => format!("Error: {}", e),
+///                     _ => "Apply".to_string(),
+///                 }}
+///             </button>
+///         </Show>
+///     }
+/// }
+/// ```
+pub fn use_mut_component<T, F>(entity_id_fn: F) -> MutComponentHandle<T>
+where
+    T: SyncComponent + Clone + Default + 'static,
+    F: Fn() -> Option<u64> + Clone + 'static,
+{
+    let ctx = expect_context::<SyncContext>();
+    let (value, exists) = ctx.subscribe_entity_component::<T, F>(entity_id_fn.clone());
+    let mutations = ctx.mutations();
+
+    // Track the current mutation request ID
+    let (current_request_id, set_current_request_id) = signal(None::<u64>);
+
+    // Create a signal to track the entity ID (updated by effect)
+    let (entity_id_signal, set_entity_id) = signal(None::<u64>);
+    Effect::new(move |_| {
+        set_entity_id.set(entity_id_fn());
+    });
+
+    // Derive mutation state from the mutations signal
+    let mutation_state = Memo::new(move |_| {
+        match current_request_id.get() {
+            None => ComponentMutationState::Idle,
+            Some(req_id) => {
+                let mutations_map = mutations.get();
+                match mutations_map.get(&req_id) {
+                    None => ComponentMutationState::Pending,
+                    Some(state) => match &state.status {
+                        None => ComponentMutationState::Pending,
+                        Some(pl3xus_sync::MutationStatus::Ok) => ComponentMutationState::Success,
+                        Some(status) => ComponentMutationState::Error(
+                            state.message.clone().unwrap_or_else(|| format!("{:?}", status))
+                        ),
+                    },
+                }
+            }
+        }
+    });
+
+    // Create the mutate function and store it
+    let mutate_fn: Box<dyn Fn(T) + Send + Sync> = Box::new(move |new_value: T| {
+        if let Some(entity_id) = entity_id_signal.get_untracked() {
+            let request_id = ctx.mutate(entity_id, new_value);
+            set_current_request_id.set(Some(request_id));
+        }
+    });
+
+    MutComponentHandle {
+        value,
+        exists,
+        mutation_state,
+        mutate_fn: StoredValue::new(mutate_fn),
+    }
+}
+
 /// Hook to access the SyncContext directly.
 ///
 /// This provides access to the full SyncContext API, including mutation methods.

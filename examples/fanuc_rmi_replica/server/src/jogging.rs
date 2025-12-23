@@ -14,10 +14,14 @@ use crate::WebSocketProvider;
 /// This handler receives only messages that have passed authorization middleware.
 /// The middleware checks that the client has control of the target entity (System).
 /// No manual control check is needed here.
+///
+/// Speed and step values are read from the robot's JogSettingsState component,
+/// not from the client message. This ensures jog settings are tied to the robot
+/// entity, not the client, so any client that takes control uses the same settings.
 pub fn handle_authorized_jog_commands(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut events: MessageReader<AuthorizedTargetedMessage<JogCommand>>,
-    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
+    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, &JogSettingsState), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
@@ -27,14 +31,9 @@ pub fn handle_authorized_jog_commands(
         let cmd = &event.message;
         let target_entity = event.target_entity;
 
-        info!(
-            "Processing authorized JogCommand for entity {:?}: {:?} direction={:?} dist={} speed={}",
-            target_entity, cmd.axis, cmd.direction, cmd.distance, cmd.speed
-        );
-
         // Find a connected robot (in future, match by target_entity)
-        let Some((entity, _, driver)) = robot_query.iter()
-            .find(|(_, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
+        let Some((entity, _, driver, jog_settings)) = robot_query.iter()
+            .find(|(_, state, driver, _)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("Authorized jog rejected: No connected robot");
             continue;
@@ -42,13 +41,31 @@ pub fn handle_authorized_jog_commands(
 
         let driver = driver.expect("Checked above");
 
+        // Get speed and step from the robot's JogSettingsState
+        let (speed, step) = match cmd.axis {
+            JogAxis::W | JogAxis::P | JogAxis::R => {
+                (jog_settings.rotation_jog_speed, jog_settings.rotation_jog_step)
+            }
+            JogAxis::J1 | JogAxis::J2 | JogAxis::J3 | JogAxis::J4 | JogAxis::J5 | JogAxis::J6 => {
+                (jog_settings.joint_jog_speed, jog_settings.joint_jog_step)
+            }
+            _ => {
+                (jog_settings.cartesian_jog_speed, jog_settings.cartesian_jog_step)
+            }
+        };
+
+        info!(
+            "Processing authorized JogCommand for entity {:?}: {:?} direction={:?} (using server settings: step={}, speed={})",
+            target_entity, cmd.axis, cmd.direction, step, speed
+        );
+
         // Build position delta (PositionDto uses f32)
         let mut pos = raw_dto::Position {
             x: 0.0, y: 0.0, z: 0.0,
             w: 0.0, p: 0.0, r: 0.0,
             ext1: 0.0, ext2: 0.0, ext3: 0.0,
         };
-        let dist = if cmd.direction == JogDirection::Positive { cmd.distance as f64 } else { -(cmd.distance as f64) };
+        let dist = if cmd.direction == JogDirection::Positive { step } else { -step };
 
         match cmd.axis {
             JogAxis::X => pos.x = dist,
@@ -75,7 +92,7 @@ pub fn handle_authorized_jog_commands(
             },
             position: pos,
             speed_type: SpeedType::MMSec.into(),
-            speed: cmd.speed as f64,
+            speed,
             term_type: TermType::FINE.into(), // Use FINE for step moves
             term_value: 1,
         });
@@ -504,4 +521,71 @@ pub fn handle_set_speed_override(
             }
         }
     }
+}
+
+/// Handle JogSettingsState component mutations.
+///
+/// This handler is called when a client mutates the JogSettingsState component.
+/// It validates the new settings and applies them to the robot entity.
+/// The mutation response is sent back to the client via MutationResponseQueue.
+pub fn handle_jog_settings_mutation(
+    mut events: MessageReader<pl3xus_sync::ComponentMutation<JogSettingsState>>,
+    mut jog_settings_query: Query<&mut JogSettingsState, With<FanucRobot>>,
+    mut response_queue: ResMut<pl3xus_sync::MutationResponseQueue>,
+) {
+    for event in events.read() {
+        let new_settings = &event.new_value;
+
+        // Validate settings
+        let validation_error = validate_jog_settings(new_settings);
+
+        if let Some(error) = validation_error {
+            // Send error response
+            response_queue.respond_error(event.connection_id, event.request_id, error);
+            continue;
+        }
+
+        // Apply the new settings to the robot entity
+        if let Ok(mut settings) = jog_settings_query.get_mut(event.entity) {
+            *settings = new_settings.clone();
+
+            info!(
+                "JogSettingsState updated for entity {:?}: cart_speed={}, cart_step={}, joint_speed={}, joint_step={}",
+                event.entity,
+                new_settings.cartesian_jog_speed,
+                new_settings.cartesian_jog_step,
+                new_settings.joint_jog_speed,
+                new_settings.joint_jog_step
+            );
+
+            // Send success response
+            response_queue.respond_ok(event.connection_id, event.request_id);
+        } else {
+            // Entity not found or doesn't have JogSettingsState
+            response_queue.respond_error(event.connection_id, event.request_id, "Robot entity not found");
+        }
+    }
+}
+
+/// Validate jog settings values.
+fn validate_jog_settings(settings: &JogSettingsState) -> Option<String> {
+    if settings.cartesian_jog_speed <= 0.0 || settings.cartesian_jog_speed > 1000.0 {
+        return Some("Cartesian jog speed must be between 0 and 1000 mm/s".to_string());
+    }
+    if settings.cartesian_jog_step <= 0.0 || settings.cartesian_jog_step > 100.0 {
+        return Some("Cartesian jog step must be between 0 and 100 mm".to_string());
+    }
+    if settings.joint_jog_speed <= 0.0 || settings.joint_jog_speed > 100.0 {
+        return Some("Joint jog speed must be between 0 and 100 °/s".to_string());
+    }
+    if settings.joint_jog_step <= 0.0 || settings.joint_jog_step > 90.0 {
+        return Some("Joint jog step must be between 0 and 90 °".to_string());
+    }
+    if settings.rotation_jog_speed <= 0.0 || settings.rotation_jog_speed > 100.0 {
+        return Some("Rotation jog speed must be between 0 and 100 °/s".to_string());
+    }
+    if settings.rotation_jog_step <= 0.0 || settings.rotation_jog_step > 90.0 {
+        return Some("Rotation jog step must be between 0 and 90 °".to_string());
+    }
+    None
 }

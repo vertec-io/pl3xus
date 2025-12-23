@@ -67,6 +67,11 @@ pub use registry::{
     MutationAuthorizerResource,
     ServerOnlyMutationAuthorizer,
     has_control_hierarchical,
+    // Component mutation handler types
+    ComponentMutation,
+    ComponentMutationQueue,
+    MutationResponseQueue,
+    PendingMutationResponse,
 };
 #[cfg(feature = "runtime")]
 pub use subscription::*;
@@ -151,19 +156,157 @@ pub trait AppPl3xusSyncExt {
     /// Register a component type `T` to be synchronized with remote clients.
     ///
     /// This is the only call most applications need to make per component type.
+    ///
+    /// # Deprecated
+    ///
+    /// Prefer using `sync_component_builder::<T>()` for new code, which provides
+    /// a builder pattern with better ergonomics.
     fn sync_component<T>(&mut self, config: Option<ComponentSyncConfig>) -> &mut Self
     where
-        T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug;
+        T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug + Clone;
+
+    /// Start building a component synchronization registration.
+    ///
+    /// Returns a builder that allows configuring the component sync with a fluent API.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// // Basic registration (read-write, no handler)
+    /// app.sync_component_builder::<Position>().build();
+    ///
+    /// // Read-only component
+    /// app.sync_component_builder::<RobotStatus>()
+    ///     .read_only()
+    ///     .build();
+    ///
+    /// // Component with mutation handler
+    /// app.sync_component_builder::<FrameToolDataState>()
+    ///     .with_handler::<WebSocketProvider>(handle_frame_tool_mutation)
+    ///     .build();
+    /// ```
+    fn sync_component_builder<T>(&mut self) -> SyncComponentBuilder<'_, T>
+    where
+        T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug + Clone;
 }
 
 #[cfg(feature = "runtime")]
 impl AppPl3xusSyncExt for App {
     fn sync_component<T>(&mut self, config: Option<ComponentSyncConfig>) -> &mut Self
     where
-        T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug,
+        T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug + Clone,
     {
         registry::register_component::<T>(self, config);
         self
+    }
+
+    fn sync_component_builder<T>(&mut self) -> SyncComponentBuilder<'_, T>
+    where
+        T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug + Clone,
+    {
+        SyncComponentBuilder::new(self)
+    }
+}
+
+/// Builder for configuring component synchronization.
+///
+/// Created by [`AppPl3xusSyncExt::sync_component_builder`].
+#[cfg(feature = "runtime")]
+pub struct SyncComponentBuilder<'a, T>
+where
+    T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug + Clone,
+{
+    app: &'a mut App,
+    config: ComponentSyncConfig,
+    _marker: std::marker::PhantomData<T>,
+}
+
+#[cfg(feature = "runtime")]
+impl<'a, T> SyncComponentBuilder<'a, T>
+where
+    T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug + Clone,
+{
+    fn new(app: &'a mut App) -> Self {
+        Self {
+            app,
+            config: ComponentSyncConfig::default(),
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    /// Make this component read-only (clients cannot mutate).
+    pub fn read_only(mut self) -> Self {
+        self.config.allow_client_mutations = false;
+        self
+    }
+
+    /// Set a custom denial message for when mutations are rejected.
+    pub fn with_denial_message(mut self, message: impl Into<String>) -> Self {
+        self.config.mutation_denied_message = Some(message.into());
+        self
+    }
+
+    /// Register a mutation handler for this component.
+    ///
+    /// When a handler is registered, client mutations are routed to the handler
+    /// system instead of being applied directly. The handler receives
+    /// `ComponentMutation<T>` events via `MessageReader` and is responsible for:
+    ///
+    /// 1. Validating the mutation
+    /// 2. Performing any side effects (e.g., calling external systems)
+    /// 3. Applying the mutation to the component if appropriate
+    /// 4. Responding to the client via `MutationResponseQueue`
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// fn handle_frame_tool_mutation(
+    ///     mut mutations: MessageReader<ComponentMutation<FrameToolDataState>>,
+    ///     mut robots: Query<(&mut FrameToolDataState, &RobotDriver)>,
+    ///     mut responses: ResMut<MutationResponseQueue>,
+    /// ) {
+    ///     for mutation in mutations.read() {
+    ///         let new_state = mutation.new_value();
+    ///
+    ///         if let Ok((mut state, driver)) = robots.get_mut(mutation.entity()) {
+    ///             if let Err(e) = driver.set_frame_tool(new_state.active_frame, new_state.active_tool) {
+    ///                 responses.respond_error(mutation.connection_id(), mutation.request_id(), e.to_string());
+    ///                 continue;
+    ///             }
+    ///
+    ///             *state = new_state.clone();
+    ///             responses.respond_ok(mutation.connection_id(), mutation.request_id());
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// app.sync_component_builder::<FrameToolDataState>()
+    ///     .with_handler::<WebSocketProvider>(handle_frame_tool_mutation)
+    ///     .build();
+    /// ```
+    pub fn with_handler<NP, S, M>(mut self, handler: S) -> Self
+    where
+        NP: NetworkProvider,
+        S: bevy::ecs::schedule::IntoScheduleConfigs<bevy::ecs::system::ScheduleSystem, M>,
+    {
+        self.config.has_mutation_handler = true;
+
+        // Register the ComponentMutation<T> message type so handlers can read it
+        self.app.add_message::<ComponentMutation<T>>();
+
+        // Add the handler system in the appropriate set
+        self.app.add_systems(
+            Update,
+            handler,
+        );
+
+        self
+    }
+
+    /// Finalize the registration and apply the configuration.
+    pub fn build(self) -> &'a mut App {
+        registry::register_component::<T>(self.app, Some(self.config));
+        self.app
     }
 }
 

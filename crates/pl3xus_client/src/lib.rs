@@ -138,6 +138,8 @@ pub use hooks::{
     use_query, use_query_keyed, use_query_targeted, QueryHandle, QueryState,
     // Query client for global query management
     use_query_client, QueryClient,
+    // Component mutation hooks (for synced components with server-side handlers)
+    use_mut_component, MutComponentHandle, ComponentMutationState,
 };
 
 // Deprecated hook names (for backwards compatibility)

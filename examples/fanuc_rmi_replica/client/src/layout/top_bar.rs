@@ -5,7 +5,7 @@
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
 
-use pl3xus_client::{use_entity_component, use_sync_context, use_connection, use_query_keyed, use_message, ControlRequest, ControlResponse, EntityControl, ConnectionReadyState};
+use pl3xus_client::{use_entity_component, use_sync_context, use_connection, use_query_keyed, use_message, use_request, ControlRequest, ControlResponse, EntityControl, ConnectionReadyState};
 use fanuc_replica_types::*;
 use crate::pages::dashboard::use_system_entity;
 
@@ -16,17 +16,18 @@ pub fn TopBar() -> impl IntoView {
     let connection = use_connection();
     let system_ctx = use_system_entity();
 
-    // Subscribe to the active system's connection state
-    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    // Subscribe to the robot's connection state (ConnectionState lives on robot entity, not system)
+    let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
 
     // WebSocket connection state from connection
     let ws_connected = Signal::derive(move || connection.ready_state.get() == ConnectionReadyState::Open);
     let ws_connecting = Signal::derive(move || connection.ready_state.get() == ConnectionReadyState::Connecting);
 
-    // Robot connection state from synced component
-    let robot_connected = move || connection_state.get().robot_connected;
-    let robot_connecting = move || connection_state.get().robot_connecting;
+    // Robot connection state from synced component (only valid if robot entity exists)
+    let robot_connected = move || robot_exists.get() && connection_state.get().robot_connected;
+    let robot_connecting = move || robot_exists.get() && connection_state.get().robot_connecting;
     let connected_robot_name = move || {
+        if !robot_exists.get() { return None; }
         let state = connection_state.get();
         if state.robot_connected { Some(state.robot_name.clone()) } else { None }
     };
@@ -125,7 +126,8 @@ pub fn TopBar() -> impl IntoView {
 #[component]
 fn ConnectionDropdown() -> impl IntoView {
     let system_ctx = use_system_entity();
-    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    // ConnectionState lives on robot entity, not system entity
+    let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
     let (dropdown_open, set_dropdown_open) = signal(false);
 
     // Use query that only fetches when dropdown is open
@@ -138,8 +140,8 @@ fn ConnectionDropdown() -> impl IntoView {
         set_dropdown_open.set(!dropdown_open.get_untracked());
     };
 
-    let is_robot_connected = move || connection_state.get().robot_connected;
-    let robot_addr = move || connection_state.get().robot_addr.clone();
+    let is_robot_connected = move || robot_exists.get() && connection_state.get().robot_connected;
+    let robot_addr = move || if robot_exists.get() { connection_state.get().robot_addr.clone() } else { String::new() };
 
     view! {
         <div class="relative">
@@ -336,7 +338,8 @@ fn QuickSettingsButton() -> impl IntoView {
     let system_ctx = use_system_entity();
 
     // Subscribe to entity-specific components
-    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    // ConnectionState lives on robot entity, EntityControl lives on system entity
+    let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
     let (control_state, _) = use_entity_component::<EntityControl, _>(move || system_ctx.system_entity_id.get());
 
     let (show_popup, set_show_popup) = signal(false);
@@ -347,13 +350,14 @@ fn QuickSettingsButton() -> impl IntoView {
         if show_popup.get() { Some(ListRobotConnections) } else { None }
     });
 
-    let robot_connected = move || connection_state.get().robot_connected;
-    let robot_connecting = move || connection_state.get().robot_connecting;
+    let robot_connected = move || robot_exists.get() && connection_state.get().robot_connected;
+    let robot_connecting = move || robot_exists.get() && connection_state.get().robot_connecting;
     let connected_robot_name = move || {
+        if !robot_exists.get() { return None; }
         let state = connection_state.get();
         if state.robot_connected { Some(state.robot_name.clone()) } else { None }
     };
-    let active_connection_id = move || connection_state.get().active_connection_id;
+    let active_connection_id = move || if robot_exists.get() { connection_state.get().active_connection_id } else { None };
 
     // Check if THIS client has control by comparing EntityControl.client_id with our own connection ID
     let has_control = move || {
@@ -540,7 +544,50 @@ fn SavedConnectionsList(
 ) -> impl IntoView {
     let ctx = use_sync_context();
 
+    // Use request/response pattern for ConnectToRobot
+    let (send_connect, connect_state) = use_request::<ConnectToRobot>();
+
+    // Track which connection we're trying to connect to (for showing loading state per-button)
+    let (connecting_to_id, set_connecting_to_id) = signal::<Option<i64>>(None);
+
+    // Track error message to display
+    let (error_message, set_error_message) = signal::<Option<String>>(None);
+
+    // Effect to handle response state changes
+    // Only process when we're actively connecting (connecting_to_id is set)
+    Effect::new(move |_| {
+        // Only process responses when we're actively waiting for one
+        if connecting_to_id.get().is_none() {
+            return;
+        }
+
+        let state = connect_state.get();
+        if let Some(response) = state.data {
+            if response.success {
+                // Success! Close the popup
+                set_show_popup.set(false);
+                set_connecting_to_id.set(None);
+                set_error_message.set(None);
+            } else if let Some(err) = response.error {
+                // Server returned an error in the response
+                set_error_message.set(Some(err));
+                set_connecting_to_id.set(None);
+            }
+        } else if let Some(err) = state.error {
+            // Network/transport error
+            set_error_message.set(Some(err));
+            set_connecting_to_id.set(None);
+        }
+    });
+
     view! {
+        // Show error message if any
+        {move || error_message.get().map(|err| view! {
+            <div class="text-[9px] text-[#ff4444] bg-[#ff444420] p-1.5 rounded mb-2">
+                {err}
+            </div>
+        })}
+
         {move || {
             if robots_query.is_loading() {
                 return view! {
@@ -564,15 +611,20 @@ fn SavedConnectionsList(
                     let conn_name = conn.name.clone();
                     let conn_addr = format!("{}:{}", conn.ip_address, conn.port);
                     let is_active = move || active_connection_id.get() == Some(conn_id);
+                    // Check if we're currently connecting to THIS specific connection
+                    let is_connecting_to_this = move || connecting_to_id.get() == Some(conn_id);
                     // Require control to connect - control = ownership of the apparatus/system
-                    let can_connect = move || has_control.get() && !is_active();
+                    let can_connect = move || has_control.get() && !is_active() && !robot_connecting.get() && connecting_to_id.get().is_none();
                     let ctx = ctx.clone();
+                    let send_connect = send_connect.clone();
 
                     view! {
                         <div class={move || {
                             let base = "flex items-center justify-between p-1.5 rounded";
                             if is_active() {
                                 format!("{} bg-[#22c55e15] border border-[#22c55e40]", base)
+                            } else if is_connecting_to_this() {
+                                format!("{} bg-[#00d9ff10] border border-[#00d9ff40]", base)
                             } else {
                                 format!("{} bg-[#ffffff05] hover:bg-[#ffffff08]", base)
                             }
@@ -583,6 +635,7 @@ fn SavedConnectionsList(
                             </div>
                             {move || {
                                 let ctx = ctx.clone();
+                                let send_connect = send_connect.clone();
                                 if is_active() {
                                     // Show disconnect button for active connection
                                     view! {
@@ -597,35 +650,43 @@ fn SavedConnectionsList(
                                             "Disconnect"
                                         </button>
                                     }.into_any()
+                                } else if is_connecting_to_this() {
+                                    // Show connecting state for this specific connection
+                                    view! {
+                                        <span class="text-[8px] px-2 py-0.5 text-[#00d9ff] animate-pulse">
+                                            "Connecting..."
+                                        </span>
+                                    }.into_any()
                                 } else {
                                     // Show connect button for other connections - requires control
                                     view! {
                                         <button
                                             class="text-[8px] px-2 py-0.5 bg-[#00d9ff20] text-[#00d9ff] rounded hover:bg-[#00d9ff30] disabled:opacity-50 disabled:cursor-not-allowed"
-                                            disabled=move || !can_connect() || robot_connecting.get()
+                                            disabled=move || !can_connect()
                                             title=move || {
-                                                if robot_connecting.get() {
-                                                    "Connecting..."
+                                                if robot_connecting.get() || connecting_to_id.get().is_some() {
+                                                    "Another connection in progress"
                                                 } else if !has_control.get() {
                                                     "Need control to connect"
                                                 } else {
                                                     "Connect to this robot"
                                                 }
                                             }
-                                            on:click={
-                                                let ctx = ctx.clone();
-                                                move |_| {
-                                                    ctx.send(ConnectToRobot {
-                                                        connection_id: Some(conn_id),
-                                                        addr: String::new(),
-                                                        port: 0,
-                                                        name: None,
-                                                    });
-                                                    set_show_popup.set(false);
-                                                }
+                                            on:click=move |_| {
+                                                // Clear any previous error
+                                                set_error_message.set(None);
+                                                // Track which connection we're connecting to
+                                                set_connecting_to_id.set(Some(conn_id));
+                                                // Send the request (don't close popup - wait for response)
+                                                send_connect(ConnectToRobot {
+                                                    connection_id: Some(conn_id),
+                                                    addr: String::new(),
+                                                    port: 0,
+                                                    name: None,
+                                                });
                                             }
                                         >
-                                            {move || if robot_connecting.get() { "Connecting..." } else { "Connect" }}
+                                            "Connect"
                                         </button>
                                     }.into_any()
                                 }
@@ -862,40 +923,48 @@ pub fn ConnectionStateHandler() -> impl IntoView {
     let toast = crate::components::use_toast();
     let system_ctx = use_system_entity();
 
-    // Subscribe to entity-specific connection state
-    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    // Subscribe to robot's connection state (ConnectionState lives on robot entity)
+    let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
 
     // Track previous state to detect transitions
-    // (was_connecting, was_connected, robot_name)
-    let prev_state = StoredValue::new((false, false, String::new()));
+    // (robot_existed, was_connecting, was_connected, robot_name)
+    let prev_state = StoredValue::new((false, false, false, String::new()));
 
     Effect::new(move |_| {
+        let exists = robot_exists.get();
         let current = connection_state.get();
 
-        let (is_connecting, is_connected, robot_name) = (
-            current.robot_connecting,
-            current.robot_connected,
-            current.robot_name.clone(),
-        );
+        let (is_connecting, is_connected, robot_name) = if exists {
+            (current.robot_connecting, current.robot_connected, current.robot_name.clone())
+        } else {
+            (false, false, String::new())
+        };
 
-        let (was_connecting, was_connected, prev_name) = prev_state.get_value();
+        let (prev_existed, was_connecting, was_connected, prev_name) = prev_state.get_value();
 
-        // Detect state transitions
-        if was_connecting && !is_connecting && !is_connected {
-            // Was connecting, now not connecting and not connected = connection failed
-            toast.error("Failed to connect to robot");
-        } else if was_connecting && is_connected {
-            // Was connecting, now connected = success
-            let name = if robot_name.is_empty() { "Robot".to_string() } else { robot_name.clone() };
-            toast.success(format!("Connected to {}", name));
-        } else if was_connected && !is_connected && !is_connecting {
-            // Was connected, now disconnected = connection lost or intentional disconnect
+        // Detect state transitions (only when robot entity exists or just disappeared)
+        if prev_existed && exists {
+            // Robot entity exists in both states - check connection state transitions
+            if was_connecting && !is_connecting && !is_connected {
+                // Was connecting, now not connecting and not connected = connection failed
+                toast.error("Failed to connect to robot");
+            } else if was_connecting && is_connected {
+                // Was connecting, now connected = success
+                let name = if robot_name.is_empty() { "Robot".to_string() } else { robot_name.clone() };
+                toast.success(format!("Connected to {}", name));
+            } else if was_connected && !is_connected && !is_connecting {
+                // Was connected, now disconnected = connection lost or intentional disconnect
+                let name = if prev_name.is_empty() { "Robot".to_string() } else { prev_name };
+                toast.info(format!("Disconnected from {}", name));
+            }
+        } else if prev_existed && !exists && was_connected {
+            // Robot entity was despawned while connected - show disconnect message
             let name = if prev_name.is_empty() { "Robot".to_string() } else { prev_name };
             toast.info(format!("Disconnected from {}", name));
         }
 
         // Update previous state
-        prev_state.set_value((is_connecting, is_connected, robot_name));
+        prev_state.set_value((exists, is_connecting, is_connected, robot_name));
     });
 
     view! {}

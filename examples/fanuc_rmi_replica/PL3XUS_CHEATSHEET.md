@@ -2,6 +2,8 @@
 
 Quick reference for pl3xus client hooks and patterns. The pl3xus framework provides a reactive synchronization layer between a Bevy server and Leptos clients.
 
+**Last Updated**: December 2025
+
 ## Core Philosophy
 
 1. **Server is the SINGLE SOURCE OF TRUTH** for all system state
@@ -11,26 +13,53 @@ Quick reference for pl3xus client hooks and patterns. The pl3xus framework provi
 
 ## Quick Reference Table
 
+### Primary Hooks (Use These)
+
 | Hook | Returns | Use Case |
 |------|---------|----------|
-| `use_sync_component::<T>()` | `ReadSignal<HashMap<u64, T>>` | Read all entities with component T |
-| `use_sync_component_store::<T>()` | `Store<HashMap<u64, T>>` | Fine-grained reactivity for component T |
-| `use_sync_component_where::<T, F>(filter)` | `Signal<HashMap<u64, T>>` | Filtered subset of entities |
-| `use_sync_entity::<T>(id)` | `Signal<Option<T>>` | Read single entity's component |
-| `use_sync_message::<T>()` | `ReadSignal<T>` | Broadcast messages from server |
-| `use_sync_message_store::<T>()` | `Store<T>` | Fine-grained broadcast message access |
-| `use_request::<R>()` | `(impl Fn(R), Signal<UseRequestState<R::Response>>)` | Request/response with loading state |
+| `use_entity_component::<T, _>(entity_id_fn)` | `(Signal<T>, Signal<bool>)` | Subscribe to specific entity's component |
+| `use_components::<T>()` | `ReadSignal<HashMap<u64, T>>` | Read all entities with component T |
+| `use_query::<R>()` | `QueryHandle<R>` | Cached query, auto-refetches on invalidation |
+| `use_query_keyed::<R, K>(key_fn)` | `QueryHandle<R>` | Keyed query (null key skips fetch) |
+| `use_mutation::<R>(callback)` | `MutationHandle<R>` | Fire-and-forget with response handler |
+| `use_mutation_targeted::<R>(callback)` | `TargetedMutationHandle<R>` | Entity-targeted mutation with auth |
+| `use_send_targeted::<M>()` | `impl Fn(u64, M)` | Send targeted message (fire-and-forget) |
+| `use_request::<R>()` | `(impl Fn(R), UseRequestState<R>)` | Low-level request (prefer use_query/use_mutation) |
+
+### Secondary Hooks
+
+| Hook | Returns | Use Case |
+|------|---------|----------|
+| `use_component_store::<T>()` | `Store<HashMap<u64, T>>` | Fine-grained reactivity for component T |
 | `use_sync_context()` | `SyncContext` | Raw access to send/mutate methods |
-| `use_sync_field_editor(...)` | `(NodeRef, RwSignal, String, Fn, Fn)` | Editable fields with focus retention |
 | `use_sync_connection()` | `SyncConnection` | WebSocket connection control |
-| `use_sync_mutations()` | `ReadSignal<HashMap<u64, MutationState>>` | Track mutation statuses |
-| `use_sync_untracked(append_fn)` | `(Signal<TFull>, Signal<Option<TIncremental>>)` | Log-style incremental appending |
 
 ## Reading Server State
 
-### Read All Entities (Atomic Reactivity)
+### Read Specific Entity's Component (Preferred Pattern)
 ```rust
-let positions = use_sync_component::<RobotPosition>();
+let system_ctx = use_system_entity();
+
+// Subscribe to the active robot's position
+let (position, robot_exists) = use_entity_component::<RobotPosition, _>(
+    move || system_ctx.robot_entity_id.get()
+);
+
+// Always check robot_exists before accessing component data
+let robot_ready = Memo::new(move |_| {
+    robot_exists.get() && connection_state.get().robot_connected
+});
+
+view! {
+    <Show when=move || robot_exists.get()>
+        <p>"X: " {move || position.get().x}</p>
+    </Show>
+}
+```
+
+### Read All Entities of a Type
+```rust
+let positions = use_components::<RobotPosition>();
 
 view! {
     <For
@@ -41,86 +70,116 @@ view! {
 }
 ```
 
-### Read All Entities (Fine-Grained Reactivity)
+### Fine-Grained Reactivity (Store)
 ```rust
-let positions = use_sync_component_store::<RobotPosition>();
+let positions = use_component_store::<RobotPosition>();
 
 // Only re-renders when THIS entity's position changes
 view! { <p>{move || positions.read().get(&entity_id).map(|p| p.x)}</p> }
 ```
 
-### Read Single Entity
-```rust
-let config = use_sync_entity::<MicrowaveConfig>(entity_id);
+## Queries (Cached Data with Server Invalidation)
 
-view! { <p>{move || config.get().map(|c| c.power_enabled.to_string())}</p> }
+### Simple Query (Auto-fetches on mount)
+```rust
+let programs = use_query::<ListPrograms>();
+
+view! {
+    <Show when=move || programs.is_loading()>
+        <p>"Loading..."</p>
+    </Show>
+    {move || programs.data().map(|data| view! {
+        <ul>
+            {data.programs.iter().map(|p| view! { <li>{&p.name}</li> }).collect_view()}
+        </ul>
+    })}
+    {move || programs.error().map(|e| view! { <p class="text-red-500">{e}</p> })}
+}
 ```
 
-### Filtered Entities
+### Keyed Query (Conditional fetching)
 ```rust
-let active_positions = use_sync_component_where::<Position, _>(|pos| pos.x > 100.0);
-```
-
-### Derive Memos from Synced State (Common Pattern)
-```rust
-let exec_state = use_sync_component::<ExecutionState>();
-
-let is_running = Memo::new(move |_| {
-    exec_state.get().values().next().map(|s| s.running).unwrap_or(false)
+// Only fetches when key returns Some
+let program = use_query_keyed::<GetProgram, _>(move || {
+    selected_id.get().map(|id| GetProgram { id })
 });
 
-let loaded_program = Memo::new(move |_| {
-    exec_state.get().values().next().and_then(|s| s.loaded_program_name.clone())
+// Refetches automatically when selected_id changes
+// Refetches when server sends QueryInvalidation for GetProgram with matching key
+```
+
+### Query Handle API
+```rust
+let query = use_query::<ListPrograms>();
+
+query.is_loading()      // bool - request in flight
+query.data()            // Option<&Response> - cached data
+query.error()           // Option<String> - error message
+query.refetch()         // Force refetch
+query.is_stale()        // bool - data marked stale by server
+```
+
+## Mutations (Commands with Response Handling)
+
+### Simple Mutation
+```rust
+let toast = use_toast();
+
+let create_program = use_mutation::<CreateProgram>(move |result| {
+    match result {
+        Ok(r) if r.success => toast.success("Program created!"),
+        Ok(r) => toast.error(format!("Failed: {}", r.error.unwrap_or_default())),
+        Err(e) => toast.error(format!("Error: {e}")),
+    }
 });
+
+// Call the mutation
+create_program.send(CreateProgram { name: "MyProgram".into() });
 ```
 
-## Sending Messages to Server
-
-### Fire-and-Forget (One-Way)
+### Targeted Mutation (Entity-specific with authorization)
 ```rust
-let ctx = use_sync_context();
+let system_ctx = use_system_entity();
+let toast = use_toast();
 
-let init = move |_| {
-    ctx.send(InitializeRobot { group_mask: Some(1) });
-};
+let set_speed = use_mutation_targeted::<SetSpeedOverride>(move |result| {
+    match result {
+        Ok(r) if r.success => toast.success("Speed updated"),
+        Ok(r) => toast.error(r.error.unwrap_or_default()),
+        Err(e) => toast.error(format!("{e}")),
+    }
+});
 
-view! { <button on:click=init>"Initialize"</button> }
+// Send to specific entity
+if let Some(robot_id) = system_ctx.robot_entity_id.get() {
+    set_speed.send(robot_id, SetSpeedOverride { value: 50.0 });
+}
 ```
 
-### Mutate Component (Optimistic Update)
-```rust
-let ctx = use_sync_context();
+## Targeted Messages (Fire-and-Forget)
 
-let toggle_power = move |_| {
-    if let Some(config) = server_config.get_untracked() {
-        ctx.mutate(entity_id, MicrowaveConfig {
-            power_enabled: !config.power_enabled,
-            ..config
-        });
+### Send to Specific Entity
+```rust
+let system_ctx = use_system_entity();
+let send_jog = use_send_targeted::<JogCommand>();
+
+let on_jog = move |direction| {
+    if let Some(robot_id) = system_ctx.robot_entity_id.get() {
+        send_jog(robot_id, JogCommand { direction, speed: 10.0 });
     }
 };
 ```
 
-### Request/Response Pattern
+## Low-Level Request (Prefer use_query/use_mutation)
+
+### use_request (for imperative polling patterns)
 ```rust
-let (fetch, state) = use_request::<ListPrograms>();
+// Only use for imperative triggers like "refresh I/O data"
+let (fetch_io, io_state) = use_request::<GetIOData>();
 
-Effect::new(move |_| {
-    fetch(ListPrograms); // Fetch on mount
-});
-
-view! {
-    <Show when=move || state.get().is_loading()>
-        <p>"Loading..."</p>
-    </Show>
-    <Show when=move || state.get().data.is_some()>
-        <ul>
-            {move || state.get().data.unwrap_or_default().programs.iter().map(|p| {
-                view! { <li>{&p.name}</li> }
-            }).collect::<Vec<_>>()}
-        </ul>
-    </Show>
-}
+// Trigger on button click (not auto-fetching)
+let refresh = move |_| fetch_io(GetIOData { robot_id });
+```
 ```
 
 ## Receiving Broadcast Messages
@@ -235,6 +294,28 @@ view! {
 
 ## Common Anti-Patterns to Avoid
 
+### ❌ WRONG: Subscribing to wrong entity
+```rust
+// DON'T subscribe to ConnectionState on the system entity
+// ConnectionState lives on the ROBOT entity!
+let (connection_state, _) = use_entity_component::<ConnectionState, _>(
+    move || system_ctx.system_entity_id.get()  // ❌ WRONG!
+);
+```
+
+### ✅ CORRECT: Subscribe to the right entity
+```rust
+// ConnectionState, RobotStatus, RobotPosition all live on the robot entity
+let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(
+    move || system_ctx.robot_entity_id.get()  // ✅ Correct
+);
+
+// Always check robot_exists before accessing state
+let robot_connected = Memo::new(move |_| {
+    robot_exists.get() && connection_state.get().robot_connected
+});
+```
+
 ### ❌ WRONG: Copying server state to local signals
 ```rust
 // DON'T DO THIS - duplicates server state
@@ -250,8 +331,32 @@ Effect::new(move |_| {
 ### ✅ CORRECT: Derive from synced state
 ```rust
 // DO THIS - create derived signals/memos
-let position = Memo::new(move |_| {
-    synced_positions.get().values().next().cloned()
+let (position, _) = use_entity_component::<RobotPosition, _>(
+    move || system_ctx.robot_entity_id.get()
+);
+```
+
+### ❌ WRONG: Effect runs on mount with stale data
+```rust
+// DON'T process stale response data on mount
+Effect::new(move |_| {
+    if let Some(response) = state.data() {
+        close_popup();  // ❌ Closes immediately on mount!
+    }
+});
+```
+
+### ✅ CORRECT: Guard against stale data
+```rust
+// DO guard with a "waiting" signal
+Effect::new(move |_| {
+    // Only process when we're actively waiting for a response
+    if waiting_for_response.get().is_none() {
+        return;
+    }
+    if let Some(response) = state.data() {
+        close_popup();  // ✅ Only runs when expected
+    }
 });
 ```
 
@@ -314,11 +419,33 @@ One-way client → server messages:
 
 ## Server-Side Patterns (Bevy)
 
+### Query Invalidation (Trigger Client Refetch)
+```rust
+use pl3xus_sync::{invalidate_queries, invalidate_queries_with_keys};
+
+fn handle_create_program(
+    mut requests: MessageReader<Request<CreateProgram>>,
+    mut sync_state: ResMut<SyncState<WebSocketProvider>>,
+    db: Option<Res<DatabaseResource>>,
+) {
+    for request in requests.read() {
+        // ... create program in database ...
+
+        // Invalidate ALL ListPrograms queries on all clients
+        invalidate_queries::<ListPrograms>(&mut sync_state);
+
+        // Invalidate specific keyed queries
+        invalidate_queries_with_keys::<GetProgram, _>(&mut sync_state, &[program_id]);
+
+        request.clone().respond(response).ok();
+    }
+}
+```
+
 ### Broadcasting a Synced Component
 ```rust
 fn update_robot_position(
     mut robot_query: Query<&mut RobotPosition>,
-    net: Res<Network<FanucChannel>>,
 ) {
     for mut pos in robot_query.iter_mut() {
         pos.x += 1.0;

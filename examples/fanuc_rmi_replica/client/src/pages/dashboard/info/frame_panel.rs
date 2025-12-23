@@ -19,7 +19,8 @@ pub fn FrameManagementPanel() -> impl IntoView {
     let system_ctx = use_system_entity();
 
     // Subscribe to entity-specific components
-    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    // All these components live on the robot entity
+    let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
     let (frame_tool_state, _) = use_entity_component::<FrameToolDataState, _>(move || system_ctx.robot_entity_id.get());
 
     // Derive active frame/tool from synced server state
@@ -35,7 +36,7 @@ pub fn FrameManagementPanel() -> impl IntoView {
         }
     });
 
-    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
+    let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
 
     // Local UI state for pending frame selection (before Apply is clicked)
     let (pending_frame, set_pending_frame) = signal::<Option<usize>>(None);

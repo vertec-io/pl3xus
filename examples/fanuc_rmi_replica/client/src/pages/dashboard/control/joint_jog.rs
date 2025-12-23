@@ -17,8 +17,9 @@ pub fn JointJogPanel() -> impl IntoView {
     let system_ctx = use_system_entity();
 
     // Subscribe to entity-specific components
+    // All these components live on the robot entity
     let (joint_angles, _) = use_entity_component::<JointAngles, _>(move || system_ctx.robot_entity_id.get());
-    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
     let (jog_settings, _) = use_entity_component::<JogSettingsState, _>(move || system_ctx.robot_entity_id.get());
 
     // Local string state for inputs (initialized from server state)
@@ -37,8 +38,8 @@ pub fn JointJogPanel() -> impl IntoView {
         }
     });
 
-    // Robot connected state
-    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
+    // Robot connected state (only true if robot entity exists AND is connected)
+    let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
 
     // Get the Robot entity bits (for targeted robot commands)
     // Jog commands target the Robot entity, not the System

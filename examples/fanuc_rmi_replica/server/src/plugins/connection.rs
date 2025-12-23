@@ -10,6 +10,7 @@ use bevy::prelude::*;
 use bevy::ecs::message::MessageReader;
 use bevy_tokio_tasks::TokioTasksRuntime;
 use pl3xus::AppNetworkMessage;
+use pl3xus::managers::network_request::{AppNetworkRequestMessage, Request};
 use pl3xus_sync::control::EntityControl;
 use pl3xus_websockets::WebSocketProvider;
 use std::sync::Arc;
@@ -79,8 +80,9 @@ pub struct RobotConnectionPlugin;
 
 impl Plugin for RobotConnectionPlugin {
     fn build(&self, app: &mut App) {
-        // Register network messages for connection
-        app.register_network_message::<ConnectToRobot, WebSocketProvider>();
+        // Register ConnectToRobot as a request/response (returns entity_id)
+        app.listen_for_request_message::<ConnectToRobot, WebSocketProvider>();
+        // DisconnectRobot remains a simple message (no response needed)
         app.register_network_message::<DisconnectRobot, WebSocketProvider>();
 
         // Add connection systems
@@ -104,27 +106,40 @@ impl Plugin for RobotConnectionPlugin {
 /// 2. Direct parameters (addr, port, name)
 ///
 /// IMPORTANT: Only the client who has control of the System entity can connect.
+/// Returns the robot entity ID immediately (connection happens asynchronously).
 fn handle_connect_requests(
     mut commands: Commands,
     db: Option<Res<DatabaseResource>>,
-    mut connect_events: MessageReader<pl3xus::NetworkData<ConnectToRobot>>,
+    mut requests: MessageReader<Request<ConnectToRobot>>,
     system_query: Query<(Entity, &EntityControl), With<ActiveSystem>>,
     mut robots: Query<(Entity, &mut RobotConnectionState, &mut RobotConnectionDetails, &mut ConnectionState), With<FanucRobot>>,
 ) {
-    for event in connect_events.read() {
-        let client_id = *event.source();
-        let msg: &ConnectToRobot = &*event;
+    for request in requests.read() {
+        let client_id = *request.source();
+        let msg = request.get_request();
         info!("📡 Received ConnectToRobot: {:?}:{} (connection_id: {:?}) from {:?}", msg.addr, msg.port, msg.connection_id, client_id);
+
+        // Helper to send error response
+        let send_error = |req: Request<ConnectToRobot>, error: String| {
+            let _ = req.respond(ConnectToRobotResponse {
+                success: false,
+                entity_id: None,
+                error: Some(error),
+            });
+        };
 
         // Get the System entity and check control
         let Ok((system_entity, system_control)) = system_query.single() else {
             error!("No System entity found - cannot process connection request");
+            send_error(request.clone(), "No System entity found".to_string());
             continue;
         };
 
         // Check if client has control of the System
         if system_control.client_id != client_id {
-            warn!("ConnectToRobot rejected from {:?}: No control of System (held by {:?})", client_id, system_control.client_id);
+            let err = format!("No control of System (held by {:?})", system_control.client_id);
+            warn!("ConnectToRobot rejected from {:?}: {}", client_id, err);
+            send_error(request.clone(), err);
             continue;
         }
 
@@ -155,22 +170,30 @@ fn handle_connect_requests(
                             (details, jog)
                         }
                         Ok(None) => {
-                            warn!("Robot connection {} not found in database", conn_id);
+                            let err = format!("Robot connection {} not found in database", conn_id);
+                            warn!("{}", err);
+                            send_error(request.clone(), err);
                             continue;
                         }
                         Err(e) => {
-                            error!("Failed to load robot connection {}: {}", conn_id, e);
+                            let err = format!("Failed to load robot connection {}: {}", conn_id, e);
+                            error!("{}", err);
+                            send_error(request.clone(), err);
                             continue;
                         }
                     }
                 } else {
-                    warn!("Database not available, cannot load robot connection");
+                    let err = "Database not available, cannot load robot connection".to_string();
+                    warn!("{}", err);
+                    send_error(request.clone(), err);
                     continue;
                 }
             } else {
                 // Use direct connection details from message
                 if msg.addr.is_empty() || msg.port == 0 {
-                    warn!("ConnectToRobot requires either connection_id or valid addr/port");
+                    let err = "ConnectToRobot requires either connection_id or valid addr/port".to_string();
+                    warn!("{}", err);
+                    send_error(request.clone(), err);
                     continue;
                 }
                 let details = RobotConnectionDetails {
@@ -210,7 +233,15 @@ fn handle_connect_requests(
             // Set the robot as a child of the System entity
             commands.entity(system_entity).add_child(robot_entity);
 
-            info!("🔄 Spawned robot entity {:?} as child of System {:?} in Connecting state", robot_entity, system_entity);
+            let entity_bits = robot_entity.to_bits();
+            info!("🔄 Spawned robot entity {:?} (bits={}) as child of System {:?} in Connecting state", robot_entity, entity_bits, system_entity);
+
+            // Send success response with the new entity ID
+            let _ = request.clone().respond(ConnectToRobotResponse {
+                success: true,
+                entity_id: Some(entity_bits),
+                error: None,
+            });
             continue;
         }
 
@@ -247,12 +278,26 @@ fn handle_connect_requests(
                     conn_state.robot_connecting = true;
                     conn_state.robot_connected = false;
 
-                    info!("🔄 Robot {:?} transitioning to Connecting state", entity);
+                    let entity_bits = entity.to_bits();
+                    info!("🔄 Robot {:?} (bits={}) transitioning to Connecting state", entity, entity_bits);
+
+                    // Send success response with existing entity ID
+                    let _ = request.clone().respond(ConnectToRobotResponse {
+                        success: true,
+                        entity_id: Some(entity_bits),
+                        error: None,
+                    });
                 } else {
-                    warn!("Robot already in state {:?}, ignoring connect request", *state);
+                    let err = format!("Robot already in state {:?}", *state);
+                    warn!("{}, ignoring connect request", err);
+                    send_error(request.clone(), err);
                 }
             }
-            Err(e) => warn!("Failed to get robot entity: {:?}", e),
+            Err(e) => {
+                let err = format!("Failed to get robot entity: {:?}", e);
+                warn!("{}", err);
+                send_error(request.clone(), err);
+            }
         }
     }
 }

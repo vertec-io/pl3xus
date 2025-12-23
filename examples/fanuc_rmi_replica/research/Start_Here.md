@@ -5,132 +5,106 @@
 Create an **exact replica** of the Fanuc_RMI_API web application using the pl3xus framework.
 The original application is located at `/home/apino/dev/Fanuc_RMI_API/`.
 
-## ⚠️ CRITICAL: Read Known_Issues.md First
+## 🔥 LATEST SESSION: December 2025
 
-**The previous agent's assessment of "~85% complete" was OVERLY OPTIMISTIC.**
+**For the most up-to-date context, read: [`active/december_2025_session/START_HERE.md`](./active/december_2025_session/START_HERE.md)**
 
-There are **16 major unresolved issues** documented in `Known_Issues.md`. Many core features are broken or incomplete:
-- Program loading/editing is completely broken
-- Robot connection editing has infinite loops
-- Joint jogging sends no data to robot
-- Control system doesn't indicate who has control
-- Quick command buttons do nothing
-- Configuration doesn't load properly
+The December 2025 session focused on:
+1. **TanStack Query-inspired API** (`use_query`, `use_mutation`, `use_query_keyed`)
+2. **Server-side query invalidation** (server pushes, client auto-refetches)
+3. **Fixed entity targeting bugs** (`ConnectionState` lives on robot entity)
+4. **Migrated all client code** to new patterns
 
-**READ `Known_Issues.md` IMMEDIATELY** - it contains the user's actual assessment of what's broken.
+## Current Status: ~80% Complete
 
-## Current Status: ~60% Complete (Realistic Assessment)
-
-What's actually working:
+### What's Working
 - ✅ Real-time robot state sync (position, joint angles, robot status)
-- ✅ Database integration (basic CRUD)
-- ✅ UI layout roughly matches original
-- ✅ Toast notification system (wrong position)
+- ✅ Database integration (full CRUD)
+- ✅ Connection management (connect, disconnect, save connections)
+- ✅ Query/mutation API with proper error handling
+- ✅ Server-side query invalidation
+- ✅ Exclusive control system with authorization
+- ✅ Quick commands (Initialize, Reset, Abort)
+- ✅ Program list and details
+- ✅ Configuration management
+- ✅ Toast notification system
 
-What's broken or incomplete:
-- ❌ Program loading/editing completely broken (Issue #3, #11)
-- ❌ Robot connection editing broken with infinite loops (Issue #12)
-- ❌ Control system incomplete - no feedback, no disconnect release (Issue #15)
-- ❌ Joint jogging non-functional (Issue #14)
-- ❌ Quick command buttons do nothing (Issue #13)
-- ❌ Configuration tab has multiple issues (Issue #6, #10)
-- ❌ I/O panel not exact replica (Issue #2)
-- ❌ Number inputs used instead of text inputs (Issue #1)
-- ❌ Pop-out functionality missing (Issue #8)
-- ❌ Command composer doesn't run commands (Issue #5)
+### What Needs Work
+- ⚠️ Position display uses wrong pattern (Priority 1)
+- ⚠️ Some commands not yet entity-targeted
+- ⚠️ Program state doesn't persist when navigating
+- ⚠️ I/O panel needs display name configuration
+- ⚠️ Pop-out functionality missing
 
-## Critical Issue Being Debugged
-
-**Symptom:** Client panics with `reactive_graph... RuntimeError: unreachable` when clicking "REQUEST CONTROL" button.
-
-**Root Cause Identified:** The `handle_incoming_message` function in `crates/pl3xus_client/src/context.rs` is called from inside an Effect and performs reactive reads/writes that cause the reactive graph to panic.
-
-**Latest Fix Applied:**
-Changed `handle_incoming_message` to use `get_untracked()` for reading and `update_untracked()` + `notify()` for writing (lines 268-281 in context.rs).
-
-**Status:** Fix just applied, needs testing. Even if this works, Issue #15 has additional control problems.
+See [`active/december_2024_session/OUTSTANDING_TASKS.md`](./active/december_2024_session/OUTSTANDING_TASKS.md) for full list.
 
 ## Architecture Overview
 
 ```
 pl3xus Framework
 ├── crates/
-│   ├── pl3xus/           # Bevy server-side sync framework
-│   ├── pl3xus_client/    # Leptos client-side sync framework  
-│   ├── pl3xus_common/    # Shared types (NetworkPacket, ControlRequest/Response)
-│   └── pl3xus_sync/      # Entity sync + ExclusiveControlPlugin
+│   ├── pl3xus/           # Main crate (re-exports)
+│   ├── pl3xus_client/    # Client hooks and context
+│   ├── pl3xus_common/    # Shared types
+│   ├── pl3xus_sync/      # Server sync + control
+│   └── pl3xus_driver/    # FANUC driver
 │
 └── examples/fanuc_rmi_replica/
-    ├── server/           # Bevy app with FANUC driver
-    ├── client/           # Leptos WASM app
-    └── types/            # Shared types between server/client
+    ├── server/           # Bevy ECS server
+    ├── client/           # Leptos WASM client
+    └── shared/           # Shared types (fanuc_replica_types)
 ```
 
 ## Key Technical Concepts
 
-### Sync Components
-- Server syncs components to clients using `SyncComponent` trait
-- Client receives via `use_sync_component::<T>()` hook returning `ReadSignal<HashMap<u64, T>>`
-- Entity bits key: `4294967295` (0xFFFFFFFF) is the robot entity
+### Entity Hierarchy
+```
+System (ActiveSystem) ← EntityControl lives here
+  └── Robot (ActiveRobot) ← ConnectionState, RobotStatus, RobotPosition live here
+```
 
-### Exclusive Control System
-- `ExclusiveControlPlugin` handles control requests
-- `ControlRequest::Take/Release` messages from client
-- `ControlResponse::Granted/Denied/Released` back to client
-- `EntityControl` component tracks which client_id has control
+### Client Hooks
+- `use_entity_component<T>(entity_id)` - Subscribe to specific entity's component
+- `use_components<T>()` - Get all components of type (HashMap)
+- `use_query<R>()` - Cached query with server-side invalidation
+- `use_mutation<R>(callback)` - Fire-and-forget with response handler
+- `use_send_targeted<M>()` - Send entity-targeted message
 
-### Request/Response Pattern
-- `use_request::<R>()` hook for database operations
-- Server handles with `RequestHandlerPlugin`
-- Examples: ListRobotConnections, CreateProgram, GetFrameData
+### Authorization
+- `ExclusiveControlPlugin` handles exclusive entity control
+- Messages registered with `.with_entity_policy(ExclusiveControlPolicy)` require control
 
 ## Running the Application
 
 ```bash
-# Terminal 1: Start FANUC simulator
-cd /home/apino/dev/Fanuc_RMI_API && ./target/release/sim
+# Terminal 1: Start FANUC simulator (optional)
+cd /path/to/fanuc_rmi_api && python -m http.server
 
 # Terminal 2: Start server
-cd /home/apino/dev/pl3xus && ./target/release/fanuc_replica_server
+cd examples/fanuc_rmi_replica && cargo run -p fanuc_replica_server
 
 # Terminal 3: Start client
-cd /home/apino/dev/pl3xus/examples/fanuc_rmi_replica/client && trunk serve --port 8084
+cd examples/fanuc_rmi_replica/client && trunk serve
 
-# Open browser: http://127.0.0.1:8084/
+# Open browser: http://localhost:8080/
 ```
 
 ## Files to Study First
 
-1. `crates/pl3xus_client/src/context.rs` - Client sync context (current bug location)
-2. `crates/pl3xus_client/src/provider.rs` - WebSocket message handler
-3. `examples/fanuc_rmi_replica/client/src/layout/top_bar.rs` - Control button handler
-4. `examples/fanuc_rmi_replica/server/src/main.rs` - Server setup
-5. `crates/pl3xus_sync/src/control.rs` - ExclusiveControlPlugin
+1. `crates/pl3xus_client/src/hooks.rs` - Client hooks (use_query, use_mutation, etc.)
+2. `crates/pl3xus_sync/src/control.rs` - ExclusiveControlPlugin
+3. `examples/fanuc_rmi_replica/client/src/pages/dashboard/context.rs` - SystemEntityContext
+4. `examples/fanuc_rmi_replica/server/src/plugins/` - Server plugins
 
-## Reference Documentation
+## Research Documents
 
-See other files in this research folder:
-- **`Known_Issues.md`** - ⚠️ 16 CRITICAL ISSUES - READ FIRST
-- `Task_Status.md` - All 127 tasks with status
-- `Current_Issue.md` - Detailed description of reactive graph bug
-- `Related_Repos.md` - Reference repositories and patterns
-- `Feature_Comparison.md` - Original vs replica feature matrix
-- `Architecture.md` - System architecture and data flows
-- `LESSONS_LEARNED.md` - Patterns to avoid in Leptos
+### Active Research
+- **[`active/december_2024_session/`](./active/december_2024_session/)** - Most recent session (START HERE)
+- **[`active/targeted_requests_authorization/`](./active/targeted_requests_authorization/)** - Authorization API
+- **[`active/messages_vs_requests/`](./active/messages_vs_requests/)** - Communication patterns
 
-## Priority Order for Fixes
-
-1. **CRITICAL** - Program loading/editing (Issues #3, #11) - Core functionality broken
-2. **CRITICAL** - Robot connection editing (Issue #12) - Infinite loops, data not saving
-3. **CRITICAL** - Control system (Issue #15) - No feedback, no disconnect release
-4. **HIGH** - Joint jogging (Issue #14) - Sends no data
-5. **HIGH** - Quick commands (Issue #13) - Buttons do nothing
-6. **HIGH** - Configuration (Issues #6, #10) - Doesn't load, server overrides input
-7. **HIGH** - Number inputs (Issue #1) - App-wide, replace with text inputs
-8. **HIGH** - I/O panel (Issue #2) - Not exact replica
-9. **MEDIUM** - Command composer (Issue #5) - Doesn't run commands
-10. **MEDIUM** - Sidebar (Issue #7) - Missing Uframe/Utool
-11. **MEDIUM** - Pop-out (Issue #8) - Missing functionality
-12. **MEDIUM** - Console (Issue #4) - Missing message types
-13. **LOW** - Toast position (Issue #16) - Wrong location
+### Historical Reference
+- `Known_Issues.md` - Historical issues (many now fixed)
+- `Architecture.md` - System architecture
+- `LESSONS_LEARNED.md` - Gotchas and solutions
 

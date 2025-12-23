@@ -1008,10 +1008,12 @@ impl RequestMessage for ContinueMotion {
     type ResponseMessage = ContinueMotionResponse;
 }
 
-// ConnectToRobot is also a targeted request (targets the system entity)
+// ConnectToRobot is a request/response that returns the robot entity ID on success
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConnectToRobotResponse {
     pub success: bool,
+    /// The robot entity ID (available immediately when connection starts, not when it completes)
+    pub entity_id: Option<u64>,
     pub error: Option<String>,
 }
 

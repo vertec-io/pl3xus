@@ -13,11 +13,12 @@ pub fn MultiToolDisplay() -> impl IntoView {
     let system_ctx = use_system_entity();
 
     // Subscribe to entity-specific components
-    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    // All these components live on the robot entity
+    let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
     let (frame_tool_data, _) = use_entity_component::<FrameToolDataState, _>(move || system_ctx.robot_entity_id.get());
     let expanded_tools = ctx.expanded_tools;
 
-    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
+    let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
 
     // Get tool data from synced component
     let tool_data = move |tool_num: i32| -> (f64, f64, f64, f64, f64, f64) {

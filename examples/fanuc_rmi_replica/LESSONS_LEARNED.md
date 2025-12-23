@@ -2,6 +2,57 @@
 
 This document captures important patterns and anti-patterns discovered while developing the fanuc_rmi_replica example application using the pl3xus framework.
 
+**Last Updated**: December 2025
+
+---
+
+## 0. Entity Hierarchy and Component Location ⚠️ CRITICAL
+
+Understanding which entity owns which components is essential. Getting this wrong is a common source of bugs.
+
+### Entity Hierarchy
+```
+System (ActiveSystem marker)
+  └── Robot (ActiveRobot marker)  ← Most components live here!
+        ├── ConnectionState
+        ├── RobotStatus
+        ├── RobotPosition
+        ├── JointAngles
+        ├── FrameToolDataState
+        └── IoStatus
+```
+
+### The Problem
+```rust
+// ❌ WRONG - ConnectionState does NOT live on the system entity!
+let (connection_state, _) = use_entity_component::<ConnectionState, _>(
+    move || system_ctx.system_entity_id.get()
+);
+
+// This returns the default value because there's no ConnectionState on system entity
+let connected = connection_state.get().robot_connected;  // Always false!
+```
+
+### The Solution
+```rust
+// ✅ CORRECT - Subscribe to the robot entity
+let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(
+    move || system_ctx.robot_entity_id.get()
+);
+
+// Always check robot_exists - the robot entity may not exist yet
+let connected = Memo::new(move |_| {
+    robot_exists.get() && connection_state.get().robot_connected
+});
+```
+
+### Key Insight
+- `robot_exists = true` means the robot entity is spawned (connection attempt started)
+- `robot_connected = true` means the robot is actually connected
+- Always check both when determining if robot is ready
+
+---
+
 ## 1. Effect Infinite Loop Prevention ⚠️ CRITICAL
 
 The most common and dangerous mistake when using Leptos Effects with pl3xus's `use_request` hook is creating infinite loops.
@@ -71,7 +122,69 @@ Effect::new(move |_| {
 });
 ```
 
-## 2. Signal Tracking Rules
+## 2. Use Query/Mutation API Instead of use_request ⚠️ NEW
+
+The old `use_request` pattern required manual Effect handling and was error-prone. The new Query/Mutation API handles caching, loading states, and server-side invalidation automatically.
+
+### Old Pattern (Avoid)
+```rust
+// ❌ OLD - Manual Effect handling, no caching, error-prone
+let (fetch_programs, state) = use_request::<ListPrograms>();
+let (has_loaded, set_has_loaded) = signal(false);
+
+Effect::new(move |_| {
+    if !has_loaded.get() {
+        set_has_loaded.set(true);
+        fetch_programs(ListPrograms);
+    }
+});
+
+Effect::new(move |_| {
+    if let Some(data) = state.get().data {
+        // Handle response...
+    }
+});
+```
+
+### New Pattern (Preferred)
+```rust
+// ✅ NEW - Automatic fetching, caching, server invalidation
+let programs = use_query::<ListPrograms>();
+
+// Just use it in the view
+if programs.is_loading() { /* show spinner */ }
+if let Some(data) = programs.data() { /* render list */ }
+if let Some(err) = programs.error() { /* show error */ }
+
+// Server sends QueryInvalidation, client auto-refetches
+```
+
+### For Mutations
+```rust
+// ✅ use_mutation with callback for error handling
+let toast = use_toast();
+let create_program = use_mutation::<CreateProgram>(move |result| {
+    match result {
+        Ok(r) if r.success => toast.success("Created!"),
+        Ok(r) => toast.error(r.error.unwrap_or_default()),
+        Err(e) => toast.error(format!("{e}")),
+    }
+});
+
+create_program.send(CreateProgram { name: "Test".into() });
+```
+
+### When to Still Use use_request
+Only use `use_request` for **imperative polling** patterns where you don't want caching:
+```rust
+// I/O refresh button - triggers server to update synced components
+let (refresh_io, _) = use_request::<GetIOData>();
+let on_refresh = move |_| refresh_io(GetIOData { robot_id });
+```
+
+---
+
+## 3. Signal Tracking Rules
 
 Understanding how Leptos tracks signal dependencies is crucial:
 

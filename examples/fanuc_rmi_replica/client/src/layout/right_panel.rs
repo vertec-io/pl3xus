@@ -14,10 +14,10 @@ pub fn RightPanel() -> impl IntoView {
     let layout_ctx = use_context::<LayoutContext>().expect("LayoutContext required");
     let system_ctx = use_system_entity();
 
-    // Subscribe to the active system's connection state
-    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    // Subscribe to the robot's connection state (ConnectionState lives on robot entity)
+    let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
 
-    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
+    let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
 
     view! {
         <aside class="w-56 bg-[#0d0d0d] border-l border-[#ffffff08] flex flex-col overflow-hidden shrink-0">

@@ -26,14 +26,15 @@ pub fn QuickCommandsPanel() -> impl IntoView {
     let system_ctx = use_system_entity();
 
     // Subscribe to entity-specific components
+    // RobotStatus and ConnectionState both live on the robot entity
     let (status, _) = use_entity_component::<RobotStatus, _>(move || system_ctx.robot_entity_id.get());
-    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
 
     // Track when user is actively dragging the slider
     let (user_editing, set_user_editing) = signal(false);
 
-    // Robot connected state
-    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
+    // Robot connected state (only true if robot entity exists AND is connected)
+    let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
 
     // Get the Robot entity bits (for targeted robot commands)
     let robot_entity_bits = move || system_ctx.robot_entity_id.get();

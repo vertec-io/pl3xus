@@ -32,15 +32,15 @@ use crate::pages::dashboard::use_system_entity;
 pub fn InfoTab() -> impl IntoView {
     let system_ctx = use_system_entity();
 
-    // Subscribe to entity-specific connection state
-    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
+    // Subscribe to robot's connection state (ConnectionState lives on robot entity)
+    let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
 
     // Request hooks for loading frame/tool data
     let (get_frame_data, _) = use_request::<GetFrameData>();
     let (get_tool_data, _) = use_request::<GetToolData>();
     let (get_active_frame_tool, _) = use_request::<GetActiveFrameTool>();
 
-    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
+    let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
 
     // Load frame/tool data when robot becomes connected
     let (has_loaded, set_has_loaded) = signal(false);

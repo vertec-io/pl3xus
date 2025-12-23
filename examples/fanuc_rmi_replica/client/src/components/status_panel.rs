@@ -12,12 +12,14 @@ pub fn StatusPanel() -> impl IntoView {
     let ctx = use_system_entity();
 
     // Subscribe to the active robot's components
+    // All these components live on the robot entity
     let (status, _) = use_entity_component::<RobotStatus, _>(move || ctx.robot_entity_id.get());
-    let (connection, _) = use_entity_component::<ConnectionState, _>(move || ctx.system_entity_id.get());
+    let (connection, robot_exists) = use_entity_component::<ConnectionState, _>(move || ctx.robot_entity_id.get());
     let (frame_tool, _) = use_entity_component::<FrameToolDataState, _>(move || ctx.robot_entity_id.get());
 
+    let is_connected = move || robot_exists.get() && connection.get().robot_connected;
+
     let get_status = move || status.get();
-    let get_connection = move || connection.get();
     let get_frame_tool = move || frame_tool.get();
 
     view! {
@@ -31,7 +33,7 @@ pub fn StatusPanel() -> impl IntoView {
             </div>
 
             // Active Frame/Tool display - only show when robot is connected
-            <Show when=move || get_connection().robot_connected>
+            <Show when=move || is_connected()>
                 <div class="mt-2 pt-2 border-t border-[#ffffff08]">
                     <div class="flex items-center justify-between">
                         <span class="text-[#666666] text-[8px]">"UFrame:"</span>

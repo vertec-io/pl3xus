@@ -16,7 +16,7 @@
 //! - Active UFrame/UTool -> use_entity_component::<FrameToolDataState, _>(|| ctx.robot_entity_id.get())
 //! - Program execution -> use_entity_component::<ExecutionState, _>(|| ctx.robot_entity_id.get())
 //! - Robot position -> use_entity_component::<RobotPosition, _>(|| ctx.robot_entity_id.get())
-//! - Connection state -> use_entity_component::<ConnectionState, _>(|| ctx.system_entity_id.get())
+//! - Connection state -> use_entity_component::<ConnectionState, _>(|| ctx.robot_entity_id.get())  // Note: lives on robot entity!
 
 use leptos::prelude::*;
 use std::collections::HashSet;

@@ -34,9 +34,9 @@ pub fn ControlTab() -> impl IntoView {
     let show_composer = ctx.show_composer;
     let system_ctx = use_system_entity();
 
-    // Subscribe to the active system's connection state
-    let (connection_state, _) = use_entity_component::<ConnectionState, _>(move || system_ctx.system_entity_id.get());
-    let robot_connected = Memo::new(move |_| connection_state.get().robot_connected);
+    // Subscribe to the robot's connection state (ConnectionState lives on robot entity)
+    let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
+    let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
 
     view! {
         <div class="h-full flex flex-col gap-2">

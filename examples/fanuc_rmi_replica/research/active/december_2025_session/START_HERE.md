@@ -69,10 +69,10 @@ pl3xus is a framework for building **server-authoritative, real-time synchronize
 
 ```bash
 # Terminal 1: Start the FANUC simulator
-cd /path/to/fanuc_rmi_api && python -m http.server
+cd /home/apino/dev/Fanuc_RMI_API && cargo run -p sim -- --realtime
 
 # Terminal 2: Start the server
-cd examples/fanuc_rmi_replica && cargo run -p fanuc_replica_server
+cd examples/fanuc_rmi_replica/server && cargo run
 
 # Terminal 3: Build and serve the client
 cd examples/fanuc_rmi_replica/client && trunk serve
@@ -125,4 +125,6 @@ let robot_connected = Memo::new(move |_|
     robot_exists.get() && connection_state.get().robot_connected
 );
 ```
+
+
 

@@ -262,7 +262,17 @@ Located at `/home/apino/dev/meteorite`. Uses an older version of pl3xus (called 
 
 ### Fanuc_RMI_API
 
-The original web application being replicated. Reference for UI/UX and feature parity.
+The original web application being replicated. Reference for UI/UX and feature parity.The Fanuc RMI API also includes all of the types and interfaces for interacting with FANUC robots over the Remote Motion Interface (RMI) API, as well as a driver for interacting with the robot directly. 
+
+Located at `/home/apino/dev/Fanuc_RMI_API`.
+
+### leptos
+
+Located at `/home/apino/dev/leptos`. Reference for framework patterns and best practices.
+
+### leptos-use
+
+Located at `/home/apino/dev/leptos-use`. Collection of useful Leptos hooks.
 
 ---
 

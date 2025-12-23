@@ -2520,21 +2520,30 @@ where
         }
     });
 
+    // Track the last invalidation counter we've seen
+    let last_invalidation = RwSignal::new(0u64);
+
     // Watch for server-side invalidation
     Effect::new({
         let ctx = ctx.clone();
         let query_type = query_type.clone();
-        let query_key = query_key.clone();
         let do_fetch = do_fetch.clone();
         move |_| {
-            // Check if this query needs refetching due to invalidation
-            if ctx.query_needs_refetch(&query_type, &query_key) {
-                #[cfg(target_arch = "wasm32")]
-                leptos::logging::log!(
-                    "[use_query] Query '{}' invalidated, refetching...",
-                    query_type
-                );
-                do_fetch();
+            // Subscribe to the invalidation signal reactively
+            let invalidations = ctx.query_invalidations.get();
+            if let Some(&counter) = invalidations.get(&query_type) {
+                let last = last_invalidation.get_untracked();
+                if counter > last {
+                    last_invalidation.set(counter);
+                    #[cfg(target_arch = "wasm32")]
+                    leptos::logging::log!(
+                        "[use_query] Query '{}' invalidated (counter: {} -> {}), refetching...",
+                        query_type,
+                        last,
+                        counter
+                    );
+                    do_fetch();
+                }
             }
         }
     });
@@ -2652,7 +2661,8 @@ where
 
     // Watch for request completion
     Effect::new({
-        let query_type = query_type.clone();
+        #[allow(unused_variables)]
+        let query_type_for_log = query_type.clone();
         move |_| {
             let req_state = request_state.get();
 
@@ -2664,7 +2674,7 @@ where
                 #[cfg(target_arch = "wasm32")]
                 leptos::logging::log!(
                     "[use_query_keyed] Query '{}' error: {}",
-                    query_type,
+                    query_type_for_log,
                     error
                 );
                 state.update(|s| {
@@ -2675,7 +2685,7 @@ where
                 #[cfg(target_arch = "wasm32")]
                 leptos::logging::log!(
                     "[use_query_keyed] Query '{}' received data, updating state",
-                    query_type
+                    query_type_for_log
                 );
                 state.update(|s| {
                     s.data = Some(data.clone());
@@ -2890,22 +2900,31 @@ where
         }
     });
 
+    // Track the last invalidation counter we've seen
+    let last_invalidation = RwSignal::new(0u64);
+
     // Watch for server-side invalidation
     Effect::new({
         let ctx = ctx.clone();
         let query_type = query_type.clone();
-        let query_key = query_key.clone();
         let do_fetch = do_fetch.clone();
         move |_| {
-            // Check if this query needs refetching due to invalidation
-            if ctx.query_needs_refetch(&query_type, &query_key) {
-                #[cfg(target_arch = "wasm32")]
-                leptos::logging::log!(
-                    "[use_query_targeted] Query '{}' for entity {} invalidated, refetching...",
-                    query_type,
-                    entity_id
-                );
-                do_fetch();
+            // Subscribe to the invalidation signal reactively
+            let invalidations = ctx.query_invalidations.get();
+            if let Some(&counter) = invalidations.get(&query_type) {
+                let last = last_invalidation.get_untracked();
+                if counter > last {
+                    last_invalidation.set(counter);
+                    #[cfg(target_arch = "wasm32")]
+                    leptos::logging::log!(
+                        "[use_query_targeted] Query '{}' for entity {} invalidated (counter: {} -> {}), refetching...",
+                        query_type,
+                        entity_id,
+                        last,
+                        counter
+                    );
+                    do_fetch();
+                }
             }
         }
     });

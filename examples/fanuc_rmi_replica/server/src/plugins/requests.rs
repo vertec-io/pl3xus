@@ -8,7 +8,7 @@ use pl3xus::managers::network_request::{AppNetworkRequestMessage, Request};
 use pl3xus::Network;
 use pl3xus_websockets::WebSocketProvider;
 use pl3xus_sync::control::EntityControl;
-use pl3xus_sync::{AuthorizedRequest, QueryInvalidation, SyncServerMessage};
+use pl3xus_sync::{AuthorizedRequest, AppInvalidationExt, InvalidationRules, broadcast_invalidations};
 use fanuc_replica_types::*;
 
 use bevy_tokio_tasks::TokioTasksRuntime;
@@ -72,6 +72,28 @@ impl Plugin for RequestHandlerPlugin {
         app.listen_for_request_message::<GetConnectionStatus, WebSocketProvider>();
         app.listen_for_request_message::<GetExecutionState, WebSocketProvider>();
         app.listen_for_request_message::<UpdateJogSettings, WebSocketProvider>();
+
+        // =====================================================================
+        // Register Query Invalidation Rules
+        // =====================================================================
+        // These rules define which queries should be invalidated when mutations succeed.
+        // Handlers call broadcast_invalidations::<RequestType, _>() after successful responses.
+        app.invalidation_rules()
+            // Program mutations
+            .on_success::<CreateProgram>().invalidate("ListPrograms")
+            .on_success::<DeleteProgram>().invalidate("ListPrograms")
+            .on_success::<DeleteProgram>().invalidate("GetProgram")
+            .on_success::<UpdateProgramSettings>().invalidate("GetProgram")
+            .on_success::<UploadCsv>().invalidate("GetProgram")
+            // Robot connection mutations
+            .on_success::<CreateRobotConnection>().invalidate("ListRobotConnections")
+            .on_success::<UpdateRobotConnection>().invalidate("ListRobotConnections")
+            .on_success::<DeleteRobotConnection>().invalidate("ListRobotConnections")
+            // Configuration mutations
+            .on_success::<CreateConfiguration>().invalidate("GetRobotConfigurations")
+            .on_success::<UpdateConfiguration>().invalidate("GetRobotConfigurations")
+            .on_success::<DeleteConfiguration>().invalidate("GetRobotConfigurations")
+            .on_success::<SetDefaultConfiguration>().invalidate("GetRobotConfigurations");
 
         // Add handler systems - Robot Connections & Configurations
         app.add_systems(Update, (
@@ -187,6 +209,7 @@ fn handle_create_robot_connection(
     mut requests: MessageReader<Request<CreateRobotConnection>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
+    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -199,11 +222,6 @@ fn handle_create_robot_connection(
         let response = match result {
             Ok(robot_id) => {
                 info!("✅ Created robot connection id={}", robot_id);
-                // Invalidate ListRobotConnections queries on all clients
-                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
-                    query_types: vec!["ListRobotConnections".to_string()],
-                    keys: None,
-                }));
                 CreateRobotConnectionResponse {
                     robot_id,
                     success: true,
@@ -220,8 +238,14 @@ fn handle_create_robot_connection(
             }
         };
 
+        let success = response.success;
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
+        }
+
+        // Broadcast invalidations if successful
+        if success {
+            broadcast_invalidations::<CreateRobotConnection, _>(&net, &rules, None);
         }
     }
 }
@@ -231,6 +255,7 @@ fn handle_update_robot_connection(
     mut requests: MessageReader<Request<UpdateRobotConnection>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
+    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -243,11 +268,6 @@ fn handle_update_robot_connection(
         let response = match result {
             Ok(()) => {
                 info!("✅ Updated robot connection id={}", inner.id);
-                // Invalidate ListRobotConnections queries on all clients
-                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
-                    query_types: vec!["ListRobotConnections".to_string()],
-                    keys: None,
-                }));
                 UpdateRobotConnectionResponse {
                     success: true,
                     error: None,
@@ -262,8 +282,13 @@ fn handle_update_robot_connection(
             }
         };
 
+        let success = response.success;
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
+        }
+
+        if success {
+            broadcast_invalidations::<UpdateRobotConnection, _>(&net, &rules, None);
         }
     }
 }
@@ -273,6 +298,7 @@ fn handle_delete_robot_connection(
     mut requests: MessageReader<Request<DeleteRobotConnection>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
+    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -285,11 +311,6 @@ fn handle_delete_robot_connection(
         let response = match result {
             Ok(()) => {
                 info!("✅ Deleted robot connection id={}", inner.id);
-                // Invalidate ListRobotConnections queries on all clients
-                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
-                    query_types: vec!["ListRobotConnections".to_string()],
-                    keys: None,
-                }));
                 DeleteRobotConnectionResponse {
                     success: true,
                     error: None,
@@ -304,8 +325,13 @@ fn handle_delete_robot_connection(
             }
         };
 
+        let success = response.success;
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
+        }
+
+        if success {
+            broadcast_invalidations::<DeleteRobotConnection, _>(&net, &rules, None);
         }
     }
 }
@@ -314,10 +340,9 @@ fn handle_delete_robot_connection(
 fn handle_create_configuration(
     mut requests: MessageReader<Request<CreateConfiguration>>,
     db: Option<Res<DatabaseResource>>,
-    net: Option<Res<Network<WebSocketProvider>>>,
+    net: Res<Network<WebSocketProvider>>,
+    rules: Res<InvalidationRules>,
 ) {
-    let mut should_invalidate = false;
-
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling CreateConfiguration for robot_connection_id={}", inner.robot_connection_id);
@@ -329,7 +354,6 @@ fn handle_create_configuration(
         let response = match result {
             Ok(id) => {
                 info!("✅ Created configuration id={}", id);
-                should_invalidate = true;
                 CreateConfigurationResponse {
                     success: true,
                     configuration_id: id,
@@ -346,20 +370,13 @@ fn handle_create_configuration(
             }
         };
 
+        let success = response.success;
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
         }
-    }
 
-    // Invalidate configuration queries so all clients refetch
-    if should_invalidate {
-        if let Some(net) = net {
-            let invalidation = QueryInvalidation {
-                query_types: vec!["GetRobotConfigurations".to_string()],
-                keys: None,
-            };
-            net.broadcast(SyncServerMessage::QueryInvalidation(invalidation));
-            info!("📢 Broadcast query invalidation for GetRobotConfigurations");
+        if success {
+            broadcast_invalidations::<CreateConfiguration, _>(&net, &rules, None);
         }
     }
 }
@@ -368,10 +385,9 @@ fn handle_create_configuration(
 fn handle_update_configuration(
     mut requests: MessageReader<Request<UpdateConfiguration>>,
     db: Option<Res<DatabaseResource>>,
-    net: Option<Res<Network<WebSocketProvider>>>,
+    net: Res<Network<WebSocketProvider>>,
+    rules: Res<InvalidationRules>,
 ) {
-    let mut should_invalidate = false;
-
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling UpdateConfiguration for id={}", inner.id);
@@ -383,7 +399,6 @@ fn handle_update_configuration(
         let response = match result {
             Ok(()) => {
                 info!("✅ Updated configuration id={}", inner.id);
-                should_invalidate = true;
                 UpdateConfigurationResponse {
                     success: true,
                     error: None,
@@ -398,20 +413,13 @@ fn handle_update_configuration(
             }
         };
 
+        let success = response.success;
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
         }
-    }
 
-    // Invalidate configuration queries so all clients refetch
-    if should_invalidate {
-        if let Some(net) = net {
-            let invalidation = QueryInvalidation {
-                query_types: vec!["GetRobotConfigurations".to_string()],
-                keys: None,
-            };
-            net.broadcast(SyncServerMessage::QueryInvalidation(invalidation));
-            info!("📢 Broadcast query invalidation for GetRobotConfigurations");
+        if success {
+            broadcast_invalidations::<UpdateConfiguration, _>(&net, &rules, None);
         }
     }
 }
@@ -420,10 +428,9 @@ fn handle_update_configuration(
 fn handle_delete_configuration(
     mut requests: MessageReader<Request<DeleteConfiguration>>,
     db: Option<Res<DatabaseResource>>,
-    net: Option<Res<Network<WebSocketProvider>>>,
+    net: Res<Network<WebSocketProvider>>,
+    rules: Res<InvalidationRules>,
 ) {
-    let mut should_invalidate = false;
-
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling DeleteConfiguration for id={}", inner.id);
@@ -435,7 +442,6 @@ fn handle_delete_configuration(
         let response = match result {
             Ok(()) => {
                 info!("✅ Deleted configuration id={}", inner.id);
-                should_invalidate = true;
                 DeleteConfigurationResponse {
                     success: true,
                     error: None,
@@ -450,20 +456,13 @@ fn handle_delete_configuration(
             }
         };
 
+        let success = response.success;
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
         }
-    }
 
-    // Invalidate configuration queries so all clients refetch
-    if should_invalidate {
-        if let Some(net) = net {
-            let invalidation = QueryInvalidation {
-                query_types: vec!["GetRobotConfigurations".to_string()],
-                keys: None,
-            };
-            net.broadcast(SyncServerMessage::QueryInvalidation(invalidation));
-            info!("📢 Broadcast query invalidation for GetRobotConfigurations");
+        if success {
+            broadcast_invalidations::<DeleteConfiguration, _>(&net, &rules, None);
         }
     }
 }
@@ -472,10 +471,9 @@ fn handle_delete_configuration(
 fn handle_set_default_configuration(
     mut requests: MessageReader<Request<SetDefaultConfiguration>>,
     db: Option<Res<DatabaseResource>>,
-    net: Option<Res<Network<WebSocketProvider>>>,
+    net: Res<Network<WebSocketProvider>>,
+    rules: Res<InvalidationRules>,
 ) {
-    let mut should_invalidate = false;
-
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling SetDefaultConfiguration for id={}", inner.id);
@@ -487,7 +485,6 @@ fn handle_set_default_configuration(
         let response = match result {
             Ok(()) => {
                 info!("✅ Set default configuration id={}", inner.id);
-                should_invalidate = true;
                 SetDefaultConfigurationResponse {
                     success: true,
                     error: None,
@@ -502,20 +499,13 @@ fn handle_set_default_configuration(
             }
         };
 
+        let success = response.success;
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
         }
-    }
 
-    // Invalidate configuration queries so all clients refetch
-    if should_invalidate {
-        if let Some(net) = net {
-            let invalidation = QueryInvalidation {
-                query_types: vec!["GetRobotConfigurations".to_string()],
-                keys: None,
-            };
-            net.broadcast(SyncServerMessage::QueryInvalidation(invalidation));
-            info!("📢 Broadcast query invalidation for GetRobotConfigurations");
+        if success {
+            broadcast_invalidations::<SetDefaultConfiguration, _>(&net, &rules, None);
         }
     }
 }
@@ -650,6 +640,7 @@ fn handle_create_program(
     mut requests: MessageReader<Request<CreateProgram>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
+    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -662,11 +653,6 @@ fn handle_create_program(
         let response = match result {
             Ok(program_id) => {
                 info!("✅ Created program id={}", program_id);
-                // Invalidate ListPrograms queries on all clients
-                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
-                    query_types: vec!["ListPrograms".to_string()],
-                    keys: None,
-                }));
                 CreateProgramResponse {
                     success: true,
                     program_id: Some(program_id),
@@ -683,8 +669,13 @@ fn handle_create_program(
             }
         };
 
+        let success = response.success;
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
+        }
+
+        if success {
+            broadcast_invalidations::<CreateProgram, _>(&net, &rules, None);
         }
     }
 }
@@ -694,6 +685,7 @@ fn handle_delete_program(
     mut requests: MessageReader<Request<DeleteProgram>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
+    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let program_id = request.get_request().program_id;
@@ -706,11 +698,6 @@ fn handle_delete_program(
         let response = match result {
             Ok(()) => {
                 info!("✅ Deleted program id={}", program_id);
-                // Invalidate ListPrograms and GetProgram queries on all clients
-                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
-                    query_types: vec!["ListPrograms".to_string(), "GetProgram".to_string()],
-                    keys: None,
-                }));
                 DeleteProgramResponse {
                     success: true,
                     error: None,
@@ -725,8 +712,13 @@ fn handle_delete_program(
             }
         };
 
+        let success = response.success;
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
+        }
+
+        if success {
+            broadcast_invalidations::<DeleteProgram, _>(&net, &rules, None);
         }
     }
 }
@@ -736,12 +728,14 @@ fn handle_update_program_settings(
     mut requests: MessageReader<Request<UpdateProgramSettings>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
+    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let req = request.get_request();
+        let program_id = req.program_id;
         info!(
             "📋 Handling UpdateProgramSettings for program_id={}, move_speed={:?}",
-            req.program_id, req.move_speed
+            program_id, req.move_speed
         );
 
         let result = db.as_ref()
@@ -769,12 +763,7 @@ fn handle_update_program_settings(
 
         let response = match result {
             Ok(()) => {
-                info!("✅ Updated program settings for id={}", req.program_id);
-                // Invalidate GetProgram queries for this specific program
-                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
-                    query_types: vec!["GetProgram".to_string()],
-                    keys: Some(vec![req.program_id.to_string()]),
-                }));
+                info!("✅ Updated program settings for id={}", program_id);
                 UpdateProgramSettingsResponse {
                     success: true,
                     error: None,
@@ -789,8 +778,14 @@ fn handle_update_program_settings(
             }
         };
 
+        let success = response.success;
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
+        }
+
+        if success {
+            // Keyed invalidation for specific program
+            broadcast_invalidations::<UpdateProgramSettings, _>(&net, &rules, Some(vec![program_id.to_string()]));
         }
     }
 }
@@ -800,22 +795,18 @@ fn handle_upload_csv(
     mut requests: MessageReader<Request<UploadCsv>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
+    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
-        info!("📋 Handling UploadCsv for program_id={}", inner.program_id);
+        let program_id = inner.program_id;
+        info!("📋 Handling UploadCsv for program_id={}", program_id);
 
-        let result = parse_and_insert_csv(&inner.csv_content, inner.program_id, &db);
+        let result = parse_and_insert_csv(&inner.csv_content, program_id, &db);
 
         let response = match result {
             Ok(count) => {
-                info!("✅ Imported {} lines to program id={}", count, inner.program_id);
-                // Invalidate GetProgram queries for this specific program
-                info!("📢 Broadcasting QueryInvalidation for GetProgram (program_id={})", inner.program_id);
-                net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
-                    query_types: vec!["GetProgram".to_string()],
-                    keys: Some(vec![inner.program_id.to_string()]),
-                }));
+                info!("✅ Imported {} lines to program id={}", count, program_id);
                 UploadCsvResponse {
                     success: true,
                     lines_imported: Some(count),
@@ -832,8 +823,14 @@ fn handle_upload_csv(
             }
         };
 
+        let success = response.success;
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
+        }
+
+        if success {
+            // Keyed invalidation for specific program
+            broadcast_invalidations::<UploadCsv, _>(&net, &rules, Some(vec![program_id.to_string()]));
         }
     }
 }

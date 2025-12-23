@@ -39,6 +39,8 @@ mod registry;
 mod subscription;
 #[cfg(feature = "runtime")]
 mod systems;
+#[cfg(feature = "runtime")]
+mod invalidation;
 
 /// Pluggable authorization policies for messages.
 #[cfg(feature = "runtime")]
@@ -120,6 +122,17 @@ pub use authorization::{
 // Re-export DeferredResponder for async request handling
 #[cfg(feature = "runtime")]
 pub use pl3xus::DeferredResponder;
+
+// Automatic query invalidation API
+#[cfg(feature = "runtime")]
+pub use invalidation::{
+    InvalidationRule,
+    InvalidationRules,
+    InvalidationRulesBuilder,
+    InvalidationRuleBuilder,
+    AppInvalidationExt,
+    broadcast_invalidations,
+};
 
 #[cfg(feature = "runtime")]
 use bevy::prelude::*;

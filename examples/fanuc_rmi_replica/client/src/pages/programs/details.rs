@@ -54,13 +54,19 @@ pub fn ProgramDetails(
 
     // Sync signals when program changes or is re-fetched with new data
     Effect::new(move |_| {
+        leptos::logging::log!("[ProgramDetails] Effect running, checking current_program");
         if let Some(prog) = current_program.get() {
             let id_changed = current_prog_id.get() != Some(prog.id);
             let inst_count_changed = current_inst_count.get() != prog.instructions.len();
+            leptos::logging::log!(
+                "[ProgramDetails] Program: {} (id={}), instructions: {}, id_changed: {}, inst_count_changed: {}",
+                prog.name, prog.id, prog.instructions.len(), id_changed, inst_count_changed
+            );
 
             // Update when ID changes OR when instruction count changes (i.e. after CSV upload)
             // but only if settings haven't been modified by user
             if id_changed || (inst_count_changed && !settings_modified.get()) {
+                leptos::logging::log!("[ProgramDetails] Updating local signals");
                 set_current_prog_id.set(Some(prog.id));
                 set_current_inst_count.set(prog.instructions.len());
                 set_start_x.set(prog.start_x.map(|v| format!("{:.2}", v)).unwrap_or_default());
@@ -81,6 +87,8 @@ pub fn ProgramDetails(
                 set_term_value.set(prog.default_term_value.to_string());
                 set_settings_modified.set(false);
             }
+        } else {
+            leptos::logging::log!("[ProgramDetails] No current_program");
         }
     });
 

@@ -811,6 +811,7 @@ fn handle_upload_csv(
             Ok(count) => {
                 info!("✅ Imported {} lines to program id={}", count, inner.program_id);
                 // Invalidate GetProgram queries for this specific program
+                info!("📢 Broadcasting QueryInvalidation for GetProgram (program_id={})", inner.program_id);
                 net.broadcast(SyncServerMessage::QueryInvalidation(QueryInvalidation {
                     query_types: vec!["GetProgram".to_string()],
                     keys: Some(vec![inner.program_id.to_string()]),

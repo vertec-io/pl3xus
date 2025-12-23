@@ -49,10 +49,15 @@ pub fn ProgramsView() -> impl IntoView {
 
     // Watch for program query response to update current_program
     Effect::new(move |_| {
+        leptos::logging::log!("[ProgramsView] Effect running, checking program_query.data()");
         if let Some(response) = program_query.data() {
+            leptos::logging::log!("[ProgramsView] Got response, program: {:?}", response.program.as_ref().map(|p| &p.name));
             if let Some(prog) = response.program.clone() {
+                leptos::logging::log!("[ProgramsView] Setting current_program to: {}", prog.name);
                 current_program.set(Some(prog));
             }
+        } else {
+            leptos::logging::log!("[ProgramsView] No data from program_query");
         }
     });
 

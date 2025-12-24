@@ -1,0 +1,122 @@
+{
+  "version": "1.0.0",
+  "framework_version": "0.1.0",
+  "bevy_version": "0.17",
+  "leptos_version": "0.7",
+  "paths": {
+    "crates": "./crates",
+    "pl3xus": "./crates/pl3xus",
+    "pl3xus_sync": "./crates/pl3xus_sync",
+    "pl3xus_client": "./crates/pl3xus_client",
+    "pl3xus_common": "./crates/pl3xus_common",
+    "pl3xus_websockets": "./crates/pl3xus_websockets",
+    "pl3xus_memory": "./crates/pl3xus_memory",
+    "pl3xus_macros": "./crates/pl3xus_macros",
+    "examples": "./examples",
+    "fanuc_rmi_replica": "./examples/fanuc_rmi_replica",
+    "docs": "./docs",
+    "docs_site": "./docs-site",
+    "skills": "./skills"
+  },
+  "project_structures": {
+    "supported_patterns": ["shared_types", "plugin_based"],
+    "default": "shared_types",
+    "detection": {
+      "plugin_based": "grep -r 'feature = \"ecs\"' plugins/src/",
+      "shared_types": "ls shared/src/lib.rs types/src/lib.rs"
+    },
+    "shared_types": {
+      "description": "Separate crate for shared types between server and client",
+      "crates": ["server", "client", "shared"],
+      "server": {
+        "main": "src/main.rs",
+        "plugins": "src/plugins/"
+      },
+      "client": {
+        "main": "src/main.rs",
+        "pages": "src/pages/",
+        "components": "src/components/"
+      },
+      "shared": {
+        "types": "src/lib.rs",
+        "components": "src/components.rs",
+        "requests": "src/requests.rs"
+      }
+    },
+    "plugin_based": {
+      "description": "Feature-gated types in plugins crate, minimal server",
+      "crates": ["server", "app", "plugins"],
+      "plugins": {
+        "lib": "src/lib.rs",
+        "features": ["ecs", "server", "stores"]
+      },
+      "server": {
+        "main": "src/main.rs",
+        "note": "Minimal - imports plugins and calls build()"
+      },
+      "app": {
+        "main": "src/main.rs",
+        "pages": "src/hmi/",
+        "components": "src/components/"
+      }
+    }
+  },
+  "conventions": {
+    "component_sync": {
+      "pattern": "app.sync_component::<T>(None)",
+      "description": "Register component for automatic synchronization"
+    },
+    "targeted_request": {
+      "pattern": "app.request::<T, NP>().targeted().with_default_entity_policy().register()",
+      "description": "Production pattern for entity-targeted requests"
+    },
+    "batch_requests": {
+      "pattern": "app.requests::<(T1, T2, T3), NP>().targeted().with_default_entity_policy().with_error_response()",
+      "description": "Register multiple related requests with same configuration"
+    },
+    "message_handler": {
+      "pattern": "fn handle_message(mut messages: MessageReader<NetworkData<T>>)",
+      "description": "Bevy 0.17 message handler pattern"
+    },
+    "entity_component_hook": {
+      "pattern": "use_entity_component::<T>(entity_id)",
+      "description": "Preferred hook for multi-entity scenarios"
+    },
+    "mutation_hook": {
+      "pattern": "use_mutation_targeted::<T>(handler)",
+      "description": "Targeted mutation with response handler"
+    }
+  },
+  "anti_patterns": [
+    {
+      "pattern": "use_components::<T>().values().next()",
+      "reason": "No guarantee of correct entity in multi-entity scenarios",
+      "alternative": "use_entity_component::<T>(entity_id)"
+    },
+    {
+      "pattern": "app.register_message::<T, NP>()",
+      "reason": "Bypasses authorization and targeting",
+      "alternative": "app.message::<T, NP>().targeted().with_entity_policy(...).register()"
+    },
+    {
+      "pattern": "EventReader<T>",
+      "reason": "Deprecated in Bevy 0.17",
+      "alternative": "MessageReader<T>"
+    },
+    {
+      "pattern": "input type=\"number\"",
+      "reason": "Difficult to use with decimals and negatives",
+      "alternative": "Text input with proper validation"
+    }
+  ],
+  "reference_examples": {
+    "production": "fanuc_rmi_replica",
+    "description": "The fanuc_rmi_replica example demonstrates production-grade patterns"
+  },
+  "documentation": {
+    "api_docs": "https://docs.rs/pl3xus",
+    "guides": "./docs/core/guides/",
+    "architecture": "./docs/core/architecture/"
+  }
+}
+

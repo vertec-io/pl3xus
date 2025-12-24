@@ -3,6 +3,7 @@ use serde::Serialize;
 
 use pl3xus::{managers::Network, managers::NetworkProvider, NetworkEvent};
 
+use crate::authorization::{AuthResult, DefaultEntityAccessPolicy};
 use crate::messages::{
     MutationResponse,
     SyncBatch,
@@ -246,6 +247,46 @@ pub fn process_mutations<NP: NetworkProvider>(world: &mut World) {
                                     mutation.component_type
                                 ))
                         );
+                    } else if reg.config.has_mutation_handler && reg.config.requires_entity_authorization {
+                        // Authorized handler: check entity access policy first
+                        let entity = mutation.entity.to_entity();
+
+                        // Get the default entity access policy
+                        let auth_result = if reg.config.use_default_entity_policy {
+                            world
+                                .get_resource::<DefaultEntityAccessPolicy>()
+                                .map(|policy| policy.0.check(world, mutation.connection_id, entity))
+                                .unwrap_or(AuthResult::Authorized) // No policy = allow
+                        } else {
+                            AuthResult::Authorized // No policy configured = allow
+                        };
+
+                        match auth_result {
+                            AuthResult::Authorized => {
+                                // Route to authorized handler
+                                if let Some(route_fn) = reg.route_to_authorized_handler {
+                                    handler_routed.push((mutation.clone(), route_fn));
+                                    routed_to_handler = true;
+                                } else {
+                                    status = Status::InternalError;
+                                    response_message = Some(format!(
+                                        "Component {} requires authorization but no authorized route function",
+                                        mutation.component_type
+                                    ));
+                                }
+                            }
+                            AuthResult::Denied(reason) => {
+                                warn!(
+                                    "Component mutation {} from {:?} to entity {:?} denied: {}",
+                                    mutation.component_type,
+                                    mutation.connection_id,
+                                    entity,
+                                    reason
+                                );
+                                status = Status::Forbidden;
+                                response_message = Some(reason);
+                            }
+                        }
                     } else if reg.config.has_mutation_handler {
                         // Route to handler - the handler will respond via MutationResponseQueue
                         if let Some(route_fn) = reg.route_to_handler {
@@ -376,10 +417,14 @@ pub fn process_snapshot_queue<NP: NetworkProvider>(world: &mut World) {
     > = std::collections::HashMap::new();
 
     for request in pending.drain(..) {
+        let mut found_match = false;
+        let mut found_component_type = false;
+
         for (type_name, snapshot_fn) in &type_snapshot_fns {
             if request.component_type != "*" && type_name != &request.component_type {
                 continue;
             }
+            found_component_type = true;
 
             let snapshots = snapshot_fn(world);
 
@@ -390,6 +435,7 @@ pub fn process_snapshot_queue<NP: NetworkProvider>(world: &mut World) {
                     }
                 }
 
+                found_match = true;
                 per_connection
                     .entry(request.connection_id)
                     .or_default()
@@ -400,6 +446,28 @@ pub fn process_snapshot_queue<NP: NetworkProvider>(world: &mut World) {
                         value,
                     });
             }
+        }
+
+        // Log warnings for subscriptions that didn't find any matching data
+        if !found_component_type {
+            warn!(
+                "[pl3xus_sync] Subscription warning: component type '{}' is not registered for sync (conn={:?}, sub_id={})",
+                request.component_type,
+                request.connection_id,
+                request.subscription_id
+            );
+        } else if !found_match {
+            if let Some(target_entity) = request.entity {
+                warn!(
+                    "[pl3xus_sync] Subscription warning: entity {:?} does not exist or does not have component '{}' (conn={:?}, sub_id={})",
+                    target_entity,
+                    request.component_type,
+                    request.connection_id,
+                    request.subscription_id
+                );
+            }
+            // Note: For wildcard entity subscriptions (entity=None), having no matches is normal
+            // (e.g., no entities with that component exist yet), so we don't warn.
         }
     }
 

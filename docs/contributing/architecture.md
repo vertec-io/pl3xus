@@ -22,10 +22,10 @@ graph TD
     subgraph Server [Bevy ECS Server]
         direction TB
         subgraph Plugin [Pl3xusSyncPlugin]
-            Registry[Component Registry<br/>- Position<br/>- Velocity<br/>- EntityName]
+            Registry[Component Registry<br/>- Position<br/>- Velocity<br/>- RobotConfig]
             ChangeDetect[Change Detection<br/>- Added<br/>- Changed<br/>- Removed]
             SubManager[Subscription Manager<br/>- Client 1: Position<br/>- Client 2: Velocity]
-            
+
             Registry --> ChangeDetect
             ChangeDetect --> Broadcast
         end

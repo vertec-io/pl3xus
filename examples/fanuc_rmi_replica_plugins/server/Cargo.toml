@@ -1,0 +1,10 @@
+[package]
+name = "fanuc_replica_plugins_server"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# Import plugins with full server features
+fanuc_replica_plugins = { path = "../plugins", features = ["ecs", "server"] }
+

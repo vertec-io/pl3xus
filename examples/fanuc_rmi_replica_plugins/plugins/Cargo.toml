@@ -1,0 +1,60 @@
+[package]
+name = "fanuc_replica_plugins"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+default = ["ecs", "server"]
+
+# ECS feature - enables Bevy Component derives and ECS systems
+ecs = [
+    "dep:bevy",
+    "dep:pl3xus_sync",
+    "dep:pl3xus_macros",
+    "dep:pl3xus",
+    "dep:pl3xus_common",
+]
+
+# Server feature - enables server-only functionality (driver, database, tokio)
+server = [
+    "ecs",
+    "dep:tokio",
+    "dep:fanuc_rmi",
+    "dep:rusqlite",
+    "dep:anyhow",
+    "dep:pl3xus_websockets",
+    "dep:bevy-tokio-tasks",
+]
+
+# Stores feature - enables reactive stores for client-side fine-grained reactivity
+stores = [
+    "dep:reactive_stores",
+    "dep:pl3xus_common",
+]
+
+[dependencies]
+# Always available
+serde = { version = "1.0", features = ["derive"] }
+
+# Fanuc RMI types (DTO only - always available for types)
+fanuc_rmi_dto = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git", package = "fanuc_rmi", features = ["DTO"], default-features = false }
+
+# ECS feature dependencies
+bevy = { version = "0.17", default-features = false, features = ["multi_threaded", "bevy_log"], optional = true }
+pl3xus = { path = "../../../crates/pl3xus", features = ["debug_messages"], optional = true }
+pl3xus_common = { path = "../../../crates/pl3xus_common", optional = true }
+pl3xus_sync = { path = "../../../crates/pl3xus_sync", features = ["runtime"], optional = true }
+pl3xus_macros = { path = "../../../crates/pl3xus_macros", optional = true }
+
+# Server feature dependencies
+tokio = { version = "1.28", features = ["full"], optional = true }
+fanuc_rmi = { path = "/home/apino/dev/Fanuc_RMI_API/fanuc_rmi", features = ["driver", "logging", "DTO"], optional = true }
+rusqlite = { version = "0.31", features = ["bundled"], optional = true }
+anyhow = { version = "1.0", optional = true }
+pl3xus_websockets = { path = "../../../crates/pl3xus_websockets", optional = true }
+bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_tasks", optional = true }
+
+# Stores feature dependencies (client-side)
+reactive_stores = { version = "0.2", optional = true }
+

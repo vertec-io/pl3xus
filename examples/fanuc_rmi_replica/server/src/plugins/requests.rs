@@ -7,8 +7,7 @@ use bevy::ecs::message::MessageReader;
 use pl3xus::managers::network_request::Request;
 use pl3xus::Network;
 use pl3xus_websockets::WebSocketProvider;
-use pl3xus_sync::control::EntityControl;
-use pl3xus_sync::AuthorizedRequest;
+use pl3xus_sync::{AuthorizedRequest, TargetedRequest};
 use pl3xus_sync::authorization::AppBatchRequestRegistrationExt;
 use pl3xus_sync::RequestInvalidateExt;
 use fanuc_replica_types::*;
@@ -19,7 +18,6 @@ type WS = WebSocketProvider;
 use bevy_tokio_tasks::TokioTasksRuntime;
 use crate::database::DatabaseResource;
 use crate::plugins::connection::{FanucRobot, RmiDriver, RobotConnectionState};
-use crate::plugins::execution::{ProgramExecutor, LoadedProgramData, ExecutorRunState};
 use crate::plugins::program::{Program, ProgramState, ProgramDefaults, ApproachRetreat, ExecutionBuffer, console_entry as program_console_entry};
 use crate::plugins::system::ActiveSystem;
 use fanuc_rmi::packets::PacketPriority;
@@ -57,7 +55,7 @@ impl Plugin for RequestHandlerPlugin {
             LoadConfiguration,
         ), WS>().register();
 
-        // Programs
+        // Programs (non-targeted CRUD operations)
         app.requests::<(
             ListPrograms,
             GetProgram,
@@ -65,39 +63,21 @@ impl Plugin for RequestHandlerPlugin {
             DeleteProgram,
             UpdateProgramSettings,
             UploadCsv,
-            LoadProgram,
         ), WS>().register();
+        // Note: LoadProgram is registered as a targeted request in sync.rs
 
-        // Frame/Tool
+        // Frame/Tool and I/O Operations are registered as targeted requests in sync.rs
+        // Only non-targeted I/O config operations remain here
         app.requests::<(
-            GetActiveFrameTool,
-            SetActiveFrameTool,
-            GetFrameData,
-            WriteFrameData,
-            GetToolData,
-            WriteToolData,
-        ), WS>().register();
-
-        // I/O Operations
-        app.requests::<(
-            ReadDin,
-            ReadDinBatch,
-            WriteDout,
-            ReadAin,
-            WriteAout,
-            ReadGin,
-            WriteGout,
             GetIoConfig,
             UpdateIoConfig,
         ), WS>().register();
 
-        // Settings
+        // Settings (non-targeted, global operations)
         app.requests::<(
             GetSettings,
             UpdateSettings,
             ResetDatabase,
-            GetConnectionStatus,
-            GetExecutionState,
             UpdateJogSettings,
         ), WS>().register();
 
@@ -131,36 +111,20 @@ impl Plugin for RequestHandlerPlugin {
             handle_stop_program,
         ));
 
-        // Add handler systems - Frame/Tool
-        app.add_systems(Update, (
-            handle_get_active_frame_tool,
-            handle_set_active_frame_tool,
-            handle_get_frame_data,
-            handle_write_frame_data,
-            handle_get_tool_data,
-            handle_write_tool_data,
-        ));
+        // Note: Frame/Tool and I/O handlers are registered in sync.rs as targeted requests
+        // Only non-targeted handlers remain here
 
-        // Add handler systems - I/O
+        // Add handler systems - I/O Config (non-targeted)
         app.add_systems(Update, (
-            handle_read_din,
-            handle_read_din_batch,
-            handle_write_dout,
-            handle_read_ain,
-            handle_write_aout,
-            handle_read_gin,
-            handle_write_gout,
             handle_get_io_config,
             handle_update_io_config,
         ));
 
-        // Add handler systems - Settings
+        // Add handler systems - Settings (non-targeted)
         app.add_systems(Update, (
             handle_get_settings,
             handle_update_settings,
             handle_reset_database,
-            handle_get_connection_status,
-            handle_get_execution_state,
             handle_update_jog_settings,
         ));
     }
@@ -882,38 +846,23 @@ fn parse_and_insert_csv(
 
 /// Handle LoadProgram request - loads a program for execution.
 ///
-/// IMPORTANT: Requires robot connection AND client control of System.
+/// Authorization is handled by middleware - no manual control check needed.
+/// This is a targeted request that targets the System entity.
 /// Creates a Program component on the System entity with all instructions.
 /// Updates the server-side ExecutionState so all clients see the loaded program.
 fn handle_load_program(
     mut commands: Commands,
-    mut requests: MessageReader<Request<LoadProgram>>,
+    mut requests: MessageReader<AuthorizedRequest<LoadProgram>>,
     db: Option<Res<DatabaseResource>>,
-    system_query: Query<(Entity, &EntityControl), With<ActiveSystem>>,
     robots: Query<(Entity, &RobotConnectionState), With<FanucRobot>>,
     mut execution_states: Query<&mut ExecutionState>,
-    mut executor: ResMut<ProgramExecutor>,
 ) {
     for request in requests.read() {
+        let request = request.clone();
         let program_id = request.get_request().program_id;
         let client_id = request.source();
+        let system_entity = request.target_entity;
         info!("📋 Handling LoadProgram request for program {} from {:?}", program_id, client_id);
-
-        // Check control on System entity
-        let (system_entity, has_control) = match system_query.single() {
-            Ok((entity, system_control)) => (entity, system_control.client_id == *client_id),
-            Err(_) => {
-                let response = LoadProgramResponse {
-                    success: false,
-                    program: None,
-                    error: Some("System not ready".to_string()),
-                };
-                if let Err(e) = request.clone().respond(response) {
-                    error!("Failed to send response: {:?}", e);
-                }
-                continue;
-            }
-        };
 
         // Check robot connection
         let (robot_entity, is_connected) = match robots.single() {
@@ -927,21 +876,7 @@ fn handle_load_program(
                 program: None,
                 error: Some("Robot not connected".to_string()),
             };
-            if let Err(e) = request.clone().respond(response) {
-                error!("Failed to send response: {:?}", e);
-            }
-            continue;
-        }
-
-        if !has_control {
-            let response = LoadProgramResponse {
-                success: false,
-                program: None,
-                error: Some("You do not have control of the apparatus".to_string()),
-            };
-            if let Err(e) = request.clone().respond(response) {
-                error!("Failed to send response: {:?}", e);
-            }
+            let _ = request.respond(response);
             continue;
         }
 
@@ -952,9 +887,7 @@ fn handle_load_program(
                 program: None,
                 error: Some("Database not available".to_string()),
             };
-            if let Err(e) = request.clone().respond(response) {
-                error!("Failed to send response: {:?}", e);
-            }
+            let _ = request.respond(response);
             continue;
         };
 
@@ -1045,51 +978,6 @@ fn handle_load_program(
                     commands.entity(robot_entity).insert(ExecutionBuffer::new());
                 }
 
-                // LEGACY: Also update ProgramExecutor for backward compatibility
-                let loaded_data = LoadedProgramData {
-                    instructions: program_detail.instructions.clone(),
-                    approach: if program_detail.start_x.is_some() && program_detail.start_y.is_some() && program_detail.start_z.is_some() {
-                        Some((
-                            program_detail.start_x.unwrap(),
-                            program_detail.start_y.unwrap(),
-                            program_detail.start_z.unwrap(),
-                            program_detail.start_w.unwrap_or(0.0),
-                            program_detail.start_p.unwrap_or(0.0),
-                            program_detail.start_r.unwrap_or(0.0),
-                        ))
-                    } else {
-                        None
-                    },
-                    retreat: if program_detail.end_x.is_some() && program_detail.end_y.is_some() && program_detail.end_z.is_some() {
-                        Some((
-                            program_detail.end_x.unwrap(),
-                            program_detail.end_y.unwrap(),
-                            program_detail.end_z.unwrap(),
-                            program_detail.end_w.unwrap_or(0.0),
-                            program_detail.end_p.unwrap_or(0.0),
-                            program_detail.end_r.unwrap_or(0.0),
-                        ))
-                    } else {
-                        None
-                    },
-                    move_speed: program_detail.move_speed,
-                };
-
-                executor.loaded_program_id = Some(program_detail.id);
-                executor.loaded_program_name = Some(program_detail.name.clone());
-                executor.loaded_program_data = Some(loaded_data);
-                executor.total_instructions = lines.len();
-                executor.completed_line = 0;
-                executor.run_state = ExecutorRunState::Idle;
-                executor.defaults.w = program_detail.default_w;
-                executor.defaults.p = program_detail.default_p;
-                executor.defaults.r = program_detail.default_r;
-                executor.defaults.speed = program_detail.default_speed.unwrap_or(100.0);  // default_speed is optional per-instruction override
-                executor.defaults.term_type = program_detail.default_term_type.clone();
-                executor.defaults.term_value = program_detail.default_term_value;
-                executor.defaults.uframe = program_detail.default_uframe;
-                executor.defaults.utool = program_detail.default_utool;
-
                 // Update ExecutionState component (synced to all clients)
                 if let Some(entity) = robot_entity {
                     if let Ok(mut exec_state) = execution_states.get_mut(entity) {
@@ -1124,9 +1012,7 @@ fn handle_load_program(
                     program: Some(program_with_lines),
                     error: None,
                 };
-                if let Err(e) = request.clone().respond(response) {
-                    error!("Failed to send response: {:?}", e);
-                }
+                let _ = request.respond(response);
             }
             Ok(None) => {
                 let response = LoadProgramResponse {
@@ -1134,9 +1020,7 @@ fn handle_load_program(
                     program: None,
                     error: Some(format!("Program {} not found", program_id)),
                 };
-                if let Err(e) = request.clone().respond(response) {
-                    error!("Failed to send response: {:?}", e);
-                }
+                let _ = request.respond(response);
             }
             Err(e) => {
                 let response = LoadProgramResponse {
@@ -1144,9 +1028,7 @@ fn handle_load_program(
                     program: None,
                     error: Some(format!("Database error: {}", e)),
                 };
-                if let Err(e) = request.clone().respond(response) {
-                    error!("Failed to send response: {:?}", e);
-                }
+                let _ = request.respond(response);
             }
         }
     }
@@ -1161,7 +1043,6 @@ fn handle_unload_program(
     mut requests: MessageReader<AuthorizedRequest<UnloadProgram>>,
     system_query: Query<Entity, With<ActiveSystem>>,
     program_query: Query<&Program, With<ActiveSystem>>,
-    mut executor: ResMut<ProgramExecutor>,
     mut execution_states: Query<&mut ExecutionState>,
     mut robots: Query<Option<&mut ExecutionBuffer>, With<FanucRobot>>,
 ) {
@@ -1193,9 +1074,6 @@ fn handle_unload_program(
                 info!("🧹 Cleared ExecutionBuffer");
             }
         }
-
-        // LEGACY: Reset executor state for backward compatibility
-        executor.reset();
 
         // Reset ExecutionState on all robot entities (synced to clients)
         for mut exec_state in execution_states.iter_mut() {
@@ -1534,15 +1412,32 @@ fn handle_stop_program(
 // using the packet system (FrcReadFrameData, FrcWriteFrameData, etc.)
 
 /// Handle GetActiveFrameTool request - returns current active frame and tool.
-fn handle_get_active_frame_tool(
-    mut requests: MessageReader<Request<GetActiveFrameTool>>,
+/// This is a targeted query (no authorization required).
+pub fn handle_get_active_frame_tool(
+    mut requests: MessageReader<Request<TargetedRequest<GetActiveFrameTool>>>,
+    robots: Query<&FrameToolDataState, With<FanucRobot>>,
 ) {
     for request in requests.read() {
-        info!("📋 Handling GetActiveFrameTool request");
+        let targeted = request.get_request();
+        info!("📋 Handling GetActiveFrameTool request for target {}", targeted.target_id);
 
-        // TODO: Get from connected robot driver when available
-        // For now, return defaults
-        let response = GetActiveFrameToolResponse { uframe: 1, utool: 1 };
+        // Parse target entity from bits string
+        let target = match targeted.target_id.parse::<u64>() {
+            Ok(bits) => Entity::from_bits(bits),
+            Err(_) => {
+                error!("Invalid target entity: {}", targeted.target_id);
+                continue;
+            }
+        };
+
+        // Get from target entity
+        let (uframe, utool) = if let Ok(ft_state) = robots.get(target) {
+            (ft_state.active_frame, ft_state.active_tool)
+        } else {
+            (1, 1) // Default if entity not found
+        };
+
+        let response = GetActiveFrameToolResponse { uframe, utool };
 
         if let Err(e) = request.clone().respond(response) {
             error!("Failed to send response: {:?}", e);
@@ -1551,8 +1446,9 @@ fn handle_get_active_frame_tool(
 }
 
 /// Handle SetActiveFrameTool request - sets active frame and tool on robot.
-fn handle_set_active_frame_tool(
-    mut requests: MessageReader<Request<SetActiveFrameTool>>,
+/// This is a targeted request that requires entity control.
+pub fn handle_set_active_frame_tool(
+    mut requests: MessageReader<AuthorizedRequest<SetActiveFrameTool>>,
     mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
 ) {
     for request in requests.read() {
@@ -1576,13 +1472,24 @@ fn handle_set_active_frame_tool(
 }
 
 /// Handle GetFrameData request - reads frame data from robot and updates synced state.
-fn handle_get_frame_data(
-    mut requests: MessageReader<Request<GetFrameData>>,
+/// This is a targeted query (no authorization required).
+pub fn handle_get_frame_data(
+    mut requests: MessageReader<Request<TargetedRequest<GetFrameData>>>,
     mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
 ) {
     for request in requests.read() {
-        let frame_number = request.get_request().frame_number;
-        info!("📋 Handling GetFrameData for frame {}", frame_number);
+        let targeted = request.get_request();
+        let frame_number = targeted.request.frame_number;
+        info!("📋 Handling GetFrameData for frame {} on target {}", frame_number, targeted.target_id);
+
+        // Parse target entity from bits string
+        let target = match targeted.target_id.parse::<u64>() {
+            Ok(bits) => Entity::from_bits(bits),
+            Err(_) => {
+                error!("Invalid target entity: {}", targeted.target_id);
+                continue;
+            }
+        };
 
         // TODO: Read from connected robot driver when available
         // For now, return mock data (zeros)
@@ -1595,8 +1502,8 @@ fn handle_get_frame_data(
             r: 0.0,
         };
 
-        // Update synced component so all clients get the data
-        for mut ft_state in robots.iter_mut() {
+        // Update synced component on target entity so all clients get the data
+        if let Ok(mut ft_state) = robots.get_mut(target) {
             ft_state.frames.insert(frame_number, frame_data.clone());
         }
 
@@ -1617,15 +1524,17 @@ fn handle_get_frame_data(
 }
 
 /// Handle WriteFrameData request - writes frame data to robot and updates synced state.
-fn handle_write_frame_data(
-    mut requests: MessageReader<Request<WriteFrameData>>,
+/// This is a targeted request that requires entity control.
+pub fn handle_write_frame_data(
+    mut requests: MessageReader<AuthorizedRequest<WriteFrameData>>,
     mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
-        info!("📋 Handling WriteFrameData for frame {}", inner.frame_number);
+        let target = request.target_entity;
+        info!("📋 Handling WriteFrameData for frame {} on entity {:?}", inner.frame_number, target);
 
-        // Update synced component
+        // Update synced component on target entity
         let frame_data = FrameToolData {
             x: inner.x,
             y: inner.y,
@@ -1634,8 +1543,8 @@ fn handle_write_frame_data(
             p: inner.p,
             r: inner.r,
         };
-        for mut ft_state in robots.iter_mut() {
-            ft_state.frames.insert(inner.frame_number, frame_data.clone());
+        if let Ok(mut ft_state) = robots.get_mut(target) {
+            ft_state.frames.insert(inner.frame_number, frame_data);
         }
 
         // TODO: Write to connected robot driver when available
@@ -1649,13 +1558,24 @@ fn handle_write_frame_data(
 }
 
 /// Handle GetToolData request - reads tool data from robot and updates synced state.
-fn handle_get_tool_data(
-    mut requests: MessageReader<Request<GetToolData>>,
+/// This is a targeted query (no authorization required).
+pub fn handle_get_tool_data(
+    mut requests: MessageReader<Request<TargetedRequest<GetToolData>>>,
     mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
 ) {
     for request in requests.read() {
-        let tool_number = request.get_request().tool_number;
-        info!("📋 Handling GetToolData for tool {}", tool_number);
+        let targeted = request.get_request();
+        let tool_number = targeted.request.tool_number;
+        info!("📋 Handling GetToolData for tool {} on target {}", tool_number, targeted.target_id);
+
+        // Parse target entity from bits string
+        let target = match targeted.target_id.parse::<u64>() {
+            Ok(bits) => Entity::from_bits(bits),
+            Err(_) => {
+                error!("Invalid target entity: {}", targeted.target_id);
+                continue;
+            }
+        };
 
         // TODO: Read from connected robot driver when available
         // For now, return mock data (zeros)
@@ -1668,8 +1588,8 @@ fn handle_get_tool_data(
             r: 0.0,
         };
 
-        // Update synced component so all clients get the data
-        for mut ft_state in robots.iter_mut() {
+        // Update synced component on target entity so all clients get the data
+        if let Ok(mut ft_state) = robots.get_mut(target) {
             ft_state.tools.insert(tool_number, tool_data.clone());
         }
 
@@ -1690,15 +1610,17 @@ fn handle_get_tool_data(
 }
 
 /// Handle WriteToolData request - writes tool data to robot and updates synced state.
-fn handle_write_tool_data(
-    mut requests: MessageReader<Request<WriteToolData>>,
+/// This is a targeted request that requires entity control.
+pub fn handle_write_tool_data(
+    mut requests: MessageReader<AuthorizedRequest<WriteToolData>>,
     mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
-        info!("📋 Handling WriteToolData for tool {}", inner.tool_number);
+        let target = request.target_entity;
+        info!("📋 Handling WriteToolData for tool {} on entity {:?}", inner.tool_number, target);
 
-        // Update synced component
+        // Update synced component on target entity
         let tool_data = FrameToolData {
             x: inner.x,
             y: inner.y,
@@ -1707,8 +1629,8 @@ fn handle_write_tool_data(
             p: inner.p,
             r: inner.r,
         };
-        for mut ft_state in robots.iter_mut() {
-            ft_state.tools.insert(inner.tool_number, tool_data.clone());
+        if let Ok(mut ft_state) = robots.get_mut(target) {
+            ft_state.tools.insert(inner.tool_number, tool_data);
         }
 
         // TODO: Write to connected robot driver when available
@@ -1726,17 +1648,19 @@ fn handle_write_tool_data(
 // ============================================================================
 
 /// Handle ReadDin request - reads digital input value.
-fn handle_read_din(
-    mut requests: MessageReader<Request<ReadDin>>,
+/// This is a targeted query (no authorization required).
+pub fn handle_read_din(
+    mut requests: MessageReader<Request<TargetedRequest<ReadDin>>>,
 ) {
     for request in requests.read() {
-        let inner = request.get_request();
-        info!("📋 Handling ReadDin for port {}", inner.port_number);
+        let targeted = request.get_request();
+        let port_number = targeted.request.port_number;
+        info!("📋 Handling ReadDin for port {} on target {}", port_number, targeted.target_id);
 
         // TODO: Read from connected robot driver when available
         // For now, return mock value (false)
         let response = DinValueResponse {
-            port_number: inner.port_number,
+            port_number,
             port_value: false,
         };
 
@@ -1747,16 +1671,18 @@ fn handle_read_din(
 }
 
 /// Handle ReadDinBatch request - reads multiple digital input values.
-fn handle_read_din_batch(
-    mut requests: MessageReader<Request<ReadDinBatch>>,
+/// This is a targeted query (no authorization required).
+pub fn handle_read_din_batch(
+    mut requests: MessageReader<Request<TargetedRequest<ReadDinBatch>>>,
 ) {
     for request in requests.read() {
-        let inner = request.get_request();
-        info!("📋 Handling ReadDinBatch for {} ports", inner.port_numbers.len());
+        let targeted = request.get_request();
+        let port_numbers = &targeted.request.port_numbers;
+        info!("📋 Handling ReadDinBatch for {} ports on target {}", port_numbers.len(), targeted.target_id);
 
         // TODO: Read from connected robot driver when available
         // For now, return mock values (all false)
-        let values: Vec<(u16, bool)> = inner.port_numbers.iter()
+        let values: Vec<(u16, bool)> = port_numbers.iter()
             .map(|&port| (port, false))
             .collect();
 
@@ -1770,19 +1696,21 @@ fn handle_read_din_batch(
 
 /// Handle WriteDout request - writes digital output value.
 /// Waits for robot confirmation before updating IoStatus and responding.
-fn handle_write_dout(
-    mut requests: MessageReader<Request<WriteDout>>,
+/// This is a targeted request that requires entity control.
+pub fn handle_write_dout(
+    mut requests: MessageReader<AuthorizedRequest<WriteDout>>,
     driver_query: Query<&RmiDriver, With<FanucRobot>>,
     runtime: Option<Res<bevy_tokio_tasks::TokioTasksRuntime>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
+        let target = request.target_entity;
         let port = inner.port_number;
         let value = inner.port_value;
-        info!("📋 Handling WriteDout for port {} = {}", port, value);
+        info!("📋 Handling WriteDout for port {} = {} on entity {:?}", port, value, target);
 
-        // Get driver or respond with error
-        let driver = match driver_query.single() {
+        // Get driver from target entity or respond with error
+        let driver = match driver_query.get(target) {
             Ok(d) => d.0.clone(),
             Err(_) => {
                 let response = DoutValueResponse {
@@ -1860,10 +1788,9 @@ fn handle_write_dout(
                     } else {
                         bevy::log::info!("✅ DOUT[{}] set to {} confirmed by robot", port, value);
 
-                        // Update IoStatus on main thread (will be synced to clients)
+                        // Update IoStatus on target entity (will be synced to clients)
                         ctx.run_on_main_thread(move |ctx| {
-                            let mut io_query = ctx.world.query_filtered::<&mut IoStatus, With<FanucRobot>>();
-                            if let Ok(mut io_status) = io_query.single_mut(ctx.world) {
+                            if let Some(mut io_status) = ctx.world.get_mut::<IoStatus>(target) {
                                 let word_index = (port as usize - 1) / 16;
                                 let bit_index = (port as usize - 1) % 16;
                                 while io_status.digital_outputs.len() <= word_index {
@@ -1912,17 +1839,19 @@ fn handle_write_dout(
 }
 
 /// Handle ReadAin request - reads analog input value.
-fn handle_read_ain(
-    mut requests: MessageReader<Request<ReadAin>>,
+/// This is a targeted query (no authorization required).
+pub fn handle_read_ain(
+    mut requests: MessageReader<Request<TargetedRequest<ReadAin>>>,
 ) {
     for request in requests.read() {
-        let inner = request.get_request();
-        info!("📋 Handling ReadAin for port {}", inner.port_number);
+        let targeted = request.get_request();
+        let port_number = targeted.request.port_number;
+        info!("📋 Handling ReadAin for port {} on target {}", port_number, targeted.target_id);
 
         // TODO: Read from connected robot driver when available
         // For now, return mock value (0.0)
         let response = AinValueResponse {
-            port_number: inner.port_number,
+            port_number,
             port_value: 0.0,
         };
 
@@ -1933,26 +1862,28 @@ fn handle_read_ain(
 }
 
 /// Handle WriteAout request - writes analog output value.
-fn handle_write_aout(
-    mut requests: MessageReader<Request<WriteAout>>,
+/// This is a targeted request that requires entity control.
+pub fn handle_write_aout(
+    mut requests: MessageReader<AuthorizedRequest<WriteAout>>,
     mut io_query: Query<&mut IoStatus, With<FanucRobot>>,
     driver_query: Query<&RmiDriver, With<FanucRobot>>,
     runtime: Option<Res<bevy_tokio_tasks::TokioTasksRuntime>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
+        let target = request.target_entity;
         let port = inner.port_number;
         let value = inner.port_value;
-        info!("📋 Handling WriteAout for port {} = {}", port, value);
+        info!("📋 Handling WriteAout for port {} = {} on entity {:?}", port, value, target);
 
-        // Update the IoStatus component (synced to all clients)
-        if let Ok(mut io_status) = io_query.single_mut() {
+        // Update the IoStatus component on target entity (synced to all clients)
+        if let Ok(mut io_status) = io_query.get_mut(target) {
             io_status.analog_outputs.insert(port, value);
             info!("✅ Updated IoStatus AOUT[{}] = {}", port, value);
         }
 
         // Send command to robot driver (if connected)
-        if let (Ok(driver), Some(runtime)) = (driver_query.single(), runtime.as_ref()) {
+        if let (Ok(driver), Some(runtime)) = (driver_query.get(target), runtime.as_ref()) {
             let driver = driver.0.clone();
             runtime.spawn_background_task(move |_ctx| async move {
                 use fanuc_rmi::packets::{SendPacket, Command};
@@ -1981,17 +1912,19 @@ fn handle_write_aout(
 }
 
 /// Handle ReadGin request - reads group input value.
-fn handle_read_gin(
-    mut requests: MessageReader<Request<ReadGin>>,
+/// This is a targeted query (no authorization required).
+pub fn handle_read_gin(
+    mut requests: MessageReader<Request<TargetedRequest<ReadGin>>>,
 ) {
     for request in requests.read() {
-        let inner = request.get_request();
-        info!("📋 Handling ReadGin for port {}", inner.port_number);
+        let targeted = request.get_request();
+        let port_number = targeted.request.port_number;
+        info!("📋 Handling ReadGin for port {} on target {}", port_number, targeted.target_id);
 
         // TODO: Read from connected robot driver when available
         // For now, return mock value (0)
         let response = GinValueResponse {
-            port_number: inner.port_number,
+            port_number,
             port_value: 0,
         };
 
@@ -2002,26 +1935,28 @@ fn handle_read_gin(
 }
 
 /// Handle WriteGout request - writes group output value.
-fn handle_write_gout(
-    mut requests: MessageReader<Request<WriteGout>>,
+/// This is a targeted request that requires entity control.
+pub fn handle_write_gout(
+    mut requests: MessageReader<AuthorizedRequest<WriteGout>>,
     mut io_query: Query<&mut IoStatus, With<FanucRobot>>,
     driver_query: Query<&RmiDriver, With<FanucRobot>>,
     runtime: Option<Res<bevy_tokio_tasks::TokioTasksRuntime>>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
+        let target = request.target_entity;
         let port = inner.port_number;
         let value = inner.port_value;
-        info!("📋 Handling WriteGout for port {} = {}", port, value);
+        info!("📋 Handling WriteGout for port {} = {} on entity {:?}", port, value, target);
 
-        // Update the IoStatus component (synced to all clients)
-        if let Ok(mut io_status) = io_query.single_mut() {
+        // Update the IoStatus component on target entity (synced to all clients)
+        if let Ok(mut io_status) = io_query.get_mut(target) {
             io_status.group_outputs.insert(port, value);
             info!("✅ Updated IoStatus GOUT[{}] = {}", port, value);
         }
 
         // Send command to robot driver (if connected)
-        if let (Ok(driver), Some(runtime)) = (driver_query.single(), runtime.as_ref()) {
+        if let (Ok(driver), Some(runtime)) = (driver_query.get(target), runtime.as_ref()) {
             let driver = driver.0.clone();
             runtime.spawn_background_task(move |_ctx| async move {
                 use fanuc_rmi::packets::{SendPacket, Command};
@@ -2074,6 +2009,7 @@ fn handle_get_io_config(
 fn handle_update_io_config(
     mut requests: MessageReader<Request<UpdateIoConfig>>,
     db: Option<Res<DatabaseResource>>,
+    mut robot_query: Query<(&ConnectionState, &mut IoConfigState)>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -2082,7 +2018,25 @@ fn handle_update_io_config(
 
         let (success, error) = match db.as_ref() {
             Some(db) => match db.update_io_config(inner.robot_connection_id, &inner.configs) {
-                Ok(_) => (true, None),
+                Ok(_) => {
+                    // Find the robot entity with matching active_connection_id and update its IoConfigState
+                    for (conn_state, mut io_config) in robot_query.iter_mut() {
+                        if conn_state.active_connection_id == Some(inner.robot_connection_id) {
+                            // Build the new IoConfigState from the configs
+                            let mut new_configs = std::collections::HashMap::new();
+                            for cfg in &inner.configs {
+                                new_configs.insert(
+                                    (cfg.io_type.clone(), cfg.io_index),
+                                    cfg.clone(),
+                                );
+                            }
+                            io_config.configs = new_configs;
+                            info!("✅ Updated IoConfigState on robot entity");
+                            break;
+                        }
+                    }
+                    (true, None)
+                },
                 Err(e) => (false, Some(e.to_string())),
             },
             None => (false, Some("Database not available".to_string())),
@@ -2177,18 +2131,39 @@ fn handle_reset_database(
 }
 
 /// Handle GetConnectionStatus request.
-fn handle_get_connection_status(
-    mut requests: MessageReader<Request<GetConnectionStatus>>,
+/// This is a targeted query (no authorization required).
+pub fn handle_get_connection_status(
+    mut requests: MessageReader<Request<TargetedRequest<GetConnectionStatus>>>,
+    robots: Query<(&RobotConnectionState, &ConnectionState), With<FanucRobot>>,
 ) {
     for request in requests.read() {
-        info!("📋 Handling GetConnectionStatus");
+        let targeted = request.get_request();
+        info!("📋 Handling GetConnectionStatus for target {}", targeted.target_id);
 
-        // TODO: Check actual connection status
-        let response = ConnectionStatusResponse {
-            connected: false,
-            robot_name: None,
-            ip_address: None,
-            port: None,
+        // Parse target entity from bits string
+        let target = match targeted.target_id.parse::<u64>() {
+            Ok(bits) => Entity::from_bits(bits),
+            Err(_) => {
+                error!("Invalid target entity: {}", targeted.target_id);
+                continue;
+            }
+        };
+
+        // Get connection status from target entity
+        let response = if let Ok((conn_state, conn_details)) = robots.get(target) {
+            ConnectionStatusResponse {
+                connected: *conn_state == RobotConnectionState::Connected,
+                robot_name: Some(conn_details.robot_name.clone()),
+                ip_address: Some(conn_details.robot_addr.clone()),
+                port: None, // Port is embedded in robot_addr
+            }
+        } else {
+            ConnectionStatusResponse {
+                connected: false,
+                robot_name: None,
+                ip_address: None,
+                port: None,
+            }
         };
 
         if let Err(e) = request.clone().respond(response) {
@@ -2198,13 +2173,15 @@ fn handle_get_connection_status(
 }
 
 /// Handle GetExecutionState request.
-fn handle_get_execution_state(
-    mut requests: MessageReader<Request<GetExecutionState>>,
+/// This is a targeted query (no authorization required).
+pub fn handle_get_execution_state(
+    mut requests: MessageReader<Request<TargetedRequest<GetExecutionState>>>,
 ) {
     for request in requests.read() {
-        info!("📋 Handling GetExecutionState");
+        let targeted = request.get_request();
+        info!("📋 Handling GetExecutionState for target {}", targeted.target_id);
 
-        // TODO: Get actual execution state
+        // TODO: Get actual execution state from target entity
         let response = ExecutionStateResponse {
             status: "idle".to_string(),
             current_line: None,

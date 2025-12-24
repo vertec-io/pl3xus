@@ -1,18 +1,19 @@
 //! Load Program Modal - Select and load a program for execution.
 //!
-//! This modal sends a LoadProgram mutation to the server. The server updates
-//! the ExecutionState component which is automatically synced to all clients.
+//! This modal sends a LoadProgram targeted mutation to the server. The server
+//! updates the ExecutionState component which is automatically synced to all clients.
 //! No client-side state updates are needed - the UI reads directly from the
 //! synced ExecutionState.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_query, use_mutation};
+use pl3xus_client::{use_query, use_mutation_targeted};
 use fanuc_replica_types::*;
 use crate::components::{use_toast, ToastType};
+use crate::pages::dashboard::use_system_entity;
 
 /// Load Program Modal - Select and load a program for execution.
 ///
-/// Sends LoadProgram mutation to server. Server updates ExecutionState which
+/// Sends LoadProgram targeted mutation to server. Server updates ExecutionState which
 /// is automatically synced to all clients. No client-side state updates needed.
 #[component]
 pub fn LoadProgramModal<F>(
@@ -22,6 +23,7 @@ where
     F: Fn() + Clone + 'static,
 {
     let toast = use_toast();
+    let system_ctx = use_system_entity();
 
     // Query for programs - auto-fetches on mount, auto-refetches on server invalidation
     let programs_query = use_query::<ListPrograms>(ListPrograms);
@@ -29,8 +31,8 @@ where
     let (selected_id, set_selected_id) = signal::<Option<i64>>(None);
     let on_close_load = on_close.clone();
 
-    // LoadProgram mutation - shows toasts and closes modal on success
-    let load = use_mutation::<LoadProgram>(move |result| {
+    // LoadProgram targeted mutation - shows toasts and closes modal on success
+    let load = use_mutation_targeted::<LoadProgram>(move |result| {
         match result {
             Ok(r) if r.success => {
                 if let Some(program) = &r.program {
@@ -43,6 +45,9 @@ where
         }
     });
 
+    // Get the system entity ID for targeting
+    let system_entity_id = system_ctx.system_entity_id;
+
     // Get programs from query data
     let programs = Memo::new(move |_| {
         programs_query.data().map(|r| r.programs.clone()).unwrap_or_default()
@@ -53,11 +58,11 @@ where
     let on_close_header = on_close.clone();
     let on_close_cancel = on_close.clone();
 
-    // Load selected program - sends mutation to server
-    // Note: MutationHandle is Copy, so it can be used directly in closures
+    // Load selected program - sends targeted mutation to server
+    // Note: TargetedMutationHandle is Copy, so it can be used directly in closures
     let load_click = move |_| {
-        if let Some(id) = selected_id.get() {
-            load.send(LoadProgram { program_id: id });
+        if let (Some(program_id), Some(entity_id)) = (selected_id.get(), system_entity_id.get()) {
+            load.send(entity_id, LoadProgram { program_id });
         }
     };
 

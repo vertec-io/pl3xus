@@ -26,7 +26,6 @@ impl Plugin for RobotSyncPlugin {
         // Jog commands are high-frequency and don't need responses
         app.messages::<(
             JogCommand,
-            JogRobot,
             LinearMotionCommand,
             JointMotionCommand,
         ), WebSocketProvider>()
@@ -53,6 +52,19 @@ impl Plugin for RobotSyncPlugin {
             ResetRobot,
             AbortMotion,
             SetSpeedOverride,
+            SetActiveFrameTool,
+        ), WebSocketProvider>()
+            .targeted()
+            .with_default_entity_policy()
+            .with_error_response();
+
+        // Frame/Tool and I/O write operations - require entity control
+        app.requests::<(
+            WriteFrameData,
+            WriteToolData,
+            WriteDout,
+            WriteAout,
+            WriteGout,
         ), WebSocketProvider>()
             .targeted()
             .with_default_entity_policy()
@@ -61,6 +73,7 @@ impl Plugin for RobotSyncPlugin {
         // Program execution commands - need response for UI feedback
         // Note: These target the system entity (ActiveSystem), not the robot
         app.requests::<(
+            LoadProgram,
             StartProgram,
             PauseProgram,
             ResumeProgram,
@@ -71,14 +84,25 @@ impl Plugin for RobotSyncPlugin {
             .with_default_entity_policy()
             .with_error_response();
 
-        // Legacy targeted messages for program execution (to be migrated)
-        app.messages::<(
-            ExecuteProgram,
-            StopExecution,
-            LoadProgram,
+        // =====================================================================
+        // TARGETED QUERIES (no authorization, just targeting for multi-robot)
+        // =====================================================================
+        // Read operations that need to target a specific robot but don't require
+        // authorization (anyone can read the state of any robot).
+
+        // Frame/Tool and I/O read operations - no authorization needed
+        app.requests::<(
+            GetActiveFrameTool,
+            GetFrameData,
+            GetToolData,
+            ReadDin,
+            ReadDinBatch,
+            ReadAin,
+            ReadGin,
+            GetConnectionStatus,
+            GetExecutionState,
         ), WebSocketProvider>()
             .targeted()
-            .with_default_entity_policy()
             .register();
 
         // =====================================================================
@@ -86,15 +110,39 @@ impl Plugin for RobotSyncPlugin {
         // =====================================================================
         // Targeted messages use AuthorizedTargetedMessage<T>
         // Targeted requests use AuthorizedRequest<T>
+        // Targeted queries use Request<TargetedRequest<T>>
 
+        // Jogging and robot control handlers
         app.add_systems(Update, (
             jogging::handle_authorized_jog_commands,
-            jogging::handle_jog_robot_commands,
             jogging::handle_initialize_robot,
             jogging::handle_abort_motion,
             jogging::handle_reset_robot,
             jogging::handle_set_speed_override,
             jogging::handle_send_packet,
+            super::requests::handle_set_active_frame_tool,
+        ));
+
+        // Frame/Tool and I/O write handlers (require authorization)
+        app.add_systems(Update, (
+            super::requests::handle_write_frame_data,
+            super::requests::handle_write_tool_data,
+            super::requests::handle_write_dout,
+            super::requests::handle_write_aout,
+            super::requests::handle_write_gout,
+        ));
+
+        // Frame/Tool and I/O read handlers (no authorization)
+        app.add_systems(Update, (
+            super::requests::handle_get_active_frame_tool,
+            super::requests::handle_get_frame_data,
+            super::requests::handle_get_tool_data,
+            super::requests::handle_read_din,
+            super::requests::handle_read_din_batch,
+            super::requests::handle_read_ain,
+            super::requests::handle_read_gin,
+            super::requests::handle_get_connection_status,
+            super::requests::handle_get_execution_state,
         ));
     }
 }

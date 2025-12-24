@@ -45,12 +45,12 @@ fn decode_all_packets(data: &[u8]) -> Vec<NetworkPacket> {
             Ok((packet, _)) => {
                 packets.push(packet);
             }
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(target_arch = "wasm32")]
                 leptos::logging::warn!(
                     "[decode_all_packets] Failed to decode packet at offset {}: {:?}",
                     offset,
-                    e
+                    _e
                 );
                 break;
             }

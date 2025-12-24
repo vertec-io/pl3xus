@@ -3,7 +3,7 @@ import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
-      title: 'Eventwork',
+      title: 'pl3xus',
       url: '/',
     },
     links: [
@@ -19,7 +19,7 @@ export function baseOptions(): BaseLayoutProps {
       },
       {
         text: 'Showcase',
-        url: '/showcase', // User asked for it, I'll create a stub
+        url: '/showcase',
         active: 'nested-url',
       },
       {
@@ -28,6 +28,6 @@ export function baseOptions(): BaseLayoutProps {
         external: true,
       },
     ],
-    githubUrl: 'https://github.com/jamescarterbell/bevy_eventwork',
+    githubUrl: 'https://github.com/vertec-io/pl3xus',
   };
 }

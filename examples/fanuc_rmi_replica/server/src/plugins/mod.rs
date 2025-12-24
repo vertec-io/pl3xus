@@ -6,15 +6,13 @@
 //! - `sync`: Robot state synchronization from driver
 //! - `requests`: Request/Response handlers for database queries
 //! - `polling`: Periodic robot status polling
-//! - `execution`: Program execution with buffered streaming (legacy)
-//! - `program`: Program execution with orchestrator pattern (new)
+//! - `program`: Program execution with orchestrator pattern
 
 pub mod system;
 pub mod connection;
 pub mod sync;
 pub mod requests;
 pub mod polling;
-pub mod execution;
 pub mod program;
 
 pub use system::SystemPlugin;
@@ -22,5 +20,4 @@ pub use connection::RobotConnectionPlugin;
 pub use sync::RobotSyncPlugin;
 pub use requests::RequestHandlerPlugin;
 pub use polling::RobotPollingPlugin;
-pub use execution::ProgramExecutionPlugin;
 pub use program::ProgramPlugin;

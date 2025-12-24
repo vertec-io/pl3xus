@@ -34,6 +34,27 @@ pub struct ComponentSyncConfig {
     /// being applied directly. The handler receives `ComponentMutation<T>` events
     /// and is responsible for applying the mutation after any business logic.
     pub has_mutation_handler: bool,
+
+    /// Whether mutations require entity-level authorization.
+    ///
+    /// When `true`, mutations are only allowed if the client has control of the
+    /// target entity (checked via `EntityAccessPolicy`). Unauthorized mutations
+    /// are rejected with a `Forbidden` status.
+    ///
+    /// This is typically used together with `has_mutation_handler` - the handler
+    /// will receive `AuthorizedComponentMutation<T>` events instead of
+    /// `ComponentMutation<T>` events.
+    ///
+    /// Default: `false` (mutations are not targeted/authorized)
+    pub requires_entity_authorization: bool,
+
+    /// Whether to use the default entity access policy for authorization.
+    ///
+    /// When `true`, the `DefaultEntityAccessPolicy` resource is used for authorization.
+    /// This is typically set by `ExclusiveControlPlugin`.
+    ///
+    /// Only applicable when `requires_entity_authorization` is `true`.
+    pub use_default_entity_policy: bool,
 }
 
 impl Default for ComponentSyncConfig {
@@ -43,6 +64,8 @@ impl Default for ComponentSyncConfig {
             allow_client_mutations: true,
             mutation_denied_message: None,
             has_mutation_handler: false,
+            requires_entity_authorization: false,
+            use_default_entity_policy: false,
         }
     }
 }
@@ -236,6 +259,12 @@ pub struct ComponentRegistration {
     /// When `config.has_mutation_handler` is true, this function is called
     /// to deserialize the mutation and send it as a `ComponentMutation<T>` event.
     pub route_to_handler: Option<fn(&mut World, &QueuedMutation)>,
+    /// Optional function to route authorized mutations to a handler system.
+    ///
+    /// When `config.requires_entity_authorization` is true, this function is called
+    /// to deserialize the mutation and send it as an `AuthorizedComponentMutation<T>` event.
+    /// Authorization is checked before this function is called.
+    pub route_to_authorized_handler: Option<fn(&mut World, &QueuedMutation)>,
 }
 
 /// Registry of component types that participate in synchronization.
@@ -384,6 +413,71 @@ pub struct ComponentMutation<T: Component + Clone + Send + Sync + 'static> {
 }
 
 impl<T: Component + Clone + Send + Sync + 'static> ComponentMutation<T> {
+    /// Get the entity this mutation targets.
+    pub fn entity(&self) -> Entity {
+        self.entity
+    }
+
+    /// Get the new component value requested by the client.
+    pub fn new_value(&self) -> &T {
+        &self.new_value
+    }
+
+    /// Get the connection that originated this mutation.
+    pub fn connection_id(&self) -> pl3xus_common::ConnectionId {
+        self.connection_id
+    }
+
+    /// Get the request ID for correlation.
+    pub fn request_id(&self) -> Option<u64> {
+        self.request_id
+    }
+}
+
+/// A component mutation that has passed entity-level authorization.
+///
+/// This is emitted when a component is registered with `.targeted().with_default_entity_policy()`
+/// or `.targeted().with_entity_policy(...)`. Systems should read this message type when they
+/// want only authorized mutations (mutations from clients that have control of the target entity).
+///
+/// # Example
+///
+/// ```rust,ignore
+/// fn handle_jog_settings_mutation(
+///     mut events: MessageReader<AuthorizedComponentMutation<JogSettingsState>>,
+///     mut jog_settings_query: Query<&mut JogSettingsState, With<FanucRobot>>,
+///     mut response_queue: ResMut<MutationResponseQueue>,
+/// ) {
+///     for event in events.read() {
+///         // Authorization already verified - client has control of the entity
+///         let new_settings = &event.new_value;
+///
+///         if let Ok(mut settings) = jog_settings_query.get_mut(event.entity) {
+///             *settings = new_settings.clone();
+///             response_queue.respond_ok(event.connection_id, event.request_id);
+///         }
+///     }
+/// }
+///
+/// app.sync_component_builder::<JogSettingsState>()
+///     .with_handler::<WebSocketProvider, _, _>(handle_jog_settings_mutation)
+///     .targeted()
+///     .with_default_entity_policy()
+///     .build();
+/// ```
+#[derive(Clone, bevy::prelude::Message)]
+pub struct AuthorizedComponentMutation<T: Component + Clone + Send + Sync + 'static> {
+    /// The connection that originated the mutation (verified to have control).
+    pub connection_id: pl3xus_common::ConnectionId,
+    /// Optional client-chosen correlation id for the response.
+    pub request_id: Option<u64>,
+    /// The target entity (verified to exist and be under client's control).
+    pub entity: Entity,
+    /// The new component value requested by the client.
+    pub new_value: T,
+}
+
+impl<T: Component + Clone + Send + Sync + 'static> AuthorizedComponentMutation<T> {
     /// Get the entity this mutation targets.
     pub fn entity(&self) -> Entity {
         self.entity
@@ -753,6 +847,55 @@ where
     world.write_message(event);
 }
 
+/// Route an authorized mutation to a handler system by sending an `AuthorizedComponentMutation<T>` event.
+///
+/// This function is similar to `route_mutation_to_handler`, but emits `AuthorizedComponentMutation<T>`
+/// instead of `ComponentMutation<T>`. Authorization is checked before this function is called.
+fn route_authorized_mutation_to_handler<T>(world: &mut World, mutation: &QueuedMutation)
+where
+    T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug + Clone,
+{
+    // Deserialize bincode bytes → concrete component type
+    let value: T = match bincode::serde::decode_from_slice(&mutation.value, bincode::config::standard()) {
+        Ok((v, _)) => v,
+        Err(err) => {
+            bevy::log::error!(
+                "[route_authorized_mutation_to_handler] Failed to deserialize {}: {:?}",
+                mutation.component_type,
+                err
+            );
+            // Queue an error response
+            if let Some(mut queue) = world.get_resource_mut::<MutationResponseQueue>() {
+                queue.respond_error(
+                    mutation.connection_id,
+                    mutation.request_id,
+                    format!("Failed to deserialize mutation: {:?}", err),
+                );
+            }
+            return;
+        }
+    };
+
+    let entity = mutation.entity.to_entity();
+
+    bevy::log::debug!(
+        "[route_authorized_mutation_to_handler] Routing authorized mutation to handler: entity={:?}, type={}, value={:?}",
+        entity,
+        mutation.component_type,
+        value
+    );
+
+    // Send the typed authorized mutation event
+    let event = AuthorizedComponentMutation {
+        connection_id: mutation.connection_id,
+        request_id: mutation.request_id,
+        entity,
+        new_value: value,
+    };
+
+    world.write_message(event);
+}
+
 fn snapshot_typed<T>(world: &mut World) -> Vec<(SerializableEntity, Vec<u8>)>
 where
     T: Component + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
@@ -788,14 +931,20 @@ where
         let type_name = full_type_name.rsplit("::").next().unwrap_or(full_type_name).to_string();
         let cfg = config.unwrap_or_default();
         let has_handler = cfg.has_mutation_handler;
+        let requires_auth = cfg.requires_entity_authorization;
         registry.register_component(ComponentRegistration {
             type_id: std::any::TypeId::of::<T>(),
             type_name,
             config: cfg,
             apply_mutation: apply_typed_mutation::<T>,
             snapshot_all: snapshot_typed::<T>,
-            route_to_handler: if has_handler {
+            route_to_handler: if has_handler && !requires_auth {
                 Some(route_mutation_to_handler::<T>)
+            } else {
+                None
+            },
+            route_to_authorized_handler: if has_handler && requires_auth {
+                Some(route_authorized_mutation_to_handler::<T>)
             } else {
                 None
             },

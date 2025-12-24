@@ -4,7 +4,7 @@
 //! Server is the single source of truth for active frame/tool.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_entity_component, use_mutation};
+use pl3xus_client::{use_sync_context, use_entity_component, use_mutation_targeted, EntityControl};
 use fanuc_replica_types::{ConnectionState, FrameToolDataState, SetActiveFrameTool};
 use crate::components::use_toast;
 use crate::pages::dashboard::use_system_entity;
@@ -13,8 +13,10 @@ use crate::pages::dashboard::use_system_entity;
 ///
 /// Reads active tool from synced FrameToolDataState. The pending_tool
 /// is UI-local state for the selection before "Apply" is clicked.
+/// Keeps pending state until server confirms to avoid flash back to server value.
 #[component]
 pub fn ToolManagementPanel() -> impl IntoView {
+    let ctx = use_sync_context();
     let toast = use_toast();
     let system_ctx = use_system_entity();
 
@@ -23,23 +25,42 @@ pub fn ToolManagementPanel() -> impl IntoView {
     let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
     let (frame_tool_state, _) = use_entity_component::<FrameToolDataState, _>(move || system_ctx.robot_entity_id.get());
 
+    // Subscribe to entity control on the System entity (control is at hierarchy level)
+    let (control_state, _) = use_entity_component::<EntityControl, _>(move || system_ctx.system_entity_id.get());
+
+    // Check if THIS client has control
+    let has_control = Memo::new(move |_| {
+        let my_id = ctx.my_connection_id.get();
+        let state = control_state.get();
+        Some(state.client_id) == my_id
+    });
+
     // Derive active frame/tool from synced server state
     let active_frame = Memo::new(move |_| frame_tool_state.get().active_frame as usize);
     let active_tool = Memo::new(move |_| frame_tool_state.get().active_tool as usize);
 
-    // Mutation for setting active frame/tool with error handling
-    let set_frame_tool = use_mutation::<SetActiveFrameTool>(move |result| {
+    // Local UI state for pending tool selection (before Apply is clicked)
+    let (pending_tool, set_pending_tool) = signal::<Option<usize>>(None);
+
+    // Targeted mutation for setting active frame/tool with error handling
+    let set_frame_tool = use_mutation_targeted::<SetActiveFrameTool>(move |result| {
         match result {
-            Ok(r) if r.success => {} // Silent success - UI updates from synced state
-            Ok(r) => toast.error(format!("Tool change failed: {}", r.error.as_deref().unwrap_or(""))),
-            Err(e) => toast.error(format!("Tool error: {e}")),
+            Ok(r) if r.success => {
+                // Success - pending_tool will be cleared when synced component updates
+            }
+            Ok(r) => {
+                // Failure - clear pending and revert to server value
+                set_pending_tool.set(None);
+                toast.error(format!("Tool change failed: {}", r.error.as_deref().unwrap_or("No control")));
+            }
+            Err(e) => {
+                set_pending_tool.set(None);
+                toast.error(format!("Tool error: {e}"));
+            }
         }
     });
 
     let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
-
-    // Local UI state for pending tool selection (before Apply is clicked)
-    let (pending_tool, set_pending_tool) = signal::<Option<usize>>(None);
 
     // View mode: "buttons" or "dropdown" - UI-local state
     let (view_mode, set_view_mode) = signal("buttons");
@@ -49,8 +70,25 @@ pub fn ToolManagementPanel() -> impl IntoView {
         pending_tool.get().unwrap_or_else(|| active_tool.get())
     };
 
-    // Check if there are pending changes
-    let has_pending = move || pending_tool.get().is_some();
+    // Check if there are pending changes (only if we have control)
+    let has_pending = move || pending_tool.get().is_some() && has_control.get();
+
+    // Effect to clear pending value when server catches up
+    Effect::new(move |_| {
+        let server = active_tool.get();
+        let pending = pending_tool.get_untracked();
+        if let Some(pending_val) = pending {
+            if server == pending_val {
+                set_pending_tool.set(None);
+            }
+        }
+    });
+
+    // Get the Robot entity bits (for targeted mutation)
+    let robot_entity_bits = move || system_ctx.robot_entity_id.get();
+
+    // Disabled state for buttons/select when not in control
+    let is_disabled = move || !has_control.get();
 
     view! {
         <Show when=move || robot_connected.get()>
@@ -63,20 +101,25 @@ pub fn ToolManagementPanel() -> impl IntoView {
                         </svg>
                         "User Tools"
                     </h3>
-                    // View toggle button
-                    <button
-                        class="text-[8px] text-[#666666] hover:text-[#00d9ff] px-1.5 py-0.5 border border-[#ffffff08] rounded"
-                        on:click=move |_| {
-                            if view_mode.get() == "buttons" {
-                                set_view_mode.set("dropdown");
-                            } else {
-                                set_view_mode.set("buttons");
+                    <div class="flex items-center gap-1">
+                        <Show when=move || !has_control.get()>
+                            <span class="text-[8px] text-[#ff4444] bg-[#ff444420] px-1.5 py-0.5 rounded">"No Control"</span>
+                        </Show>
+                        // View toggle button
+                        <button
+                            class="text-[8px] text-[#666666] hover:text-[#00d9ff] px-1.5 py-0.5 border border-[#ffffff08] rounded"
+                            on:click=move |_| {
+                                if view_mode.get() == "buttons" {
+                                    set_view_mode.set("dropdown");
+                                } else {
+                                    set_view_mode.set("buttons");
+                                }
                             }
-                        }
-                        title="Toggle view mode"
-                    >
-                        {move || if view_mode.get() == "buttons" { "▼" } else { "▦" }}
-                    </button>
+                            title="Toggle view mode"
+                        >
+                            {move || if view_mode.get() == "buttons" { "▼" } else { "▦" }}
+                        </button>
+                    </div>
                 </div>
 
                 // Button grid view
@@ -85,7 +128,12 @@ pub fn ToolManagementPanel() -> impl IntoView {
                     view! {
                         <div class="flex items-center gap-2">
                             <select
-                                class="flex-1 bg-[#111111] border border-[#ffffff15] rounded px-2 py-1 text-[10px] text-white"
+                                class=move || if is_disabled() {
+                                    "flex-1 bg-[#111111] border border-[#ffffff15] rounded px-2 py-1 text-[10px] text-[#555555] opacity-50 cursor-not-allowed"
+                                } else {
+                                    "flex-1 bg-[#111111] border border-[#ffffff15] rounded px-2 py-1 text-[10px] text-white"
+                                }
+                                disabled=is_disabled
                                 on:change=move |ev| {
                                     let value = event_target_value(&ev);
                                     if let Ok(v) = value.parse::<usize>() {
@@ -107,15 +155,14 @@ pub fn ToolManagementPanel() -> impl IntoView {
                                 <button
                                     class="px-2 py-1 text-[9px] bg-[#00d9ff20] text-[#00d9ff] border border-[#00d9ff] rounded hover:bg-[#00d9ff30]"
                                     on:click=move |_| {
-                                        if let Some(tool) = pending_tool.get() {
+                                        if let (Some(tool), Some(entity_bits)) = (pending_tool.get(), robot_entity_bits()) {
                                             let frame = active_frame.get();
-                                            // Send request to server - server updates FrameToolDataState
-                                            // which syncs back to all clients
-                                            set_frame_tool.send(SetActiveFrameTool {
+                                            // Send targeted request to server - server updates FrameToolDataState
+                                            // which syncs back to all clients. Don't clear pending - let Effect do it.
+                                            set_frame_tool.send(entity_bits, SetActiveFrameTool {
                                                 uframe: frame as i32,
                                                 utool: tool as i32,
                                             });
-                                            set_pending_tool.set(None);
                                         }
                                     }
                                     title="Apply tool change to robot"
@@ -136,8 +183,11 @@ pub fn ToolManagementPanel() -> impl IntoView {
                                         class={move || {
                                             let selected = is_selected();
                                             let active = is_active();
+                                            let disabled = is_disabled();
 
-                                            if selected && active {
+                                            if disabled {
+                                                "bg-[#111111] border border-[#ffffff08] text-[#444444] text-[9px] py-1 rounded opacity-50 cursor-not-allowed"
+                                            } else if selected && active {
                                                 "bg-[#00d9ff20] border border-[#00d9ff] text-[#00d9ff] text-[9px] py-1 rounded font-medium"
                                             } else if selected {
                                                 "bg-[#ffaa0020] border border-[#ffaa00] text-[#ffaa00] text-[9px] py-1 rounded font-medium"
@@ -145,6 +195,7 @@ pub fn ToolManagementPanel() -> impl IntoView {
                                                 "bg-[#111111] border border-[#ffffff08] text-[#555555] text-[9px] py-1 rounded hover:border-[#ffffff20] hover:text-[#888888]"
                                             }
                                         }}
+                                        disabled=is_disabled
                                         on:click=move |_| {
                                             set_pending_tool.set(Some(i));
                                         }
@@ -155,20 +206,19 @@ pub fn ToolManagementPanel() -> impl IntoView {
                                 }
                             }).collect_view()}
                         </div>
-                        // Apply button (only show if pending changes)
+                        // Apply button (only show if pending changes and have control)
                         <Show when=has_pending>
                             <button
                                 class="w-full px-2 py-1 text-[9px] bg-[#00d9ff20] text-[#00d9ff] border border-[#00d9ff] rounded hover:bg-[#00d9ff30]"
                                 on:click=move |_| {
-                                    if let Some(tool) = pending_tool.get() {
+                                    if let (Some(tool), Some(entity_bits)) = (pending_tool.get(), robot_entity_bits()) {
                                         let frame = active_frame.get();
-                                        // Send request to server - server updates FrameToolDataState
-                                        // which syncs back to all clients
-                                        set_frame_tool.send(SetActiveFrameTool {
+                                        // Send targeted request to server - server updates FrameToolDataState
+                                        // which syncs back to all clients. Don't clear pending - let Effect do it.
+                                        set_frame_tool.send(entity_bits, SetActiveFrameTool {
                                             uframe: frame as i32,
                                             utool: tool as i32,
                                         });
-                                        set_pending_tool.set(None);
                                     }
                                 }
                                 title="Apply tool change to robot"

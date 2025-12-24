@@ -1,15 +1,15 @@
 ---
-title: pl3xus
+title: bevy_eventwork
 ---
-# pl3xus
+# bevy_eventwork
 
 > A modular, event-driven networking solution for [Bevy](https://bevyengine.org/) applications. Connect multiple Bevy instances with ease using a flexible, transport-agnostic architecture.
 
 Forked from the excellent [`bevy_spicy_networking`](https://crates.io/crates/bevy_spicy_networking), with significant improvements for modularity, performance, and ease of use.
 
-[![Crates.io](https://img.shields.io/crates/v/pl3xus)](https://crates.io/crates/pl3xus)
-[![Docs.rs](https://docs.rs/pl3xus/badge.svg)](https://docs.rs/pl3xus)
-[![License](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/jamescarterbell/pl3xus)
+[![Crates.io](https://img.shields.io/crates/v/bevy_eventwork)](https://crates.io/crates/bevy_eventwork)
+[![Docs.rs](https://docs.rs/bevy_eventwork/badge.svg)](https://docs.rs/bevy_eventwork)
+[![License](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/jamescarterbell/bevy_eventwork)
 
 ## Contents
 
@@ -81,11 +81,11 @@ The old API is deprecated but still fully functional:
 
 ## Documentation
 
-📚 **[Online Documentation](https://docs.rs/pl3xus)** - Complete API reference
+📚 **[Online Documentation](https://docs.rs/bevy_eventwork)** - Complete API reference
 
 You can also build the documentation locally:
 ```bash
-cargo doc -p pl3xus --open
+cargo doc -p eventwork --open
 ```
 
 ### Quickstart
@@ -95,11 +95,11 @@ cargo doc -p pl3xus --open
 ```toml
 [dependencies]
 bevy = "0.17"
-pl3xus = "1.1"  # Bevy 0.17 support with automatic message registration!
+eventwork = "1.1"  # Bevy 0.17 support with automatic message registration!
 serde = { version = "1.0", features = ["derive"] }
 
 # Choose a transport provider:
-# pl3xus_websockets = "1.1"  # For WebSocket support (WASM + Native)
+# eventwork_websockets = "1.1"  # For WebSocket support (WASM + Native)
 ```
 
 **Important**: Bevy 0.17 requires Rust 1.88.0 (nightly). See [Rust Nightly Requirement](#rust-nightly-requirement) for setup instructions.
@@ -128,7 +128,7 @@ If you need explicit control over message names (e.g., for versioning), you can 
 
 ```rust
 use serde::{Serialize, Deserialize};
-use pl3xus::NetworkMessage;
+use eventwork::NetworkMessage;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct ChatMessage {
@@ -148,15 +148,15 @@ impl NetworkMessage for ChatMessage {
 ```rust
 use bevy::prelude::*;
 use bevy::tasks::TaskPoolBuilder;
-use pl3xus::{AppNetworkMessage, Pl3xusPlugin, Pl3xusRuntime};
+use eventwork::{AppNetworkMessage, EventworkPlugin, EventworkRuntime};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         // Add the networking plugin with your chosen transport
-        .add_plugins(Pl3xusPlugin::<YourTransportProvider, bevy::tasks::TaskPool>::default())
+        .add_plugins(EventworkPlugin::<YourTransportProvider, bevy::tasks::TaskPool>::default())
         // Set up the async runtime
-        .insert_resource(Pl3xusRuntime(
+        .insert_resource(EventworkRuntime(
             TaskPoolBuilder::new().num_threads(2).build()
         ))
         // Register messages - now with automatic naming!
@@ -170,7 +170,7 @@ fn main() {
 #### 4. Handle Incoming Messages
 
 ```rust
-use pl3xus::NetworkData;
+use eventwork::NetworkData;
 
 fn handle_chat_messages(
     mut messages: MessageReader<NetworkData<ChatMessage>>,
@@ -185,7 +185,7 @@ fn handle_chat_messages(
 #### 5. Send Messages
 
 ```rust
-use pl3xus::Network;
+use eventwork::Network;
 
 fn send_chat_message(
     net: Res<Network<YourTransportProvider>>,
@@ -203,11 +203,11 @@ fn send_chat_message(
 }
 ```
 
-> 📚 **Advanced:** Pl3xus also supports `OutboundMessage` with `MessageWriter` for precise control over network scheduling. See **[Sending Messages Guide](./docs/guides/sending-messages.md)** for the complete guide on both approaches.
+> 📚 **Advanced:** Eventwork also supports `OutboundMessage` with `MessageWriter` for precise control over network scheduling. See **[Sending Messages Guide](./docs/guides/sending-messages.md)** for the complete guide on both approaches.
 
 ## Examples
 
-Check out the [examples directory](https://github.com/jamescarterbell/pl3xus/tree/master/crates/pl3xus/examples) for complete working examples:
+Check out the [examples directory](https://github.com/jamescarterbell/bevy_eventwork/tree/master/crates/eventwork/examples) for complete working examples:
 
 - **`server.rs`** - A chat server that broadcasts messages to all connected clients
 - **`client.rs`** - A graphical chat client with Bevy UI
@@ -215,17 +215,17 @@ Check out the [examples directory](https://github.com/jamescarterbell/pl3xus/tre
 Run the examples:
 ```bash
 # Terminal 1 - Start the server
-cargo run --example server -p pl3xus
+cargo run --example server -p eventwork
 
 # Terminal 2 - Start a client
-cargo run --example client -p pl3xus
+cargo run --example client -p eventwork
 ```
 
-For WebSocket examples, see the [`pl3xus_websockets` crate](./crates/pl3xus_websockets).
+For WebSocket examples, see the [`eventwork_websockets` crate](./crates/eventwork_websockets).
 
 ## Bevy Version Compatibility
 
-| pl3xus | Bevy | Rust | Notes |
+| bevy_eventwork | Bevy | Rust | Notes |
 | :------------: | :--: | :--: | :---: |
 |      1.1       | 0.17 | 1.88 (nightly) | **Current** - See [Rust Nightly Requirement](#rust-nightly-requirement) |
 |      0.9       | 0.16 | 1.85 | Maintenance mode |
@@ -252,17 +252,17 @@ For WebSocket examples, see the [`pl3xus_websockets` crate](./crates/pl3xus_webs
 
 ### Crate Version Compatibility
 
-All pl3xus crates are versioned together for simplicity:
+All eventwork crates are versioned together for simplicity:
 
 | Crate | Version | Bevy | Status |
 | :---: | :-----: | :--: | :----: |
-| `pl3xus` | 1.1.1 | 0.17 | ✅ Current |
-| `pl3xus_common` | 1.1.1 | 0.17 | ✅ Current |
-| `pl3xus_websockets` | 1.1.1 | 0.17 | ✅ Current |
-| `pl3xus_macros` | 1.1.1 | 0.17 | ✅ Current |
-| `pl3xus_memory` | 1.1.1 | 0.17 | ✅ Current |
+| `eventwork` | 1.1.1 | 0.17 | ✅ Current |
+| `eventwork_common` | 1.1.1 | 0.17 | ✅ Current |
+| `eventwork_websockets` | 1.1.1 | 0.17 | ✅ Current |
+| `eventwork_macros` | 1.1.1 | 0.17 | ✅ Current |
+| `eventwork_memory` | 1.1.1 | 0.17 | ✅ Current |
 
-**Always use matching versions** of all pl3xus crates to avoid compatibility issues.
+**Always use matching versions** of all eventwork crates to avoid compatibility issues.
 
 ## Supported Platforms
 
@@ -273,21 +273,21 @@ All pl3xus crates are versioned together for simplicity:
 | **macOS** | ⚠️ Should Work | Not regularly tested - community feedback welcome! |
 | **WASM** | ✅ Supported | Requires WebSocket transport provider |
 
-**WASM Support**: Use the [`pl3xus_websockets`](./crates/pl3xus_websockets) transport provider for full WASM compatibility.
+**WASM Support**: Use the [`eventwork_websockets`](./crates/eventwork_websockets) transport provider for full WASM compatibility.
 
 ## Transport Providers
 
-pl3xus uses a modular transport system. Choose the provider that fits your needs:
+bevy_eventwork uses a modular transport system. Choose the provider that fits your needs:
 
 | Provider | Platforms | WASM | Status | Crate |
 | :------: | :-------: | :--: | :----: | :---: |
 | **TCP** | Linux, Windows, macOS | ❌ | ✅ Included | Built-in |
-| **WebSocket** | Linux, Windows, macOS, WASM | ✅ | ✅ Available | [`pl3xus_websockets`](./crates/pl3xus_websockets) |
-| **Memory** | All | ✅ | 🧪 Testing | [`pl3xus_memory`](./crates/pl3xus_memory) |
+| **WebSocket** | Linux, Windows, macOS, WASM | ✅ | ✅ Available | [`eventwork_websockets`](./crates/eventwork_websockets) |
+| **Memory** | All | ✅ | 🧪 Testing | [`eventwork_memory`](./crates/eventwork_memory) |
 
 ### Implementing Custom Transports
 
-You can implement your own transport layer by implementing the `NetworkProvider` trait. See the [documentation](https://docs.rs/pl3xus/latest/pl3xus/trait.NetworkProvider.html) for details.
+You can implement your own transport layer by implementing the `NetworkProvider` trait. See the [documentation](https://docs.rs/bevy_eventwork/latest/bevy_eventwork/trait.NetworkProvider.html) for details.
 
 ## Workspace Crates
 
@@ -295,19 +295,19 @@ This repository is organized as a Cargo workspace with multiple crates:
 
 ### Core Crates
 
-- **[`pl3xus`](./crates/pl3xus)** - The main networking library
-- **[`pl3xus_common`](./crates/pl3xus_common)** - Shared types and utilities
-- **[`pl3xus_macros`](./crates/pl3xus_macros)** - Procedural macros
+- **[`eventwork`](./crates/eventwork)** - The main networking library
+- **[`eventwork_common`](./crates/eventwork_common)** - Shared types and utilities
+- **[`eventwork_macros`](./crates/eventwork_macros)** - Procedural macros
 
 ### Transport Providers
 
-- **[`pl3xus_websockets`](./crates/pl3xus_websockets)** - WebSocket transport (WASM + Native)
-- **[`pl3xus_memory`](./crates/pl3xus_memory)** - In-memory transport for testing
+- **[`eventwork_websockets`](./crates/eventwork_websockets)** - WebSocket transport (WASM + Native)
+- **[`eventwork_memory`](./crates/eventwork_memory)** - In-memory transport for testing
 
 ### Sync & Client Crates
 
-- **[`pl3xus_sync`](./crates/pl3xus_sync)** - Server-side ECS component synchronization
-- **[`pl3xus_client`](./crates/pl3xus_client)** - Leptos-based reactive web client for pl3xus_sync
+- **[`eventwork_sync`](./crates/eventwork_sync)** - Server-side ECS component synchronization
+- **[`eventwork_client`](./crates/eventwork_client)** - Leptos-based reactive web client for eventwork_sync
 
 ## Roadmap
 
@@ -316,8 +316,8 @@ This repository is organized as a Cargo workspace with multiple crates:
 - ✅ Rust 2024 edition
 - ✅ Improved documentation
 - ✅ WebSocket transport provider
-- ✅ ECS component synchronization (pl3xus_sync)
-- ✅ Reactive web client (pl3xus_client)
+- ✅ ECS component synchronization (eventwork_sync)
+- ✅ Reactive web client (eventwork_client)
 
 ### Future Plans
 - 🔄 Message type ID optimization (reduce bandwidth by using numeric IDs instead of strings)
@@ -350,8 +350,8 @@ Contributions are welcome! Here's how you can help:
 
 ```bash
 # Clone the repository
-git clone https://github.com/jamescarterbell/pl3xus.git
-cd pl3xus
+git clone https://github.com/jamescarterbell/bevy_eventwork.git
+cd bevy_eventwork
 
 # Build the workspace
 cargo build --workspace --all-features
@@ -360,8 +360,8 @@ cargo build --workspace --all-features
 cargo test --workspace
 
 # Run examples
-cargo run --example server -p pl3xus
-cargo run --example client -p pl3xus
+cargo run --example server -p eventwork
+cargo run --example client -p eventwork
 ```
 
 ### Guidelines
@@ -375,8 +375,8 @@ cargo run --example client -p pl3xus
 ### Getting Help
 
 - 💬 **Discord**: Find us on the [Bevy Discord](https://discord.gg/bevy) - look for `@SirCarter`
-- 📖 **Documentation**: Check the [online docs](https://docs.rs/pl3xus)
-- 🐛 **Issues**: Browse [existing issues](https://github.com/jamescarterbell/pl3xus/issues) or open a new one
+- 📖 **Documentation**: Check the [online docs](https://docs.rs/bevy_eventwork)
+- 🐛 **Issues**: Browse [existing issues](https://github.com/jamescarterbell/bevy_eventwork/issues) or open a new one
 
 ## License
 

@@ -1,224 +1,315 @@
-# Getting Started with pl3xus_sync
+# Server Development
 
-`pl3xus_sync` is a server-side Bevy plugin that automatically synchronizes ECS components to connected clients using bincode serialization.
-
-**Time**: 30-45 minutes  
-**Difficulty**: Intermediate  
-**Prerequisites**: Basic Bevy knowledge, pl3xus setup
+Build Bevy ECS servers that synchronize state to web clients in real-time.
 
 ---
 
 ## Overview
 
-`pl3xus_sync` provides:
+pl3xus_sync provides:
 
-- **Automatic component synchronization** to subscribed clients
-- **Fast binary serialization** using bincode
-- **Opt-in per component** registration
-- **Client mutation support** with authorization
-- **Configurable update rates** and conflation
-
----
-
-## Installation
-
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-bevy = "0.17"
-pl3xus = "1.1"
-pl3xus_sync = { version = "0.1", features = ["runtime"] }
-pl3xus_websockets = "1.1"
-serde = { version = "1.0", features = ["derive"] }
-```
+- **Automatic component synchronization** - Register once, sync forever
+- **Builder pattern API** - Fluent configuration for components and requests
+- **Authorization system** - Control who can read and modify what
+- **Targeted requests** - Entity-specific operations with authorization
+- **Hierarchical control** - Parent-child entity control inheritance
 
 ---
 
 ## Quick Start
 
-### Step 1: Create Shared Types
-
-Create a shared crate for types used by both server and client:
-
-**`shared_types/Cargo.toml`**:
-
-```toml
-[package]
-name = "shared_types"
-version = "0.1.0"
-edition = "2021"
-
-[features]
-server = ["dep:bevy"]
-
-[dependencies]
-serde = { version = "1.0", features = ["derive"] }
-bevy = { version = "0.17", optional = true }
-```
-
-**`shared_types/src/lib.rs`**:
+### 1. Register Components for Sync
 
 ```rust
-use serde::{Deserialize, Serialize};
-
-#[cfg(feature = "server")]
-use bevy::prelude::*;
-
-/// Position component - synchronized to clients
-#[cfg_attr(feature = "server", derive(Component))]
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct Position {
-    pub x: f32,
-    pub y: f32,
-}
-
-/// Status flags - synchronized to clients
-#[cfg_attr(feature = "server", derive(Component))]
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct StatusFlags {
-    pub label: String,
-    pub enabled: bool,
-}
-```
-
-This pattern enables:
-- Bincode serialization without reflection
-- Server gets `Component` trait via feature flag
-- Clients can use types without Bevy dependency
-
-### Step 2: Set Up the Server
-
-**Server `Cargo.toml`**:
-
-```toml
-[dependencies]
-bevy = "0.17"
-pl3xus = "1.1"
-pl3xus_sync = { version = "0.1", features = ["runtime"] }
-pl3xus_websockets = "1.1"
-shared_types = { path = "../shared_types", features = ["server"] }
-```
-
-**Server `main.rs`**:
-
-```rust
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use bevy::prelude::*;
-use bevy::tasks::{TaskPool, TaskPoolBuilder};
-use pl3xus::{Pl3xusPlugin, Pl3xusRuntime, Network};
 use pl3xus_sync::{Pl3xusSyncPlugin, AppPl3xusSyncExt};
-use pl3xus_websockets::{WebSocketProvider, NetworkSettings};
-use shared_types::{Position, StatusFlags};
 
 fn main() {
     App::new()
         .add_plugins(MinimalPlugins)
-        .add_plugins(bevy::log::LogPlugin::default())
-        // Add pl3xus networking
-        .add_plugins(Pl3xusPlugin::<WebSocketProvider, TaskPool>::default())
-        .insert_resource(Pl3xusRuntime(TaskPoolBuilder::new().num_threads(2).build()))
-        .insert_resource(NetworkSettings::default())
-        // Add sync plugin
-        .add_plugins(Pl3xusSyncPlugin::<WebSocketProvider>::default())
-        // Register components for synchronization
+        .add_plugins(Pl3xusSyncPlugin::default())
+        // Simple registration
         .sync_component::<Position>(None)
-        .sync_component::<StatusFlags>(None)
-        // Add systems
-        .add_systems(Startup, (setup_world, setup_networking))
-        .add_systems(Update, update_positions)
+        .sync_component::<Velocity>(None)
+        // That's it! Changes are automatically synced
         .run();
 }
 ```
 
-### Step 3: Start the Network Listener
+### 2. Spawn Entities
 
 ```rust
-fn setup_networking(
-    net: Res<Network<WebSocketProvider>>,
-    settings: Res<NetworkSettings>,
-    task_pool: Res<Pl3xusRuntime<TaskPool>>,
-) {
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8082);
+fn setup(mut commands: Commands) {
+    commands.spawn((
+        Position { x: 0.0, y: 0.0 },
+        Velocity { x: 1.0, y: 0.0 },
+    ));
+}
+```
 
-    match net.listen(addr, &task_pool.0, &settings) {
-        Ok(_) => info!("Sync server listening on {addr}"),
-        Err(err) => {
-            error!("Could not start listening: {err}");
-            panic!("Failed to bind listener");
+Any changes to `Position` or `Velocity` are automatically detected and sent to subscribed clients.
+
+---
+
+## Component Registration
+
+### Basic Registration
+
+```rust
+// Simple - no handler, no authorization
+app.sync_component::<Position>(None);
+```
+
+### Builder Pattern
+
+For more control, use the builder:
+
+```rust
+app.sync_component_builder::<JogSettings>()
+    .with_handler::<NP>(handle_jog_settings_mutation)  // Custom mutation handler
+    .targeted()                                         // Entity-specific
+    .with_default_entity_policy()                       // Requires EntityControl
+    .build();
+```
+
+### With Custom Handler
+
+```rust
+fn handle_jog_settings_mutation(
+    mut mutations: MessageReader<AuthorizedComponentMutation<JogSettings>>,
+    mut query: Query<&mut JogSettings>,
+) {
+    for mutation in mutations.read() {
+        let entity = mutation.entity();  // Already authorized!
+        if let Ok(mut settings) = query.get_mut(entity) {
+            *settings = mutation.into_inner();
         }
     }
 }
 ```
 
-### Step 4: Spawn and Update Entities
+---
+
+## Request Registration
+
+### Non-Targeted Requests
+
+For operations that don't target a specific entity:
 
 ```rust
-fn setup_world(mut commands: Commands) {
-    // Spawn entities with synchronized components
-    commands.spawn((
-        Position { x: 0.0, y: 0.0 },
-        StatusFlags { label: "Entity A".to_string(), enabled: true },
-    ));
-    
-    commands.spawn((
-        Position { x: 10.0, y: 5.0 },
-        StatusFlags { label: "Entity B".to_string(), enabled: false },
-    ));
-}
+// Registration
+app.request::<CreateRobot, NP>().register();
 
-fn update_positions(time: Res<Time>, mut query: Query<&mut Position>) {
-    for mut pos in &mut query {
-        // Changes are automatically detected and synced
-        pos.x += time.delta_secs();
+// Handler
+fn handle_create_robot(
+    mut requests: MessageReader<Request<CreateRobot>>,
+    mut commands: Commands,
+    net: Res<Network<NP>>,
+) {
+    for request in requests.read() {
+        let entity = commands.spawn(Robot { name: request.name.clone() }).id();
+        net.send(request.source(), CreateRobotResponse {
+            robot_id: entity.to_bits()
+        });
     }
 }
 ```
 
-Your server is now synchronizing `Position` and `StatusFlags` components to any connected clients!
+### Targeted Requests (with Authorization)
 
----
-
-## Configuration
-
-### Sync Settings
-
-Configure global sync behavior:
+For entity-specific operations:
 
 ```rust
-use pl3xus_sync::SyncSettings;
+// Registration
+app.request::<SetSpeed, NP>()
+    .targeted()
+    .with_default_entity_policy()  // Requires EntityControl
+    .register();
 
-app.insert_resource(SyncSettings {
-    max_update_rate_hz: Some(30.0),      // Limit to 30 updates/second
-    enable_message_conflation: true,      // Only send latest value
-});
+// Handler receives AuthorizedRequest
+fn handle_set_speed(
+    mut requests: MessageReader<AuthorizedRequest<SetSpeed>>,
+    mut query: Query<&mut Speed>,
+) {
+    for request in requests.read() {
+        let entity = request.entity();  // Already authorized!
+        if let Ok(mut speed) = query.get_mut(entity) {
+            speed.value = request.value;
+        }
+    }
+}
 ```
 
-### Per-Component Configuration
+### Targeted Requests (without Authorization)
+
+For read-only entity-specific operations:
 
 ```rust
-use pl3xus_sync::ComponentSyncConfig;
+// Registration - no authorization policy
+app.request::<GetStatus, NP>()
+    .targeted()
+    .register();
 
-app.sync_component::<Position>(Some(ComponentSyncConfig {
-    // Component-specific settings
-}));
+// Handler receives TargetedRequest
+fn handle_get_status(
+    mut requests: MessageReader<Request<TargetedRequest<GetStatus>>>,
+    query: Query<&Status>,
+    net: Res<Network<NP>>,
+) {
+    for request in requests.read() {
+        let target_id = &request.target_id;
+        let entity = Entity::from_bits(target_id.parse::<u64>().unwrap());
+
+        if let Ok(status) = query.get(entity) {
+            net.send(request.source(), GetStatusResponse {
+                status: status.clone()
+            });
+        }
+    }
+}
 ```
 
 ---
 
-## How It Works
+## Authorization
 
-1. **Registration**: `app.sync_component::<T>()` registers the component type
-2. **Change Detection**: Bevy's change detection tracks modifications
-3. **Subscription**: Clients send subscription requests for component types
-4. **Synchronization**: Changes are serialized and sent to subscribed clients
-5. **Conflation**: Multiple updates to same entity+component are conflated
-6. **Rate Limiting**: Updates throttled to `max_update_rate_hz`
+### EntityControl Component
+
+The `EntityControl` component tracks which client has control:
+
+```rust
+use pl3xus_sync::EntityControl;
+
+// Spawn with control tracking
+commands.spawn((
+    Robot { name: "Robot-1".into() },
+    EntityControl::default(),  // No one has control initially
+));
+```
+
+### Default Entity Policy
+
+The most common pattern - requires the client to have `EntityControl`:
+
+```rust
+app.request::<WriteValue, NP>()
+    .targeted()
+    .with_default_entity_policy()
+    .register();
+```
+
+### Custom Authorization
+
+```rust
+use pl3xus_sync::{EntityAccessPolicy, AuthResult};
+
+app.request::<AdminCommand, NP>()
+    .targeted()
+    .with_entity_policy(EntityAccessPolicy::from_fn(|world, ctx, entity| {
+        // Custom authorization logic
+        if is_admin(world, ctx.connection_id) {
+            AuthResult::Authorized
+        } else {
+            AuthResult::Denied("Admin access required".into())
+        }
+    }))
+    .register();
+```
+
+### Hierarchical Control
+
+Control of a parent entity grants control over children:
+
+```rust
+use pl3xus_sync::has_hierarchical_control;
+
+// Check if client has control of entity or any ancestor
+if has_hierarchical_control::<EntityControl, _>(
+    world,
+    entity,
+    |control| control.connection_id == Some(client_id)
+) {
+    // Authorized
+}
+```
 
 ---
 
-## Next Steps
+## Message Registration
 
-- [Client Integration](../../client/index.md) - Build a Leptos client to display synced data
-- [Mutation Authorization](../core/guides/mutations.md) - Control client mutations
-- [Exclusive Control](../core/guides/server-setup.md) - Implement control transfer patterns
+For one-way messages (no response):
+
+```rust
+// Registration
+app.message::<JogCommand, NP>()
+    .targeted()
+    .with_default_entity_policy()
+    .register();
+
+// Handler
+fn handle_jog_command(
+    mut messages: MessageReader<AuthorizedMessage<JogCommand>>,
+    mut query: Query<&mut JogState>,
+) {
+    for message in messages.read() {
+        let entity = message.entity();
+        if let Ok(mut state) = query.get_mut(entity) {
+            state.apply_jog(message.into_inner());
+        }
+    }
+}
+```
+
+---
+
+## Best Practices
+
+### 1. Use Builder Pattern for Complex Registration
+
+```rust
+// ❌ Hard to read
+app.sync_component::<Settings>(Some(ComponentSyncConfig { ... }));
+
+// ✅ Clear and extensible
+app.sync_component_builder::<Settings>()
+    .with_handler::<NP>(handle_settings)
+    .targeted()
+    .with_default_entity_policy()
+    .build();
+```
+
+### 2. Use Targeted Requests for Entity Operations
+
+```rust
+// ❌ Entity ID in request body - no authorization
+struct UpdateRobot { entity_id: u64, speed: f32 }
+
+// ✅ Targeted request with authorization
+struct UpdateRobotSpeed { speed: f32 }
+app.request::<UpdateRobotSpeed, NP>()
+    .targeted()
+    .with_default_entity_policy()
+    .register();
+```
+
+### 3. Always Validate in Handlers
+
+```rust
+fn handle_set_speed(mut requests: MessageReader<AuthorizedRequest<SetSpeed>>) {
+    for request in requests.read() {
+        // Validate even though authorized
+        if request.value < 0.0 || request.value > 1000.0 {
+            // Send error response
+            continue;
+        }
+        // Apply...
+    }
+}
+```
+
+---
+
+## Related
+
+- [Client Development](../client/index.md) - Build Leptos clients
+- [Mutations](../core/guides/mutations.md) - Mutation patterns
+- [Authorization](../core/guides/authorization.md) - Deep dive into authorization

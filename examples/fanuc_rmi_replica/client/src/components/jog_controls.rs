@@ -1,15 +1,16 @@
 //! Jog controls component for manual robot movement.
 //!
-//! Displays the server's JogSettingsState values (read-only).
-//! Jog buttons only send axis/direction - the server uses its own JogSettingsState
-//! for speed and step values. This ensures jog settings are tied to the robot
-//! entity, not the client, so any client that takes control uses the same settings.
-//!
-//! To change jog settings, use the Configuration panel's Jog Defaults section.
+//! Displays and allows editing of the server's JogSettingsState values.
+//! Jog buttons send axis/direction - the server uses its JogSettingsState
+//! for speed and step values. Settings are editable inline - press Enter to
+//! submit changes, or blur to discard.
 
 use leptos::prelude::*;
+use leptos::ev::KeyboardEvent;
+use leptos::web_sys;
+use wasm_bindgen::JsCast;
 
-use pl3xus_client::{use_sync_context, use_entity_component, EntityControl};
+use pl3xus_client::{use_sync_context, use_entity_component, use_mut_component, ComponentMutationState, EntityControl};
 use fanuc_replica_types::*;
 use crate::components::use_toast;
 use crate::pages::dashboard::context::use_system_entity;
@@ -20,9 +21,8 @@ use crate::pages::dashboard::context::use_system_entity;
 /// Robot entity as the target. The server's authorization middleware
 /// verifies that this client has control before processing the command.
 ///
-/// Speed and step values are displayed from the server's JogSettingsState
-/// but are read-only here. The server uses its own settings when processing
-/// jog commands. To change settings, use the Configuration panel.
+/// Speed and step values are editable. Press Enter to send mutation to server,
+/// or blur/Escape to discard changes and revert to server value.
 #[component]
 pub fn JogControls() -> impl IntoView {
     let ctx = use_sync_context();
@@ -31,7 +31,22 @@ pub fn JogControls() -> impl IntoView {
 
     // Subscribe to entity-specific components
     let (control_state, _) = use_entity_component::<EntityControl, _>(move || system_ctx.system_entity_id.get());
-    let (jog_settings, _) = use_entity_component::<JogSettingsState, _>(move || system_ctx.robot_entity_id.get());
+
+    // Use mut_component for jog settings - allows mutations
+    let jog_handle = use_mut_component::<JogSettingsState, _>(move || system_ctx.robot_entity_id.get());
+    let jog_settings = jog_handle.value;
+
+    // Watch mutation_state for errors and show toast
+    Effect::new(move |prev: Option<ComponentMutationState>| {
+        let state = jog_handle.mutation_state.get();
+        // Only toast on transition TO error (not every render)
+        if let ComponentMutationState::Error(ref msg) = state {
+            if !matches!(prev.as_ref(), Some(ComponentMutationState::Error(_))) {
+                toast.error(format!("Jog settings update denied: {}", msg));
+            }
+        }
+        state
+    });
 
     // Get the Robot entity bits (for targeted jog commands)
     let robot_entity_bits = move || system_ctx.robot_entity_id.get();
@@ -74,16 +89,32 @@ pub fn JogControls() -> impl IntoView {
                 </Show>
             </div>
 
-            // Cartesian Settings (X/Y/Z) - Read-only display from server
+            // Cartesian Settings (X/Y/Z) - Editable
             <div class="text-[8px] text-[#666666] mb-1">"Cartesian (X/Y/Z)"</div>
             <div class="grid grid-cols-2 gap-2 mb-2">
                 <div class="bg-[#111111] rounded p-1.5">
                     <div class="text-[8px] text-[#666666] mb-1">"Speed (mm/s)"</div>
-                    <ReadOnlyValue value=Signal::derive(move || format!("{:.1}", jog_settings.get().cartesian_jog_speed)) />
+                    <JogSettingInput
+                        server_value=Signal::derive(move || jog_settings.get().cartesian_jog_speed)
+                        on_submit=move |val| {
+                            let mut settings = jog_settings.get();
+                            settings.cartesian_jog_speed = val;
+                            jog_handle.mutate(settings);
+                        }
+                        disabled=Signal::derive(move || !has_control())
+                    />
                 </div>
                 <div class="bg-[#111111] rounded p-1.5">
                     <div class="text-[8px] text-[#666666] mb-1">"Step (mm)"</div>
-                    <ReadOnlyValue value=Signal::derive(move || format!("{:.1}", jog_settings.get().cartesian_jog_step)) />
+                    <JogSettingInput
+                        server_value=Signal::derive(move || jog_settings.get().cartesian_jog_step)
+                        on_submit=move |val| {
+                            let mut settings = jog_settings.get();
+                            settings.cartesian_jog_step = val;
+                            jog_handle.mutate(settings);
+                        }
+                        disabled=Signal::derive(move || !has_control())
+                    />
                 </div>
             </div>
 
@@ -100,16 +131,32 @@ pub fn JogControls() -> impl IntoView {
                 <JogButton label="Z-" jog=jog.clone() axis=JogAxis::Z direction=JogDirection::Negative disabled=Signal::derive(move || !has_control()) />
             </div>
 
-            // Rotation Settings (W/P/R) - Read-only display from server
+            // Rotation Settings (W/P/R) - Editable
             <div class="text-[8px] text-[#666666] mb-1">"Rotation (W/P/R)"</div>
             <div class="grid grid-cols-2 gap-2 mb-2">
                 <div class="bg-[#111111] rounded p-1.5">
                     <div class="text-[8px] text-[#666666] mb-1">"Speed (°/s)"</div>
-                    <ReadOnlyValue value=Signal::derive(move || format!("{:.1}", jog_settings.get().rotation_jog_speed)) />
+                    <JogSettingInput
+                        server_value=Signal::derive(move || jog_settings.get().rotation_jog_speed)
+                        on_submit=move |val| {
+                            let mut settings = jog_settings.get();
+                            settings.rotation_jog_speed = val;
+                            jog_handle.mutate(settings);
+                        }
+                        disabled=Signal::derive(move || !has_control())
+                    />
                 </div>
                 <div class="bg-[#111111] rounded p-1.5">
                     <div class="text-[8px] text-[#666666] mb-1">"Step (°)"</div>
-                    <ReadOnlyValue value=Signal::derive(move || format!("{:.1}", jog_settings.get().rotation_jog_step)) />
+                    <JogSettingInput
+                        server_value=Signal::derive(move || jog_settings.get().rotation_jog_step)
+                        on_submit=move |val| {
+                            let mut settings = jog_settings.get();
+                            settings.rotation_jog_step = val;
+                            jog_handle.mutate(settings);
+                        }
+                        disabled=Signal::derive(move || !has_control())
+                    />
                 </div>
             </div>
 
@@ -122,22 +169,97 @@ pub fn JogControls() -> impl IntoView {
                 <JogButton label="P+" jog=jog.clone() axis=JogAxis::P direction=JogDirection::Positive disabled=Signal::derive(move || !has_control()) />
                 <JogButton label="R+" jog=jog.clone() axis=JogAxis::R direction=JogDirection::Positive disabled=Signal::derive(move || !has_control()) />
             </div>
-
-            // Link to Configuration panel
-            <div class="mt-2 text-center">
-                <a href="/dashboard/info" class="text-[8px] text-[#00d9ff] hover:underline">"Edit settings in Configuration →"</a>
-            </div>
         </div>
     }
 }
 
-/// Read-only display of a value (styled like an input but not editable).
+/// Editable input for a jog setting value.
+/// - Shows server value by default
+/// - User can edit, press Enter to submit
+/// - Blur or Escape reverts to server value
+/// - Disabled when client doesn't have control
 #[component]
-fn ReadOnlyValue(#[prop(into)] value: Signal<String>) -> impl IntoView {
+fn JogSettingInput<F>(
+    #[prop(into)] server_value: Signal<f64>,
+    on_submit: F,
+    #[prop(into)] disabled: Signal<bool>,
+) -> impl IntoView
+where
+    F: Fn(f64) + Clone + 'static,
+{
+    let (local_value, set_local_value) = signal(String::new());
+    let (is_editing, set_is_editing) = signal(false);
+
+    // Display either local value (when editing) or server value
+    let display_value = move || {
+        if is_editing.get() {
+            local_value.get()
+        } else {
+            format!("{:.1}", server_value.get())
+        }
+    };
+
+    let on_focus = move |_| {
+        if disabled.get() {
+            return;
+        }
+        set_local_value.set(format!("{:.1}", server_value.get()));
+        set_is_editing.set(true);
+    };
+
+    let on_blur = move |_| {
+        // Discard changes on blur
+        set_is_editing.set(false);
+    };
+
+    let on_submit_clone = on_submit.clone();
+    let on_keydown = move |ev: KeyboardEvent| {
+        match ev.key().as_str() {
+            "Enter" => {
+                ev.prevent_default();
+                if let Ok(val) = local_value.get().parse::<f64>() {
+                    on_submit_clone(val);
+                }
+                set_is_editing.set(false);
+                // Blur the input
+                if let Some(target) = ev.target() {
+                    if let Ok(el) = target.dyn_into::<web_sys::HtmlElement>() {
+                        let _ = el.blur();
+                    }
+                }
+            }
+            "Escape" => {
+                set_is_editing.set(false);
+                // Blur the input
+                if let Some(target) = ev.target() {
+                    if let Ok(el) = target.dyn_into::<web_sys::HtmlElement>() {
+                        let _ = el.blur();
+                    }
+                }
+            }
+            _ => {}
+        }
+    };
+
+    let input_class = move || {
+        if disabled.get() {
+            "w-full bg-[#0a0a0a] rounded px-1.5 py-1 text-[#555555] text-[11px] text-right font-mono border border-[#ffffff08] cursor-not-allowed"
+        } else {
+            "w-full bg-[#0a0a0a] rounded px-1.5 py-1 text-white text-[11px] text-right font-mono border border-[#ffffff08] focus:border-[#00d9ff] focus:outline-none"
+        }
+    };
+
     view! {
-        <div class="w-full bg-[#0a0a0a] rounded px-1.5 py-1 text-white text-[11px] text-right font-mono border border-[#ffffff08]">
-            {value}
-        </div>
+        <input
+            type="text"
+            class=input_class
+            prop:value=display_value
+            disabled=move || disabled.get()
+            on:focus=on_focus
+            on:blur=on_blur
+            on:input=move |ev| set_local_value.set(event_target_value(&ev))
+            on:keydown=on_keydown
+        />
     }
 }
 

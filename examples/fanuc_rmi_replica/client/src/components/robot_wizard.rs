@@ -83,8 +83,8 @@ where
     // Step 3: Jog Defaults
     let (cartesian_jog_speed, set_cartesian_jog_speed) = signal("10.0".to_string());
     let (cartesian_jog_step, set_cartesian_jog_step) = signal("1.0".to_string());
-    let (joint_jog_speed, set_joint_jog_speed) = signal("0.1".to_string());
-    let (joint_jog_step, set_joint_jog_step) = signal("0.25".to_string());
+    let (joint_jog_speed, set_joint_jog_speed) = signal("10.0".to_string()); // °/s
+    let (joint_jog_step, set_joint_jog_step) = signal("1.0".to_string()); // degrees
     let (rotation_jog_speed, set_rotation_jog_speed) = signal("5.0".to_string());
     let (rotation_jog_step, set_rotation_jog_step) = signal("1.0".to_string());
 
@@ -797,16 +797,16 @@ fn JogDefaultsStep(
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                            "Speed (%)" <span class="text-[#ef4444]">"*"</span>
+                            "Speed (°/s)" <span class="text-[#ef4444]">"*"</span>
                         </label>
                         <input
                             type="text"
                             class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
                             prop:value=move || joint_jog_speed.get()
                             on:input=move |ev| set_joint_jog_speed.set(event_target_value(&ev))
-                            placeholder="0.1"
+                            placeholder="10.0"
                         />
-                        <p class="text-xs text-[#666666] mt-1">"Continuous jog speed"</p>
+                        <p class="text-xs text-[#666666] mt-1">"Degrees per second"</p>
                     </div>
 
                     <div>
@@ -818,9 +818,9 @@ fn JogDefaultsStep(
                             class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
                             prop:value=move || joint_jog_step.get()
                             on:input=move |ev| set_joint_jog_step.set(event_target_value(&ev))
-                            placeholder="0.25"
+                            placeholder="1.0"
                         />
-                        <p class="text-xs text-[#666666] mt-1">"Incremental jog angle"</p>
+                        <p class="text-xs text-[#666666] mt-1">"Degrees per step"</p>
                     </div>
                 </div>
             </div>

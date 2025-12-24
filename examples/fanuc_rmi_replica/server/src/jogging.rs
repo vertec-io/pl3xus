@@ -112,119 +112,6 @@ pub fn handle_authorized_jog_commands(
     }
 }
 
-/// Handle JogRobot commands (simplified jog from Joint Jog panel)
-/// Supports both Cartesian jogs (X/Y/Z/W/P/R) using FrcLinearRelative
-/// and Joint jogs (J1-J6) using FrcJointRelativeJRep.
-///
-/// Authorization is handled by middleware - no manual control check needed.
-pub fn handle_jog_robot_commands(
-    tokio_runtime: Res<TokioTasksRuntime>,
-    mut events: MessageReader<AuthorizedTargetedMessage<JogRobot>>,
-    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>), With<FanucRobot>>,
-) {
-    // Enter the Tokio runtime context so send_packet can use tokio::spawn
-    let _guard = tokio_runtime.runtime().enter();
-
-    for event in events.read() {
-        let cmd = &event.message;
-        let target_entity = event.target_entity;
-
-        // Find a connected robot
-        let Some((entity, _, driver)) = robot_query.iter()
-            .find(|(_, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
-        else {
-            warn!("JogRobot rejected: No connected robot");
-            continue;
-        };
-
-        let driver = driver.expect("Checked above");
-
-        // Determine if this is a joint jog or cartesian jog
-        let is_joint_jog = matches!(cmd.axis, JogAxis::J1 | JogAxis::J2 | JogAxis::J3 | JogAxis::J4 | JogAxis::J5 | JogAxis::J6);
-
-        info!("Processing authorized JogRobot for {:?} on {:?}: {:?} dist={} speed={}",
-            target_entity, entity, cmd.axis, cmd.distance, cmd.speed);
-
-        let send_packet = if is_joint_jog {
-            // Joint jog - use FrcJointRelativeJRep instruction
-            // Build joint angles delta (only the target joint has a non-zero value)
-            let mut joint_angles = raw_dto::JointAngles {
-                j1: 0.0, j2: 0.0, j3: 0.0, j4: 0.0, j5: 0.0, j6: 0.0,
-                j7: 0.0, j8: 0.0, j9: 0.0,
-            };
-
-            match cmd.axis {
-                JogAxis::J1 => joint_angles.j1 = cmd.distance,
-                JogAxis::J2 => joint_angles.j2 = cmd.distance,
-                JogAxis::J3 => joint_angles.j3 = cmd.distance,
-                JogAxis::J4 => joint_angles.j4 = cmd.distance,
-                JogAxis::J5 => joint_angles.j5 = cmd.distance,
-                JogAxis::J6 => joint_angles.j6 = cmd.distance,
-                _ => continue, // Cartesian jogs handled below
-            }
-
-            // Use Time speed type for joint motion (as per original Fanuc_RMI_API)
-            let instruction = raw_dto::Instruction::FrcJointRelativeJRep(raw_dto::FrcJointRelativeJRep {
-                sequence_id: 0,
-                joint_angles,
-                speed_type: SpeedType::Time.into(),
-                speed: cmd.speed as f64,
-                term_type: TermType::FINE.into(), // FINE for step moves
-                term_value: 1,
-            });
-
-            let packet: fanuc_rmi::packets::SendPacket =
-                raw_dto::SendPacket::Instruction(instruction).into();
-            packet
-        } else {
-            // Cartesian jog - use FrcLinearRelative instruction
-            let mut pos = raw_dto::Position {
-                x: 0.0, y: 0.0, z: 0.0,
-                w: 0.0, p: 0.0, r: 0.0,
-                ext1: 0.0, ext2: 0.0, ext3: 0.0,
-            };
-
-            match cmd.axis {
-                JogAxis::X => pos.x = cmd.distance as f64,
-                JogAxis::Y => pos.y = cmd.distance as f64,
-                JogAxis::Z => pos.z = cmd.distance as f64,
-                JogAxis::W => pos.w = cmd.distance as f64,
-                JogAxis::P => pos.p = cmd.distance as f64,
-                JogAxis::R => pos.r = cmd.distance as f64,
-                _ => continue, // Joint jogs handled above
-            }
-
-            let instruction = raw_dto::Instruction::FrcLinearRelative(raw_dto::FrcLinearRelative {
-                sequence_id: 0,
-                configuration: raw_dto::Configuration {
-                    u_frame_number: 0,
-                    u_tool_number: 0,
-                    turn4: 0, turn5: 0, turn6: 0,
-                    front: 0, up: 0, left: 0, flip: 0,
-                },
-                position: pos,
-                speed_type: SpeedType::MMSec.into(),
-                speed: cmd.speed as f64,
-                term_type: TermType::FINE.into(), // FINE for step moves
-                term_value: 1,
-            });
-
-            let packet: fanuc_rmi::packets::SendPacket =
-                raw_dto::SendPacket::Instruction(instruction).into();
-            packet
-        };
-
-        match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
-            Ok(seq) => {
-                info!("Sent JogRobot command with sequence {}", seq);
-            }
-            Err(e) => {
-                error!("Failed to send jog instruction: {:?}", e);
-            }
-        }
-    }
-}
-
 /// Handle InitializeRobot requests - initializes the robot for motion
 ///
 /// Authorization is handled by middleware - no manual control check needed.
@@ -528,8 +415,13 @@ pub fn handle_set_speed_override(
 /// This handler is called when a client mutates the JogSettingsState component.
 /// It validates the new settings and applies them to the robot entity.
 /// The mutation response is sent back to the client via MutationResponseQueue.
+/// Handle authorized mutations to JogSettingsState.
+///
+/// This handler receives `AuthorizedComponentMutation<JogSettingsState>` because
+/// the component is registered with `.targeted().with_default_entity_policy()`.
+/// Authorization has already been verified - only clients with control can mutate.
 pub fn handle_jog_settings_mutation(
-    mut events: MessageReader<pl3xus_sync::ComponentMutation<JogSettingsState>>,
+    mut events: MessageReader<pl3xus_sync::AuthorizedComponentMutation<JogSettingsState>>,
     mut jog_settings_query: Query<&mut JogSettingsState, With<FanucRobot>>,
     mut response_queue: ResMut<pl3xus_sync::MutationResponseQueue>,
 ) {

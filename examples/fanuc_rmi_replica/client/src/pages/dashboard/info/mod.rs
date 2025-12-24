@@ -20,7 +20,7 @@ pub use tool_display::MultiToolDisplay;
 pub use number_input::NumberInput;
 
 use leptos::prelude::*;
-use pl3xus_client::{use_entity_component, use_request};
+use pl3xus_client::{use_entity_component, use_targeted_request};
 use fanuc_replica_types::{ConnectionState, GetFrameData, GetToolData, GetActiveFrameTool};
 use crate::pages::dashboard::use_system_entity;
 
@@ -35,10 +35,10 @@ pub fn InfoTab() -> impl IntoView {
     // Subscribe to robot's connection state (ConnectionState lives on robot entity)
     let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
 
-    // Request hooks for loading frame/tool data
-    let (get_frame_data, _) = use_request::<GetFrameData>();
-    let (get_tool_data, _) = use_request::<GetToolData>();
-    let (get_active_frame_tool, _) = use_request::<GetActiveFrameTool>();
+    // Request hooks for loading frame/tool data (targeted to specific robot)
+    let (get_frame_data, _) = use_targeted_request::<GetFrameData>();
+    let (get_tool_data, _) = use_targeted_request::<GetToolData>();
+    let (get_active_frame_tool, _) = use_targeted_request::<GetActiveFrameTool>();
 
     let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
 
@@ -50,19 +50,21 @@ pub fn InfoTab() -> impl IntoView {
         let get_active_frame_tool = get_active_frame_tool.clone();
         move |_| {
             if robot_connected.get() && !has_loaded.get() {
-                set_has_loaded.set(true);
+                if let Some(entity_id) = system_ctx.robot_entity_id.get() {
+                    set_has_loaded.set(true);
 
-                // Request active frame/tool
-                get_active_frame_tool(GetActiveFrameTool {});
+                    // Request active frame/tool
+                    get_active_frame_tool(entity_id, GetActiveFrameTool {});
 
-                // Request all frame data (1-9) - Frame 0 is world frame and can't be read
-                for i in 1..=9i32 {
-                    get_frame_data(GetFrameData { frame_number: i });
-                }
+                    // Request all frame data (1-9) - Frame 0 is world frame and can't be read
+                    for i in 1..=9i32 {
+                        get_frame_data(entity_id, GetFrameData { frame_number: i });
+                    }
 
-                // Request all tool data (1-10)
-                for i in 1..=10i32 {
-                    get_tool_data(GetToolData { tool_number: i });
+                    // Request all tool data (1-10)
+                    for i in 1..=10i32 {
+                        get_tool_data(entity_id, GetToolData { tool_number: i });
+                    }
                 }
             } else if !robot_connected.get() {
                 // Reset when disconnected so we reload on reconnect

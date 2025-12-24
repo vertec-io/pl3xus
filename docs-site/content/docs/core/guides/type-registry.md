@@ -23,12 +23,11 @@ The `ClientTypeRegistry` is the client-side counterpart to the server's `SyncReg
 
 ```rust
 use pl3xus_client::ClientTypeRegistry;
-use shared_types::{Position, Velocity, EntityName};
+use shared_types::{Position, Velocity};
 
 let registry = ClientTypeRegistry::builder()
     .register::<Position>()
     .register::<Velocity>()
-    .register::<EntityName>()
     .build();
 ```
 
@@ -38,7 +37,6 @@ let registry = ClientTypeRegistry::builder()
 let registry = ClientTypeRegistry::builder()
     .register::<Position>()
     .register::<Velocity>()
-    .register::<EntityName>()
     .with_devtools_support()  // Enable JSON conversion
     .build();
 ```
@@ -311,7 +309,6 @@ let registry = ClientTypeRegistry::builder()
 let registry = ClientTypeRegistry::builder()
     .register::<Position>()
     .register::<Velocity>()
-    .register::<EntityName>()
     .build();
 ```
 

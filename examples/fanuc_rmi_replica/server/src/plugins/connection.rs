@@ -19,7 +19,6 @@ use tokio::sync::broadcast;
 use fanuc_rmi::drivers::{FanucDriver, FanucDriverConfig, LogLevel};
 use fanuc_replica_types::*;
 use crate::database::DatabaseResource;
-use super::execution::RmiSentInstructionChannel;
 use super::system::ActiveSystem;
 
 // ============================================================================
@@ -50,6 +49,11 @@ pub struct RmiResponseChannel(pub broadcast::Receiver<fanuc_rmi::packets::Respon
 /// Response channel for program execution (separate subscription to avoid contention).
 #[derive(Component)]
 pub struct RmiExecutionResponseChannel(pub broadcast::Receiver<fanuc_rmi::packets::ResponsePacket>);
+
+/// Channel to receive SentInstructionInfo from the driver.
+/// Used to map request_id -> sequence_id for instruction tracking.
+#[derive(Component)]
+pub struct RmiSentInstructionChannel(pub broadcast::Receiver<fanuc_rmi::packets::SentInstructionInfo>);
 
 /// Robot connection state (entity-based state machine).
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -149,7 +153,7 @@ fn handle_connect_requests(
 
         if !robot_exists {
             // No robot entity - spawn one as child of System with connection details from database or message
-            let (connection_details, jog_settings) = if let Some(conn_id) = msg.connection_id {
+            let (connection_details, jog_settings, io_config_state) = if let Some(conn_id) = msg.connection_id {
                 // Load connection details from database
                 if let Some(ref db) = db {
                     match db.get_robot_connection(conn_id) {
@@ -168,7 +172,21 @@ fn handle_connect_requests(
                                 joint_jog_speed: robot_conn.default_joint_jog_speed,
                                 joint_jog_step: robot_conn.default_joint_jog_step,
                             };
-                            (details, jog)
+                            // Load I/O configuration from database
+                            let io_config = match db.get_io_config(conn_id) {
+                                Ok(configs) => {
+                                    let mut config_map = std::collections::HashMap::new();
+                                    for cfg in configs {
+                                        config_map.insert((cfg.io_type.clone(), cfg.io_index), cfg);
+                                    }
+                                    IoConfigState { configs: config_map }
+                                }
+                                Err(e) => {
+                                    warn!("Failed to load I/O config, using defaults: {}", e);
+                                    IoConfigState::default()
+                                }
+                            };
+                            (details, jog, io_config)
                         }
                         Ok(None) => {
                             let err = format!("Robot connection {} not found in database", conn_id);
@@ -202,7 +220,7 @@ fn handle_connect_requests(
                     port: msg.port,
                     name: msg.name.clone().unwrap_or_else(|| format!("{}:{}", msg.addr, msg.port)),
                 };
-                (details, JogSettingsState::default())
+                (details, JogSettingsState::default(), IoConfigState::default())
             };
 
             // Build initial ConnectionState
@@ -223,7 +241,7 @@ fn handle_connect_requests(
                 JointAngles::default(),
                 RobotStatus::default(),
                 IoStatus::default(),
-                IoConfigState::default(),
+                io_config_state,  // Loaded from database for saved connections
                 FrameToolDataState::default(),
                 ExecutionState::default(),
                 initial_conn_state,

@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[features]
+default = []
+devtools = ["pl3xus_client/devtools"]
+
 [dependencies]
 leptos = { version = "0.8", features = ["csr"] }
 leptos_router = { version = "0.8" }

@@ -393,6 +393,41 @@ fn RobotSettingsPanel(
         }
     });
 
+    // I/O Display Names configuration
+    let (show_io_config, set_show_io_config) = signal(false);
+    let (io_selected_type, set_io_selected_type) = signal::<&'static str>("DIN");
+    let (io_local_config, set_io_local_config) = signal::<std::collections::HashMap<(String, u16), (String, bool)>>(std::collections::HashMap::new());
+    let (is_saving_io_config, set_is_saving_io_config) = signal(false);
+
+    // Query for I/O config - auto-refetches when robot changes
+    let io_config_query = use_query_keyed::<GetIoConfig, _>(move || {
+        selected_robot_id.get().map(|id| GetIoConfig { robot_connection_id: id })
+    });
+
+    // Mutation for updating I/O config
+    let update_io_config = use_mutation::<UpdateIoConfig>(move |result| {
+        set_is_saving_io_config.set(false);
+        match result {
+            Ok(r) if r.success => {
+                toast.success("I/O display names saved");
+                set_show_io_config.set(false);
+            }
+            Ok(r) => toast.error(r.error.as_deref().unwrap_or("Failed to save I/O config")),
+            Err(e) => toast.error(e),
+        }
+    });
+
+    // Mutation for connecting to robot
+    let connect_robot = use_mutation::<ConnectToRobot>(move |result| {
+        match result {
+            Ok(r) if r.success => {
+                toast.success("Connecting to robot...");
+            }
+            Ok(r) => toast.error(r.error.as_deref().unwrap_or("Failed to connect")),
+            Err(e) => toast.error(e),
+        }
+    });
+
     // Track last loaded robot ID to avoid re-setting form fields
     let (last_loaded_robot_id, set_last_loaded_robot_id) = signal::<Option<i64>>(None);
 
@@ -700,6 +735,40 @@ fn RobotSettingsPanel(
                                 </div>
                             </div>
 
+                            // I/O Display Names Section
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-[10px] font-semibold text-[#888888] uppercase tracking-wide">"I/O Display Names"</h4>
+                                    <button
+                                        class="text-[8px] px-2 py-0.5 bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] rounded hover:bg-[#00d9ff30]"
+                                        on:click=move |_| {
+                                            // Initialize local config from query data
+                                            let mut local = std::collections::HashMap::new();
+                                            if let Some(response) = io_config_query.data() {
+                                                for cfg in &response.configs {
+                                                    let name = cfg.display_name.clone().unwrap_or_default();
+                                                    local.insert((cfg.io_type.clone(), cfg.io_index as u16), (name, cfg.is_visible));
+                                                }
+                                            }
+                                            // Fill in defaults for any missing ports
+                                            for io_type in ["DIN", "DOUT", "AIN", "AOUT", "GIN", "GOUT"] {
+                                                for port in 1u16..=8 {
+                                                    local.entry((io_type.to_string(), port)).or_insert((String::new(), true));
+                                                }
+                                            }
+                                            set_io_local_config.set(local);
+                                            set_io_selected_type.set("DIN");
+                                            set_show_io_config.set(true);
+                                        }
+                                    >
+                                        "Configure"
+                                    </button>
+                                </div>
+                                <p class="text-[9px] text-[#555555]">
+                                    "Set custom display names for I/O ports (e.g., 'Gripper', 'Conveyor', 'Safety Gate')"
+                                </p>
+                            </div>
+
                             // Configurations Section
                             <div>
                                 <div class="flex items-center justify-between mb-2">
@@ -903,10 +972,18 @@ fn RobotSettingsPanel(
                             <div class="mt-4 pt-4 border-t border-[#ffffff08]">
                                 <button
                                     class="w-full text-[10px] px-4 py-2.5 bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] rounded-lg hover:bg-[#22c55e30] font-medium flex items-center justify-center gap-2"
-                                    on:click=move |_| {
-                                        // TODO: Navigate to connect page or trigger connection
-                                        // For now, just log
-                                        web_sys::console::log_1(&format!("Connect to robot: {}", robot_id).into());
+                                    on:click={
+                                        let connect_robot = connect_robot.clone();
+                                        move |_| {
+                                            // Send ConnectToRobot request with connection_id
+                                            // The server will look up the connection details from the database
+                                            connect_robot.send(ConnectToRobot {
+                                                connection_id: Some(robot_id),
+                                                addr: String::new(),
+                                                port: 0,
+                                                name: None,
+                                            });
+                                        }
                                     }
                                 >
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1209,6 +1286,241 @@ fn RobotSettingsPanel(
                     </div>
                 </div>
             </Show>
+
+            // I/O Display Names Configuration Modal
+            <Show when=move || show_io_config.get()>
+                <IoConfigModal
+                    selected_robot_id=selected_robot_id
+                    io_selected_type=io_selected_type
+                    set_io_selected_type=set_io_selected_type
+                    io_local_config=io_local_config
+                    set_io_local_config=set_io_local_config
+                    is_saving_io_config=is_saving_io_config
+                    set_is_saving_io_config=set_is_saving_io_config
+                    update_io_config=update_io_config
+                    set_show_io_config=set_show_io_config
+                />
+            </Show>
+        </div>
+    }
+}
+
+/// Modal for configuring I/O display names.
+#[component]
+fn IoConfigModal(
+    selected_robot_id: ReadSignal<Option<i64>>,
+    io_selected_type: ReadSignal<&'static str>,
+    set_io_selected_type: WriteSignal<&'static str>,
+    io_local_config: ReadSignal<std::collections::HashMap<(String, u16), (String, bool)>>,
+    set_io_local_config: WriteSignal<std::collections::HashMap<(String, u16), (String, bool)>>,
+    is_saving_io_config: ReadSignal<bool>,
+    set_is_saving_io_config: WriteSignal<bool>,
+    update_io_config: pl3xus_client::MutationHandle<UpdateIoConfig>,
+    set_show_io_config: WriteSignal<bool>,
+) -> impl IntoView {
+    const IO_TYPES: [(&str, &str); 6] = [
+        ("DIN", "Digital Inputs"),
+        ("DOUT", "Digital Outputs"),
+        ("AIN", "Analog Inputs"),
+        ("AOUT", "Analog Outputs"),
+        ("GIN", "Group Inputs"),
+        ("GOUT", "Group Outputs"),
+    ];
+    const PORTS: [u16; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
+
+    let tab_class = move |io_type: &'static str| {
+        format!(
+            "px-2 py-1 text-[9px] rounded transition-colors {}",
+            if io_selected_type.get() == io_type {
+                "bg-[#00d9ff20] text-[#00d9ff]"
+            } else {
+                "bg-[#ffffff05] text-[#666666] hover:text-[#888888]"
+            }
+        )
+    };
+
+    let save_click = move |_| {
+        if let Some(robot_id) = selected_robot_id.get() {
+            set_is_saving_io_config.set(true);
+            let local = io_local_config.get();
+            let configs: Vec<IoDisplayConfig> = local.iter().map(|((io_type, port), (name, visible))| {
+                IoDisplayConfig {
+                    io_type: io_type.clone(),
+                    io_index: *port as i32,
+                    display_name: if name.is_empty() { None } else { Some(name.clone()) },
+                    is_visible: *visible,
+                    display_order: None,
+                }
+            }).collect();
+            update_io_config.send(UpdateIoConfig {
+                robot_connection_id: robot_id,
+                configs,
+            });
+        }
+    };
+
+    view! {
+        <div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+            <div class="bg-[#0d0d0d] border border-[#ffffff15] rounded-lg w-[600px] max-h-[80vh] flex flex-col">
+                // Header
+                <div class="flex items-center justify-between p-3 border-b border-[#ffffff08]">
+                    <h3 class="text-[11px] font-semibold text-white flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                        </svg>
+                        "I/O Display Names"
+                    </h3>
+                    <button
+                        class="text-[#666666] hover:text-white"
+                        on:click=move |_| set_show_io_config.set(false)
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                // Tabs
+                <div class="flex gap-1 p-2 border-b border-[#ffffff08]">
+                    {IO_TYPES.iter().map(|(io_type, label)| {
+                        let io_type_static: &'static str = io_type;
+                        view! {
+                            <button
+                                class=move || tab_class(io_type_static)
+                                on:click=move |_| set_io_selected_type.set(io_type_static)
+                            >
+                                {*label}
+                            </button>
+                        }
+                    }).collect::<Vec<_>>()}
+                </div>
+
+                // Content
+                <div class="flex-1 overflow-y-auto p-3">
+                    // Header row
+                    <div class="grid grid-cols-[50px_1fr_80px] gap-2 mb-2 text-[8px] text-[#666666] uppercase tracking-wide px-2">
+                        <span>"Port"</span>
+                        <span>"Display Name"</span>
+                        <span class="text-center">"Visible"</span>
+                    </div>
+
+                    // Port rows
+                    {PORTS.iter().map(|&port| {
+                        let io_type = io_selected_type;
+                        view! {
+                            <IoConfigRow
+                                io_type=io_type
+                                port=port
+                                io_local_config=io_local_config
+                                set_io_local_config=set_io_local_config
+                            />
+                        }
+                    }).collect::<Vec<_>>()}
+                </div>
+
+                // Footer
+                <div class="flex justify-end gap-2 p-3 border-t border-[#ffffff08]">
+                    <button
+                        class="text-[9px] px-4 py-1.5 bg-[#111111] border border-[#ffffff08] text-[#888888] rounded hover:bg-[#191919]"
+                        on:click=move |_| set_show_io_config.set(false)
+                    >
+                        "Cancel"
+                    </button>
+                    <button
+                        class=move || format!(
+                            "text-[9px] px-4 py-1.5 rounded {}",
+                            if is_saving_io_config.get() {
+                                "bg-[#00d9ff10] border border-[#00d9ff20] text-[#00d9ff50] cursor-wait"
+                            } else {
+                                "bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] hover:bg-[#00d9ff30]"
+                            }
+                        )
+                        disabled=move || is_saving_io_config.get()
+                        on:click=save_click
+                    >
+                        {move || if is_saving_io_config.get() { "Saving..." } else { "Save" }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+/// Single row for configuring an I/O port display name.
+#[component]
+fn IoConfigRow(
+    io_type: ReadSignal<&'static str>,
+    port: u16,
+    io_local_config: ReadSignal<std::collections::HashMap<(String, u16), (String, bool)>>,
+    set_io_local_config: WriteSignal<std::collections::HashMap<(String, u16), (String, bool)>>,
+) -> impl IntoView {
+    let get_name = move || {
+        io_local_config.get()
+            .get(&(io_type.get().to_string(), port))
+            .map(|(name, _)| name.clone())
+            .unwrap_or_default()
+    };
+
+    let get_visible = move || {
+        io_local_config.get()
+            .get(&(io_type.get().to_string(), port))
+            .map(|(_, visible)| *visible)
+            .unwrap_or(true)
+    };
+
+    let on_name_change = move |ev: web_sys::Event| {
+        let target = event_target::<web_sys::HtmlInputElement>(&ev);
+        let new_name = target.value();
+        set_io_local_config.update(|config| {
+            let key = (io_type.get().to_string(), port);
+            if let Some((name, _)) = config.get_mut(&key) {
+                *name = new_name;
+            } else {
+                config.insert(key, (new_name, true));
+            }
+        });
+    };
+
+    let on_visible_toggle = move |_| {
+        set_io_local_config.update(|config| {
+            let key = (io_type.get().to_string(), port);
+            if let Some((_, visible)) = config.get_mut(&key) {
+                *visible = !*visible;
+            } else {
+                config.insert(key, (String::new(), false));
+            }
+        });
+    };
+
+    view! {
+        <div class="grid grid-cols-[50px_1fr_80px] gap-2 items-center bg-[#ffffff05] rounded p-2 mb-1">
+            // Port number
+            <span class="text-[10px] text-[#00d9ff] font-mono">{port}</span>
+
+            // Display name input
+            <input
+                type="text"
+                class="bg-[#0a0a0a] border border-[#ffffff15] rounded px-2 py-1 text-[10px] text-white placeholder-[#555555] focus:border-[#00d9ff] focus:outline-none"
+                placeholder=format!("{} (default)", port)
+                prop:value=get_name
+                on:input=on_name_change
+            />
+
+            // Visibility toggle
+            <div class="flex justify-center">
+                <button
+                    class=move || format!(
+                        "w-8 h-4 rounded-full transition-colors relative {}",
+                        if get_visible() { "bg-[#00d9ff]" } else { "bg-[#333333]" }
+                    )
+                    on:click=on_visible_toggle
+                >
+                    <div class=move || format!(
+                        "absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform {}",
+                        if get_visible() { "translate-x-4" } else { "translate-x-0.5" }
+                    )/>
+                </button>
+            </div>
         </div>
     }
 }

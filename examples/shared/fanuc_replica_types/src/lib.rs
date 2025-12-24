@@ -294,12 +294,12 @@ pub struct JogSettingsState {
 impl Default for JogSettingsState {
     fn default() -> Self {
         Self {
-            cartesian_jog_speed: 10.0,
-            cartesian_jog_step: 1.0,
-            joint_jog_speed: 0.1,
-            joint_jog_step: 0.25,
-            rotation_jog_speed: 5.0,
-            rotation_jog_step: 1.0,
+            cartesian_jog_speed: 10.0, // mm/s
+            cartesian_jog_step: 1.0,   // mm
+            joint_jog_speed: 10.0,     // °/s
+            joint_jog_step: 1.0,       // degrees
+            rotation_jog_speed: 5.0,   // °/s
+            rotation_jog_step: 1.0,    // degrees
         }
     }
 }
@@ -665,14 +665,6 @@ pub struct JogCommand {
     pub axis: JogAxis,
     pub direction: JogDirection,
 }
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ExecuteProgram {
-    pub program_id: i64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct StopExecution;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ListPrograms;
@@ -1132,23 +1124,7 @@ pub struct CircularMotionCommand {
     pub term_value: u8,
 }
 
-// Rotation Jog (separate from cartesian jog)
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RotationJogCommand {
-    pub axis: u8, // 0=W, 1=P, 2=R
-    pub direction: JogDirection,
-    pub distance: f64,
-    pub speed: f64,
-}
-
 // Simple motion commands for Command Composer
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct JogRobot {
-    pub axis: JogAxis,
-    pub distance: f32,
-    pub speed: f32,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MoveLinear {
     pub x: f32,
@@ -1200,6 +1176,12 @@ pub struct LoadProgramResponse {
 
 impl RequestMessage for LoadProgram {
     type ResponseMessage = LoadProgramResponse;
+}
+
+impl ErrorResponse for LoadProgram {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        LoadProgramResponse { success: false, program: None, error: Some(error) }
+    }
 }
 
 /// Start executing the currently loaded program.
@@ -1315,6 +1297,12 @@ impl RequestMessage for SetActiveFrameTool {
     type ResponseMessage = SetActiveFrameToolResponse;
 }
 
+impl ErrorResponse for SetActiveFrameTool {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        SetActiveFrameToolResponse { success: false, error: Some(error) }
+    }
+}
+
 /// Request to read frame data from the robot.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GetFrameData {
@@ -1348,6 +1336,13 @@ impl RequestMessage for WriteFrameData {
     type ResponseMessage = WriteFrameDataResponse;
 }
 
+#[cfg(feature = "server")]
+impl ErrorResponse for WriteFrameData {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        WriteFrameDataResponse { success: false, error: Some(error) }
+    }
+}
+
 /// Request to read tool data from the robot.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GetToolData {
@@ -1379,6 +1374,13 @@ pub struct WriteToolDataResponse {
 
 impl RequestMessage for WriteToolData {
     type ResponseMessage = WriteToolDataResponse;
+}
+
+#[cfg(feature = "server")]
+impl ErrorResponse for WriteToolData {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        WriteToolDataResponse { success: false, error: Some(error) }
+    }
 }
 
 // Robot Connection Management - CreateRobotConnection is defined above with RequestMessage impl
@@ -1693,6 +1695,13 @@ impl RequestMessage for WriteDout {
     type ResponseMessage = DoutValueResponse;
 }
 
+#[cfg(feature = "server")]
+impl ErrorResponse for WriteDout {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        DoutValueResponse { port_number: 0, port_value: false, success: false, error: Some(error) }
+    }
+}
+
 // --- Analog Input (Read Only) ---
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -1728,6 +1737,13 @@ pub struct AoutValueResponse {
 
 impl RequestMessage for WriteAout {
     type ResponseMessage = AoutValueResponse;
+}
+
+#[cfg(feature = "server")]
+impl ErrorResponse for WriteAout {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        AoutValueResponse { port_number: 0, port_value: 0.0, success: false, error: Some(error) }
+    }
 }
 
 // --- Group Input (Read Only) ---
@@ -1767,9 +1783,16 @@ impl RequestMessage for WriteGout {
     type ResponseMessage = GoutValueResponse;
 }
 
+#[cfg(feature = "server")]
+impl ErrorResponse for WriteGout {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        GoutValueResponse { port_number: 0, port_value: 0, success: false, error: Some(error) }
+    }
+}
+
 // --- I/O Configuration ---
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GetIoConfig {
     pub robot_connection_id: i64,
 }

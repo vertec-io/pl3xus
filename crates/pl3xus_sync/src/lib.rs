@@ -71,6 +71,7 @@ pub use registry::{
     has_control_hierarchical,
     // Component mutation handler types
     ComponentMutation,
+    AuthorizedComponentMutation,
     ComponentMutationQueue,
     MutationResponseQueue,
     PendingMutationResponse,
@@ -238,6 +239,8 @@ where
 {
     app: &'a mut App,
     config: ComponentSyncConfig,
+    /// Track if we need to register AuthorizedComponentMutation<T> message type
+    register_authorized_mutation: bool,
     _marker: std::marker::PhantomData<T>,
 }
 
@@ -250,6 +253,7 @@ where
         Self {
             app,
             config: ComponentSyncConfig::default(),
+            register_authorized_mutation: false,
             _marker: std::marker::PhantomData,
         }
     }
@@ -301,7 +305,7 @@ where
     /// }
     ///
     /// app.sync_component_builder::<FrameToolDataState>()
-    ///     .with_handler::<WebSocketProvider>(handle_frame_tool_mutation)
+    ///     .with_handler::<WebSocketProvider, _, _>(handle_frame_tool_mutation)
     ///     .build();
     /// ```
     pub fn with_handler<NP, S, M>(mut self, handler: S) -> Self
@@ -310,9 +314,6 @@ where
         S: bevy::ecs::schedule::IntoScheduleConfigs<bevy::ecs::system::ScheduleSystem, M>,
     {
         self.config.has_mutation_handler = true;
-
-        // Register the ComponentMutation<T> message type so handlers can read it
-        self.app.add_message::<ComponentMutation<T>>();
 
         // Add the handler system in the appropriate set
         self.app.add_systems(
@@ -323,8 +324,63 @@ where
         self
     }
 
+    /// Mark this component's mutations as requiring entity-level authorization.
+    ///
+    /// When a component is targeted, mutations are only allowed if the client has
+    /// control of the target entity. This must be used together with `with_handler()`.
+    ///
+    /// When targeted, the handler should read `AuthorizedComponentMutation<T>` instead
+    /// of `ComponentMutation<T>`.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// fn handle_jog_settings_mutation(
+    ///     mut events: MessageReader<AuthorizedComponentMutation<JogSettingsState>>,
+    ///     mut settings_query: Query<&mut JogSettingsState>,
+    ///     mut response_queue: ResMut<MutationResponseQueue>,
+    /// ) {
+    ///     for event in events.read() {
+    ///         // Authorization already verified - client has control of the entity
+    ///         if let Ok(mut settings) = settings_query.get_mut(event.entity) {
+    ///             *settings = event.new_value.clone();
+    ///             response_queue.respond_ok(event.connection_id, event.request_id);
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// app.sync_component_builder::<JogSettingsState>()
+    ///     .with_handler::<WebSocketProvider, _, _>(handle_jog_settings_mutation)
+    ///     .targeted()
+    ///     .with_default_entity_policy()
+    ///     .build();
+    /// ```
+    pub fn targeted(mut self) -> Self {
+        self.config.requires_entity_authorization = true;
+        self.register_authorized_mutation = true;
+        self
+    }
+
+    /// Use the default entity access policy for authorization.
+    ///
+    /// This uses `DefaultEntityAccessPolicy` which is typically set by `ExclusiveControlPlugin`.
+    /// The policy checks if the client has control of the target entity via `EntityControl`.
+    ///
+    /// Only applicable when `targeted()` has been called.
+    pub fn with_default_entity_policy(mut self) -> Self {
+        self.config.use_default_entity_policy = true;
+        self
+    }
+
     /// Finalize the registration and apply the configuration.
     pub fn build(self) -> &'a mut App {
+        // Register the appropriate message type based on authorization mode
+        if self.register_authorized_mutation {
+            self.app.add_message::<AuthorizedComponentMutation<T>>();
+        } else if self.config.has_mutation_handler {
+            self.app.add_message::<ComponentMutation<T>>();
+        }
+
         registry::register_component::<T>(self.app, Some(self.config));
         self.app
     }

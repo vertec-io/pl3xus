@@ -22,6 +22,10 @@ members = [
     "examples/shared/fanuc_replica_types",
     "examples/fanuc_rmi_replica/server",
     "examples/fanuc_rmi_replica/client",
+    # Plugin-based structure example
+    "examples/fanuc_rmi_replica_plugins/plugins",
+    "examples/fanuc_rmi_replica_plugins/server",
+    "examples/fanuc_rmi_replica_plugins/app",
 ]
 
 [workspace.package]

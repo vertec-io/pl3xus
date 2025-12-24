@@ -1,36 +1,30 @@
-# Getting Started with pl3xus_client
+# Client Development
 
-pl3xus_client is a reactive Leptos library for building web UIs that synchronize with Bevy ECS servers via pl3xus_sync.
-
-Time: 30-45 minutes
-Difficulty: Intermediate
-Prerequisites: Basic Leptos knowledge, pl3xus_sync server running
+Build reactive web UIs that synchronize with your Bevy ECS server in real-time.
 
 ---
 
 ## Overview
 
 pl3xus_client provides:
-- Reactive hooks for subscribing to components with automatic updates
-- Compile-time type checking
-- Focus retention for editable fields during server updates
-- Built-in component inspector
-- Automatic subscription management (subscribe on mount, unsubscribe on unmount)
+
+- **TanStack Query-inspired hooks** - `use_mutation`, `use_query`, `use_mut_component`
+- **Automatic subscriptions** - Subscribe on mount, unsubscribe on unmount
+- **Real-time updates** - UI reactively updates when server state changes
+- **Loading & error states** - Built-in state management for async operations
+- **DevTools** - Inspect entities and components in real-time
 
 ---
 
 ## Installation
-
-Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
 leptos = "0.8"
 pl3xus_client = "0.1"
 serde = { version = "1.0", features = ["derive"] }
+shared_types = { path = "../shared" }  # Your shared types crate
 ```
-
-Install Trunk for building WASM:
 
 ```bash
 cargo install trunk
@@ -41,235 +35,238 @@ rustup target add wasm32-unknown-unknown
 
 ## Quick Start
 
-### Step 1: Use the Shared Crate
-
-Use the same shared crate as your server (see [pl3xus_sync Getting Started](../../sync/index.md) for how to create it).
-
-**Client `Cargo.toml`**:
-
-```toml
-[dependencies]
-leptos = "0.8"
-pl3xus_client = "0.1"
-serde = { version = "1.0", features = ["derive"] }
-# Import shared types WITHOUT the "server" feature
-shared_types = { path = "../shared_types" }
-```
-
-This pattern enables:
-- Client builds without Bevy dependency (no "server" feature)
-- Identical types on server and client (`Position`, `Velocity`, etc.)
-- WASM compilation without Bevy
-- Compile-time type safety guarantees
-
-### Step 2: Automatic SyncComponent Implementation
-
-The `SyncComponent` trait is automatically implemented for all types that are `Serialize + Deserialize + Send + Sync + 'static`.
-
-Simply derive `Serialize` and `Deserialize` on your types:
-
-```rust
-use serde::{Serialize, Deserialize};
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Position {
-    pub x: f32,
-    pub y: f32,
-}
-```
-
-The implementation:
-- Provides a blanket implementation of `SyncComponent`
-- Extracts component names using `std::any::type_name::<T>()`
-- Caches names for performance (approximately 500ns first call, 50-100ns subsequent)
-- Matches the server-side behavior in pl3xus_sync
-
-### Step 3: Set Up the Client Registry
-
-Create a registry that maps type names to deserializers:
+### 1. Set Up the Provider
 
 ```rust
 use leptos::prelude::*;
-use pl3xus_client::{SyncProvider, ClientRegistryBuilder};
-use shared_types::{Position, Velocity};
+use pl3xus_client::{SyncProvider, ClientTypeRegistry};
+use shared::{Robot, Position};
+
+fn main() {
+    console_error_panic_hook::set_once();
+    leptos::mount::mount_to_body(App);
+}
 
 #[component]
-pub fn App() -> impl IntoView {
-    let registry = ClientRegistryBuilder::new()
+fn App() -> impl IntoView {
+    // Register types the client will receive
+    let registry = ClientTypeRegistry::builder()
+        .register::<Robot>()
         .register::<Position>()
-        .register::<Velocity>()
         .build();
 
     view! {
-        <SyncProvider
-            url="ws://localhost:8082"
-            registry=registry
-        >
-            <AppView/>
+        <SyncProvider url="ws://localhost:8080" registry=registry>
+            <Dashboard/>
         </SyncProvider>
     }
 }
 ```
 
-### Step 4: Subscribe to Components
-
-Use the `use_sync_component` hook to subscribe and display data:
+### 2. Display Synced Components
 
 ```rust
-use pl3xus_client::use_sync_component;
+use pl3xus_client::use_components;
 
 #[component]
-fn AppView() -> impl IntoView {
-    // Automatically subscribes to Position components
-    let positions = use_sync_component::<Position>();
+fn Dashboard() -> impl IntoView {
+    // Subscribe to all Robot components
+    let robots = use_components::<Robot>();
 
     view! {
-        <div class="app-view">
-            <h1>"Entities"</h1>
-            <For
-                each=move || {
-                    positions.get()
-                        .iter()
-                        .map(|(id, pos)| (*id, pos.clone()))
-                        .collect::<Vec<_>>()
-                }
-                key=|(id, _)| *id
-                let:item
-            >
-                {
-                    let (entity_id, position) = item;
-                    view! {
-                        <div class="entity">
-                            "Entity " {entity_id} ": "
-                            "x=" {position.x} ", y=" {position.y}
-                        </div>
-                    }
-                }
-            </For>
-        </div>
+        <h1>"Robots"</h1>
+        <For
+            each=move || robots.get().into_iter()
+            key=|(id, _)| *id
+            children=|(id, robot)| view! {
+                <RobotCard entity_id=id robot=robot/>
+            }
+        />
     }
 }
 ```
 
-### Step 5: Create index.html
+### 3. Display Single Entity
 
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8"/>
-    <title>My Web Client</title>
-</head>
-<body></body>
-</html>
+```rust
+use pl3xus_client::use_entity_component;
+
+#[component]
+fn RobotCard(entity_id: u64, robot: Robot) -> impl IntoView {
+    // Subscribe to this entity's Position
+    let position = use_entity_component::<Position>(entity_id.into());
+
+    view! {
+        <div class="robot-card">
+            <h2>{robot.name}</h2>
+            <Show when=move || position.get().is_some()>
+                {move || {
+                    let pos = position.get().unwrap();
+                    format!("Position: ({:.1}, {:.1})", pos.x, pos.y)
+                }}
+            </Show>
+        </div>
+    }
+}
 ```
-
-### Step 6: Build and Run
-
-```bash
-trunk serve --port 8080
-```
-
-Open `http://localhost:8080` in your browser to see the synchronized entities.
 
 ---
 
-## Editable Fields
+## Mutations
 
-To allow users to edit component values:
+Send changes to the server with loading states and error handling.
+
+### Basic Mutation
 
 ```rust
-use pl3xus_client::SyncFieldInput;
+use pl3xus_client::use_mutation;
 
 #[component]
-fn PositionEditor(entity_id: u64) -> impl IntoView {
+fn CreateButton() -> impl IntoView {
+    let mutation = use_mutation::<CreateRobot>(|result| {
+        match result {
+            Ok(response) => log!("Created: {}", response.id),
+            Err(e) => log!("Error: {}", e),
+        }
+    });
+
     view! {
-        <div class="editor">
-            <label>
-                "X: "
-                <SyncFieldInput
-                    entity_id=entity_id
-                    field_accessor=|pos: &Position| pos.x
-                    field_mutator=|pos: &Position, new_x: f32| {
-                        Position { x: new_x, y: pos.y }
-                    }
-                    input_type="number"
-                />
-            </label>
-            <label>
-                "Y: "
-                <SyncFieldInput
-                    entity_id=entity_id
-                    field_accessor=|pos: &Position| pos.y
-                    field_mutator=|pos: &Position, new_y: f32| {
-                        Position { x: pos.x, y: new_y }
-                    }
-                    input_type="number"
-                />
-            </label>
-        </div>
+        <button
+            on:click=move |_| mutation.send(CreateRobot { name: "New".into() })
+            disabled=move || mutation.is_loading()
+        >
+            {move || if mutation.is_loading() { "Creating..." } else { "Create" }}
+        </button>
     }
 }
 ```
 
-Features:
-- Input retains focus when server updates arrive
-- Press Enter to send mutation to server
-- Click away to discard changes and revert to server value
+### Targeted Mutation (with Authorization)
+
+```rust
+use pl3xus_client::use_mutation_targeted;
+
+#[component]
+fn SpeedControl(entity_id: u64) -> impl IntoView {
+    let mutation = use_mutation_targeted::<SetSpeed>(|result| {
+        if let Err(e) = result {
+            toast.error(format!("Failed: {e}"));
+        }
+    });
+
+    view! {
+        <button on:click=move |_| mutation.send(entity_id, SetSpeed { value: 100.0 })>
+            "Set Speed"
+        </button>
+    }
+}
+```
+
+### Component Mutation
+
+For mutating synced components directly:
+
+```rust
+use pl3xus_client::use_mut_component;
+
+#[component]
+fn SettingsEditor(entity_id: u64) -> impl IntoView {
+    let handle = use_mut_component::<Settings>(entity_id.into());
+
+    let on_save = move |_| {
+        if let Some(current) = handle.value().get() {
+            handle.mutate(Settings { speed: 100.0, ..current });
+        }
+    };
+
+    view! {
+        <button on:click=on_save disabled=move || handle.is_loading()>
+            "Save"
+        </button>
+    }
+}
+```
+
+---
+
+## Queries
+
+Fetch data with caching and loading states.
+
+```rust
+use pl3xus_client::use_query;
+
+#[component]
+fn ProgramList() -> impl IntoView {
+    let query = use_query::<ListPrograms>();
+
+    Effect::new(move || {
+        query.fetch(ListPrograms {});
+    });
+
+    view! {
+        <Show when=move || query.is_loading()>
+            <p>"Loading..."</p>
+        </Show>
+        <Show when=move || query.is_success()>
+            <For
+                each=move || query.data().map(|d| d.programs.clone()).unwrap_or_default()
+                key=|p| p.id
+                children=|program| view! { <div>{program.name}</div> }
+            />
+        </Show>
+    }
+}
+```
 
 ---
 
 ## DevTools
 
-pl3xus_client includes built-in DevTools for inspecting entities and components:
+Add the DevTools component to inspect your application:
 
 ```rust
 use pl3xus_client::DevTools;
 
-#[component]
-fn App() -> impl IntoView {
-    let registry = ClientRegistryBuilder::new()
-        .register::<Position>()
-        .build();
-    
-    view! {
-        <SyncProvider url="ws://localhost:8082" registry=registry>
-            <AppView/>
-            <DevTools/>  // Add DevTools
-        </SyncProvider>
-    }
+view! {
+    <SyncProvider url="ws://localhost:8080" registry=registry>
+        <App/>
+        <DevTools/>
+    </SyncProvider>
 }
 ```
 
-Press the DevTools button to inspect entities, view component values, and edit fields in real-time.
+Features:
+- Entity browser with component inspection
+- Real-time value editing
+- Connection status monitoring
+- Subscription tracking
+
+---
+
+## Hook Reference
+
+| Hook | Purpose |
+|------|---------|
+| `use_components<T>()` | Subscribe to all entities with component T |
+| `use_components_where<T>(predicate)` | Filtered subscription |
+| `use_entity_component<T>(entity_id)` | Single entity's component |
+| `use_mut_component<T>(entity_id)` | Read and mutate component |
+| `use_mutation<R>(handler)` | Send mutations |
+| `use_mutation_targeted<R>(handler)` | Targeted mutations |
+| `use_request<R>(handler)` | One-off requests |
+| `use_targeted_request<R>(handler)` | Targeted requests |
+| `use_query<R>()` | Cached queries |
+| `use_query_keyed<R, K>()` | Keyed queries |
+| `use_query_targeted<R>()` | Targeted queries |
+| `use_connection()` | Connection state |
+| `use_sync_context()` | Full context access |
 
 ---
 
 ## Next Steps
 
+- **[Hooks Reference](../core/guides/hooks.md)** - Complete hook documentation
 - **[Mutations Guide](../core/guides/mutations.md)** - Advanced mutation patterns
-- **[DevTools Guide](../core/guides/devtools.md)** - DevTools features and customization
-- **[Type Registry Guide](../core/guides/type-registry.md)** - Advanced registry patterns
-
----
-
-## Complete Example
-
-See `crates/pl3xus_client/examples/basic_client/` for a complete working example.
-
-**Run it**:
-```bash
-# Terminal 1: Start server
-cargo run -p pl3xus_client --example basic_server
-
-# Terminal 2: Start client
-cd crates/pl3xus_client/examples/basic_client
-trunk serve --port 8080
-```
-
----
-
-**Last Updated**: 2025-11-22  
-**pl3xus_client Version**: 0.1  
-**Leptos Version**: 0.8
+- **[DevTools Guide](../core/guides/devtools.md)** - DevTools features
 

@@ -50,14 +50,9 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
 
     let (show_load_modal, set_show_load_modal) = signal(false);
 
-    // Get the System entity ID for control checks
+    // Check if THIS client has control of the System entity
     // Note: Program commands use the request/response pattern, not targeted messages.
     // Authorization is handled in the server request handlers.
-    let system_entity_bits = move || -> Option<u64> {
-        system_ctx.system_entity_id.get()
-    };
-
-    // Check if THIS client has control of the System entity
     let has_control = move || {
         let my_id = ctx.my_connection_id.get();
         Some(control_state.get().client_id) == my_id

@@ -158,7 +158,7 @@ use pl3xus_sync::AppPl3xusSyncExt;
 
 app.sync_component::<Position>(None);
 app.sync_component::<Velocity>(None);
-app.sync_component::<EntityName>(None);
+// For entity names, use Bevy's built-in Name component
 ```
 
 **Requirements for synced components:**
@@ -275,11 +275,11 @@ Entities with synced components are automatically tracked:
 ```rust
 fn spawn_robot(mut commands: Commands) {
     commands.spawn((
+        Name::new("Robot A"),  // Bevy's built-in Name component
         Position { x: 0.0, y: 0.0 },
         Velocity { dx: 1.0, dy: 0.0 },
-        EntityName { name: "Robot A".into() },
     ));
-    // Subscribers to Position, Velocity, EntityName will receive this entity
+    // Subscribers to Position, Velocity will receive this entity
 }
 ```
 
@@ -384,7 +384,7 @@ use pl3xus_websockets::{NetworkSettings, WebSocketProvider};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 // Import from shared crate
-use my_shared_types::{Position, Velocity, EntityName};
+use my_shared_types::{Position, Velocity};
 
 fn main() {
     App::new()
@@ -408,7 +408,6 @@ fn main() {
         // Register components
         .sync_component::<Position>(None)
         .sync_component::<Velocity>(None)
-        .sync_component::<EntityName>(None)
         // Systems
         .add_systems(Startup, (start_server, spawn_entities))
         .add_systems(Update, update_positions)
@@ -428,9 +427,9 @@ fn start_server(
 fn spawn_entities(mut commands: Commands) {
     for i in 0..10 {
         commands.spawn((
+            Name::new(format!("Entity {}", i)),  // Bevy's built-in Name
             Position { x: i as f32 * 10.0, y: 0.0 },
             Velocity { dx: 1.0, dy: 0.0 },
-            EntityName { name: format!("Entity {}", i) },
         ));
     }
 }

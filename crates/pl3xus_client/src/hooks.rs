@@ -2446,11 +2446,17 @@ where
     // Store refetch function
     let refetch_fn = StoredValue::new(Box::new(do_fetch.clone()) as Box<dyn Fn() + Send + Sync>);
 
-    // Initial fetch or restore from cache
+    // Initial fetch or restore from cache - wait for WebSocket to be open
+    let ready_state = ctx.ready_state;
     Effect::new({
         let do_fetch = do_fetch.clone();
         let cache_state = cache_state.clone();
         move |_| {
+            // Wait for WebSocket to be open before fetching
+            if ready_state.get() != crate::ConnectionReadyState::Open {
+                return;
+            }
+
             let cached = cache_state.get_untracked();
             // If cache has data, restore it to local state
             if let Some(ref bytes) = cached.data {
@@ -2648,10 +2654,15 @@ where
     // Store refetch function
     let refetch_fn = StoredValue::new(Box::new(do_fetch.clone()) as Box<dyn Fn() + Send + Sync>);
 
-    // Watch for request parameter changes and refetch
+    // Watch for request parameter changes and refetch - wait for WebSocket to be open
+    let ready_state = ctx.ready_state;
     Effect::new({
         let do_fetch = do_fetch.clone();
         move |_| {
+            // Wait for WebSocket to be open before fetching
+            if ready_state.get() != crate::ConnectionReadyState::Open {
+                return;
+            }
             // Subscribe to the request signal
             let _req = current_request.get();
             // Fetch with new parameters
@@ -2825,11 +2836,17 @@ where
     // Store refetch function
     let refetch_fn = StoredValue::new(Box::new(do_fetch.clone()) as Box<dyn Fn() + Send + Sync>);
 
-    // Initial fetch or restore from cache
+    // Initial fetch or restore from cache - wait for WebSocket to be open
+    let ready_state = ctx.ready_state;
     Effect::new({
         let do_fetch = do_fetch.clone();
         let cache_state = cache_state.clone();
         move |_| {
+            // Wait for WebSocket to be open before fetching
+            if ready_state.get() != crate::ConnectionReadyState::Open {
+                return;
+            }
+
             let cached = cache_state.get_untracked();
             // If cache has data, restore it to local state
             if let Some(ref bytes) = cached.data {

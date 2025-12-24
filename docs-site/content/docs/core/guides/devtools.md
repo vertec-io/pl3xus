@@ -42,7 +42,6 @@ let registry = Arc::new(
     ClientTypeRegistry::builder()
         .register::<Position>()
         .register::<Velocity>()
-        .register::<EntityName>()
         .with_devtools_support()  // Required for DevTools
         .build()
 );
@@ -159,37 +158,43 @@ Collapsible panel showing:
 
 ## Entity Hierarchies
 
-DevTools automatically detects parent/child relationships through:
+DevTools automatically detects parent/child relationships using **Bevy's built-in hierarchy components**:
 
-1. **ParentEntity component**: A custom component with `parent_bits: u64`
-2. **ChildEntities component**: A custom component with `children_bits: Vec<u64>`
+- **`ChildOf`**: Bevy's relationship component that stores the parent entity
+- **`Children`**: Automatically maintained by Bevy when `ChildOf` is used
 
 When using Tree View, entities display in a hierarchical structure with expand/collapse controls.
 
 ### Setting Up Hierarchies
 
-On the server, sync the hierarchy components:
+Use Bevy's standard entity hierarchy APIs - no special registration required:
 
 ```rust
-use pl3xus_sync::AppPl3xusSyncExt;
+use bevy::prelude::*;
 
-app.sync_component::<ParentEntity>(None);
-app.sync_component::<ChildEntities>(None);
+// Spawn a parent entity
+let parent = commands.spawn((
+    Name::new("System"),
+    SystemConfig::default(),
+)).id();
+
+// Spawn children using ChildOf
+commands.spawn((
+    Name::new("Robot A"),
+    ChildOf(parent),  // This creates the parent-child relationship
+    RobotConfig::default(),
+));
+
+// Or use the fluent API
+commands.entity(parent).with_children(|parent| {
+    parent.spawn((
+        Name::new("Robot B"),
+        RobotConfig::default(),
+    ));
+});
 ```
 
-In your shared types:
-
-```rust
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ParentEntity {
-    pub parent_bits: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ChildEntities {
-    pub children_bits: Vec<u64>,
-}
-```
+DevTools will automatically detect and display the hierarchy. The `Children` component is managed by Bevy and doesn't need to be manually added.
 
 ---
 
@@ -241,31 +246,33 @@ Ensure the client registry includes all component types the server syncs:
 // Server syncs these:
 app.sync_component::<Position>(None);
 app.sync_component::<Velocity>(None);
-app.sync_component::<EntityName>(None);
 
 // Client must register the same types:
 let registry = ClientTypeRegistry::builder()
     .register::<Position>()
     .register::<Velocity>()
-    .register::<EntityName>()
     .with_devtools_support()
     .build();
 ```
 
 Unregistered types will show as raw bytes in DevTools.
 
-### 3. Use EntityName for Better Labels
+### 3. Use Bevy's Name Component for Better Labels
 
-DevTools looks for an `EntityName` component to display friendly labels:
+DevTools automatically looks for Bevy's built-in `Name` component to display friendly labels:
 
 ```rust
-#[derive(Serialize, Deserialize, Clone)]
-pub struct EntityName {
-    pub name: String,
-}
+use bevy::prelude::*;
 
-// Entities with this component show "Robot A" instead of "#12345"
+commands.spawn((
+    Name::new("Robot A"),  // Bevy's built-in Name component
+    RobotConfig::default(),
+));
+
+// In DevTools, this entity shows as "Robot A · #12345" instead of just "#12345"
 ```
+
+DevTools looks for any component with a `name` or `label` field, so Bevy's `Name` component works automatically.
 
 ### 4. Check Registry Configuration
 
@@ -302,18 +309,21 @@ let registry = ClientTypeRegistry::builder()
 
 ### Entity Hierarchy Not Showing
 
-**Cause**: ParentEntity/ChildEntities components not synced or registered.
+**Cause**: Entities not spawned with parent-child relationships using Bevy's `ChildOf` component.
 
-**Fix**: Ensure both server and client register hierarchy components:
+**Fix**: Use Bevy's built-in hierarchy APIs:
 ```rust
-// Server
-app.sync_component::<ParentEntity>(None);
-app.sync_component::<ChildEntities>(None);
+use bevy::prelude::*;
 
-// Client
-.register::<ParentEntity>()
-.register::<ChildEntities>()
+// Use ChildOf to establish parent-child relationships
+let parent = commands.spawn(Name::new("Parent")).id();
+commands.spawn((
+    Name::new("Child"),
+    ChildOf(parent),  // This creates the hierarchy
+));
 ```
+
+DevTools automatically detects `ChildOf` relationships and displays them in Tree View.
 
 ### Mutations Failing
 

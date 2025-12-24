@@ -1,8 +1,27 @@
 //! DevTools UI components
 //!
 //! This module contains the DevTools widget and related UI components.
+//!
+//! ## Features
+//!
+//! - **World Inspector**: Hierarchical entity/component browser with live editing
+//! - **Query Explorer**: TanStack Query-style panel showing all active queries, their states, and cache
+//! - **Mutation Explorer**: Mutation history with pending/success/error states and timing
+//!
+//! ## Usage
+//!
+//! ```rust,ignore
+//! use pl3xus_client::devtools::{DevTools, DevToolsMode};
+//!
+//! // Basic usage with its own WebSocket connection
+//! view! { <DevTools ws_url="ws://127.0.0.1:3000/sync" registry=registry /> }
+//!
+//! // With app context for query/mutation inspection
+//! view! { <DevTools ws_url="ws://127.0.0.1:3000/sync" registry=registry app_context=Some(ctx) /> }
+//! ```
 
 use crate::client_type_registry::ClientTypeRegistry;
+use crate::context::SyncContext;
 use crate::devtools::sync::{DevtoolsSync, use_sync};
 
 use pl3xus_common::codec::Pl3xusBincodeCodec;
@@ -29,6 +48,18 @@ use pl3xus_sync::{
     SyncServerMessage,
     SubscriptionRequest,
 };
+
+/// Active tab in the DevTools panel
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum DevToolsTab {
+    /// World Inspector - Entity/Component browser
+    #[default]
+    World,
+    /// Query Explorer - Active queries and cache
+    Queries,
+    /// Mutation Explorer - Mutation history
+    Mutations,
+}
 
     fn entity_label(id: u64, components: &HashMap<String, JsonValue>) -> String {
         for value in components.values() {
@@ -404,6 +435,413 @@ use pl3xus_sync::{
         }
     }
 
+    /// Query Explorer panel - shows all active queries, their states, and cache
+    #[component]
+    fn QueryExplorer(app_context: Option<SyncContext>) -> impl IntoView {
+        let Some(ctx) = app_context else {
+            return view! {
+                <div class="flex flex-col items-center justify-center h-full text-center p-8">
+                    <svg class="w-12 h-12 text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <h3 class="text-sm font-semibold text-slate-300 mb-2">"No App Context"</h3>
+                    <p class="text-xs text-slate-500 max-w-xs">
+                        "Pass your app's SyncContext to DevTools to inspect queries:"
+                    </p>
+                    <pre class="mt-3 text-[10px] font-mono bg-slate-950/60 border border-slate-800 rounded p-2 text-slate-400">
+"<DevTools
+    ws_url=\"...\"
+    registry=registry
+    app_context=Some(ctx)
+/>"
+                    </pre>
+                </div>
+            }.into_any();
+        };
+
+        // Get query cache entries
+        let query_cache = ctx.query_cache.clone();
+        let query_invalidations = ctx.query_invalidations;
+
+        // Selected query for detail view
+        let selected_query = RwSignal::new(None::<(String, String)>);
+
+        // Clone for each closure that needs it
+        let query_cache_for_count = query_cache.clone();
+        let query_cache_for_list = query_cache.clone();
+        let query_cache_for_detail = query_cache.clone();
+
+        view! {
+            <div class="flex h-full gap-4">
+                // Query list
+                <div class="w-1/3 flex flex-col min-h-0">
+                    <div class="flex items-center justify-between mb-2 flex-shrink-0">
+                        <h3 class="text-sm font-semibold text-slate-100">"Queries"</h3>
+                        <span class="text-[10px] text-slate-400">
+                            {
+                                let cache = query_cache_for_count.clone();
+                                move || {
+                                    let cache = cache.lock().unwrap();
+                                    format!("{} cached", cache.len())
+                                }
+                            }
+                        </span>
+                    </div>
+                    <div class="flex-1 overflow-y-auto space-y-1">
+                        {
+                            let cache = query_cache_for_list.clone();
+                            move || {
+                            let cache = cache.lock().unwrap();
+                            let invalidations = query_invalidations.get();
+
+                            if cache.is_empty() {
+                                return view! {
+                                    <div class="text-[11px] text-slate-500 p-2">
+                                        "No active queries. Use use_query() hooks to fetch data."
+                                    </div>
+                                }.into_any();
+                            }
+
+                            let mut entries: Vec<_> = cache.iter()
+                                .map(|((type_name, key), entry)| {
+                                    let type_name = type_name.clone();
+                                    let key = key.clone();
+                                    let state = entry.state.get();
+                                    let ref_count = entry.ref_count;
+                                    let last_invalidation = entry.last_invalidation;
+                                    let current_invalidation = invalidations.get(&type_name).copied().unwrap_or(0);
+                                    (type_name, key, state, ref_count, last_invalidation, current_invalidation)
+                                })
+                                .collect();
+                            entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+                            view! {
+                                <For
+                                    each=move || entries.clone()
+                                    key=|(type_name, key, _, _, _, _)| format!("{}:{}", type_name, key)
+                                    children=move |(type_name, key, state, ref_count, last_inv, current_inv)| {
+                                        let type_name_click = type_name.clone();
+                                        let key_click = key.clone();
+                                        let short_name = type_name.rsplit("::").next().unwrap_or(&type_name).to_string();
+
+                                        // Determine status color
+                                        let status_class = if state.is_fetching {
+                                            "bg-blue-500"
+                                        } else if state.error.is_some() {
+                                            "bg-red-500"
+                                        } else if current_inv > last_inv {
+                                            "bg-yellow-500" // stale
+                                        } else if state.data.is_some() {
+                                            "bg-green-500"
+                                        } else {
+                                            "bg-slate-600"
+                                        };
+
+                                        let status_label = if state.is_fetching {
+                                            "fetching"
+                                        } else if state.error.is_some() {
+                                            "error"
+                                        } else if current_inv > last_inv {
+                                            "stale"
+                                        } else if state.data.is_some() {
+                                            "fresh"
+                                        } else {
+                                            "idle"
+                                        };
+
+                                        view! {
+                                            <button
+                                                class=move || {
+                                                    let is_selected = selected_query.get() == Some((type_name.clone(), key.clone()));
+                                                    let base = "w-full text-left px-2 py-1.5 rounded-md border transition-colors";
+                                                    if is_selected {
+                                                        format!("{base} bg-indigo-600/80 border-indigo-500 text-slate-50")
+                                                    } else {
+                                                        format!("{base} bg-slate-900/40 border-slate-800 text-slate-300 hover:bg-slate-800/70")
+                                                    }
+                                                }
+                                                on:click=move |_| selected_query.set(Some((type_name_click.clone(), key_click.clone())))
+                                            >
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <span class="truncate text-[11px] font-medium">{short_name}</span>
+                                                    <div class="flex items-center gap-1">
+                                                        <span class=format!("w-2 h-2 rounded-full {}", status_class)></span>
+                                                        <span class="text-[9px] text-slate-400">{status_label}</span>
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center justify-between mt-0.5">
+                                                    <span class="text-[9px] text-slate-500 font-mono truncate max-w-[120px]">
+                                                        {if key.is_empty() { "(default)".to_string() } else { key.clone() }}
+                                                    </span>
+                                                    <span class="text-[9px] text-slate-500">
+                                                        {format!("{} refs", ref_count)}
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        }
+                                    }
+                                />
+                            }.into_any()
+                        }
+                    }
+                    </div>
+                </div>
+
+                // Query detail view
+                <div class="flex-1 rounded-xl border border-white/5 bg-slate-900/50 p-3 flex flex-col min-h-0">
+                    <Show
+                        when=move || selected_query.get().is_some()
+                        fallback=move || view! {
+                            <div class="flex items-center justify-center h-full text-[11px] text-slate-500">
+                                "Select a query to view details"
+                            </div>
+                        }
+                    >
+                        {
+                            let cache = query_cache_for_detail.clone();
+                            move || {
+                            let Some((type_name, key)) = selected_query.get() else {
+                                return view! { <div></div> }.into_any();
+                            };
+
+                            let cache = cache.lock().unwrap();
+                            let Some(entry) = cache.get(&(type_name.clone(), key.clone())) else {
+                                return view! { <div class="text-slate-500">"Query not found"</div> }.into_any();
+                            };
+
+                            let state = entry.state.get();
+                            let short_name = type_name.rsplit("::").next().unwrap_or(&type_name);
+
+                            // Clone error for use in closures
+                            let has_error = state.error.is_some();
+                            let error_text = state.error.clone().unwrap_or_default();
+                            let data_size = state.data.as_ref().map(|d| d.len());
+
+                            view! {
+                                <div class="flex flex-col gap-3 h-full">
+                                    <div>
+                                        <div class="text-[10px] uppercase tracking-wide text-slate-500">"Query Type"</div>
+                                        <div class="text-sm font-semibold text-slate-50">{short_name.to_string()}</div>
+                                        <div class="text-[10px] text-slate-500 font-mono mt-0.5">{type_name.clone()}</div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-2 text-[11px]">
+                                        <div class="bg-slate-950/50 rounded p-2">
+                                            <div class="text-slate-500">"Status"</div>
+                                            <div class="font-medium">
+                                                {if state.is_fetching { "Fetching..." }
+                                                 else if has_error { "Error" }
+                                                 else if data_size.is_some() { "Success" }
+                                                 else { "Idle" }}
+                                            </div>
+                                        </div>
+                                        <div class="bg-slate-950/50 rounded p-2">
+                                            <div class="text-slate-500">"Key"</div>
+                                            <div class="font-mono truncate">
+                                                {if key.is_empty() { "(default)".to_string() } else { key.clone() }}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <Show when=move || has_error>
+                                        <div class="bg-red-950/50 border border-red-800 rounded p-2">
+                                            <div class="text-[10px] text-red-400 uppercase">"Error"</div>
+                                            <div class="text-[11px] text-red-300 mt-1">
+                                                {error_text.clone()}
+                                            </div>
+                                        </div>
+                                    </Show>
+
+                                    <div class="flex-1 min-h-0 flex flex-col">
+                                        <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">"Data"</div>
+                                        <div class="flex-1 overflow-auto">
+                                            <pre class="text-[10px] font-mono bg-slate-950/60 border border-slate-800 rounded p-2 whitespace-pre-wrap break-all">
+                                                {if let Some(size) = data_size {
+                                                    format!("{} bytes", size)
+                                                } else {
+                                                    "No data".to_string()
+                                                }}
+                                            </pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            }.into_any()
+                        }
+                    }
+                    </Show>
+                </div>
+            </div>
+        }.into_any()
+    }
+
+    /// Mutation Explorer panel - shows mutation history with states and timing
+    #[component]
+    fn MutationExplorer(app_context: Option<SyncContext>) -> impl IntoView {
+        let Some(ctx) = app_context else {
+            return view! {
+                <div class="flex flex-col items-center justify-center h-full text-center p-8">
+                    <svg class="w-12 h-12 text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    <h3 class="text-sm font-semibold text-slate-300 mb-2">"No App Context"</h3>
+                    <p class="text-xs text-slate-500 max-w-xs">
+                        "Pass your app's SyncContext to DevTools to inspect mutations."
+                    </p>
+                </div>
+            }.into_any();
+        };
+
+        let mutations = ctx.mutations;
+        let _requests = ctx.requests; // TODO: Add requests panel in future
+
+        // Selected mutation for detail view
+        let selected_mutation = RwSignal::new(None::<u64>);
+
+        view! {
+            <div class="flex h-full gap-4">
+                // Mutation list
+                <div class="w-1/3 flex flex-col min-h-0">
+                    <div class="flex items-center justify-between mb-2 flex-shrink-0">
+                        <h3 class="text-sm font-semibold text-slate-100">"Mutations"</h3>
+                        <span class="text-[10px] text-slate-400">
+                            {move || format!("{} tracked", mutations.get().len())}
+                        </span>
+                    </div>
+                    <div class="flex-1 overflow-y-auto space-y-1">
+                        {move || {
+                            let mutation_map = mutations.get();
+
+                            if mutation_map.is_empty() {
+                                return view! {
+                                    <div class="text-[11px] text-slate-500 p-2">
+                                        "No mutations yet. Use use_mutation() hooks to send mutations."
+                                    </div>
+                                }.into_any();
+                            }
+
+                            let mut entries: Vec<_> = mutation_map.iter()
+                                .map(|(id, state)| (*id, state.clone()))
+                                .collect();
+                            entries.sort_by(|a, b| b.0.cmp(&a.0)); // Most recent first
+
+                            view! {
+                                <For
+                                    each=move || entries.clone()
+                                    key=|(id, _)| *id
+                                    children=move |(id, state)| {
+                                        let status_class = match &state.status {
+                                            Some(pl3xus_sync::MutationStatus::Ok) => "bg-green-500",
+                                            Some(pl3xus_sync::MutationStatus::Forbidden) => "bg-red-500",
+                                            Some(pl3xus_sync::MutationStatus::NotFound) => "bg-yellow-500",
+                                            Some(pl3xus_sync::MutationStatus::ValidationError) => "bg-orange-500",
+                                            Some(pl3xus_sync::MutationStatus::InternalError) => "bg-red-500",
+                                            None => "bg-blue-500 animate-pulse", // pending
+                                        };
+
+                                        let status_label = match &state.status {
+                                            Some(pl3xus_sync::MutationStatus::Ok) => "ok",
+                                            Some(pl3xus_sync::MutationStatus::Forbidden) => "forbidden",
+                                            Some(pl3xus_sync::MutationStatus::NotFound) => "not found",
+                                            Some(pl3xus_sync::MutationStatus::ValidationError) => "validation",
+                                            Some(pl3xus_sync::MutationStatus::InternalError) => "error",
+                                            None => "pending",
+                                        };
+
+                                        // Clone message for use in closures
+                                        let has_message = state.message.is_some();
+                                        let message_text = state.message.clone().unwrap_or_default();
+
+                                        view! {
+                                            <button
+                                                class=move || {
+                                                    let is_selected = selected_mutation.get() == Some(id);
+                                                    let base = "w-full text-left px-2 py-1.5 rounded-md border transition-colors";
+                                                    if is_selected {
+                                                        format!("{base} bg-indigo-600/80 border-indigo-500 text-slate-50")
+                                                    } else {
+                                                        format!("{base} bg-slate-900/40 border-slate-800 text-slate-300 hover:bg-slate-800/70")
+                                                    }
+                                                }
+                                                on:click=move |_| selected_mutation.set(Some(id))
+                                            >
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <span class="text-[11px] font-mono">{"#"}{id}</span>
+                                                    <div class="flex items-center gap-1">
+                                                        <span class=format!("w-2 h-2 rounded-full {}", status_class)></span>
+                                                        <span class="text-[9px] text-slate-400">{status_label}</span>
+                                                    </div>
+                                                </div>
+                                                <Show when=move || has_message>
+                                                    <div class="text-[9px] text-slate-500 truncate mt-0.5">
+                                                        {message_text.clone()}
+                                                    </div>
+                                                </Show>
+                                            </button>
+                                        }
+                                    }
+                                />
+                            }.into_any()
+                        }}
+                    </div>
+                </div>
+
+                // Mutation detail view
+                <div class="flex-1 rounded-xl border border-white/5 bg-slate-900/50 p-3 flex flex-col min-h-0">
+                    <Show
+                        when=move || selected_mutation.get().is_some()
+                        fallback=move || view! {
+                            <div class="flex items-center justify-center h-full text-[11px] text-slate-500">
+                                "Select a mutation to view details"
+                            </div>
+                        }
+                    >
+                        {move || {
+                            let Some(id) = selected_mutation.get() else {
+                                return view! { <div></div> }.into_any();
+                            };
+
+                            let mutation_map = mutations.get();
+                            let Some(state) = mutation_map.get(&id) else {
+                                return view! { <div class="text-slate-500">"Mutation not found"</div> }.into_any();
+                            };
+
+                            view! {
+                                <div class="flex flex-col gap-3">
+                                    <div>
+                                        <div class="text-[10px] uppercase tracking-wide text-slate-500">"Request ID"</div>
+                                        <div class="text-sm font-semibold text-slate-50 font-mono">{"#"}{id}</div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-2 text-[11px]">
+                                        <div class="bg-slate-950/50 rounded p-2">
+                                            <div class="text-slate-500">"Status"</div>
+                                            <div class="font-medium">
+                                                {match &state.status {
+                                                    Some(pl3xus_sync::MutationStatus::Ok) => "Ok",
+                                                    Some(pl3xus_sync::MutationStatus::Forbidden) => "Forbidden",
+                                                    Some(pl3xus_sync::MutationStatus::NotFound) => "Not Found",
+                                                    Some(pl3xus_sync::MutationStatus::ValidationError) => "Validation Error",
+                                                    Some(pl3xus_sync::MutationStatus::InternalError) => "Internal Error",
+                                                    None => "Pending...",
+                                                }}
+                                            </div>
+                                        </div>
+                                        <div class="bg-slate-950/50 rounded p-2">
+                                            <div class="text-slate-500">"Message"</div>
+                                            <div class="truncate">
+                                                {state.message.clone().unwrap_or_else(|| "-".to_string())}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }.into_any()
+                        }}
+                    </Show>
+                </div>
+            </div>
+        }.into_any()
+    }
+
     /// Display mode for the DevTools component
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     pub enum DevToolsMode {
@@ -427,17 +865,25 @@ use pl3xus_sync::{
     /// - `ws_url`: WebSocket URL to connect to
     /// - `registry`: Type registry for deserializing component data
     /// - `mode`: Display mode (Widget or Embedded). Defaults to Widget.
+    /// - `app_context`: Optional SyncContext from the main app for query/mutation inspection
     #[component]
     pub fn DevTools(
         ws_url: &'static str,
         registry: Arc<ClientTypeRegistry>,
         #[prop(optional)] mode: DevToolsMode,
+        #[prop(optional)] app_context: Option<SyncContext>,
     ) -> impl IntoView {
         // Check if DevTools support is enabled in the registry
         let devtools_support_enabled = registry.is_devtools_support_enabled();
         if !devtools_support_enabled {
             console::error_1(&"[DevTools] ERROR: ClientTypeRegistry was not built with .with_devtools_support()! DevTools will not function correctly. Please add .with_devtools_support() to your registry builder.".into());
         }
+
+        // Clone app_context for use in multiple closures
+        let app_context_for_queries_badge = app_context.clone();
+        let app_context_for_mutations_badge = app_context.clone();
+        let app_context_for_tabs = app_context.clone();
+        let app_context_for_widget = app_context.clone();
 
         // Connection + debug state
         let (last_incoming, set_last_incoming) = signal(String::new());
@@ -447,6 +893,9 @@ use pl3xus_sync::{
 
         // Widget state (for floating mode)
         let (widget_expanded, set_widget_expanded) = signal(false);
+
+        // Active tab state
+        let active_tab = RwSignal::new(DevToolsTab::World);
 
         // Live entity/component view built from incoming SyncBatch items.
         let entities = RwSignal::new(HashMap::<u64, HashMap<String, JsonValue>>::new());
@@ -634,27 +1083,56 @@ use pl3xus_sync::{
             v
         };
 
-        // Build tree structure from ParentEntity and ChildEntities components
+        // Build tree structure from Bevy's ChildOf component (parent-child relationships)
+        // Bevy 0.17+ uses ChildOf(Entity) for hierarchy, which serializes to an object
+        // containing the parent entity bits. We look for common serialization patterns.
         let entity_tree = move || {
             let all_entities = entities.get();
             let mut roots = Vec::new();
             let mut children_map: HashMap<u64, Vec<u64>> = HashMap::new();
 
-            // First pass: collect all parent-child relationships
-            for (entity_id, components) in &all_entities {
-                // Check if this entity has a ParentEntity component
-                if let Some(JsonValue::Object(parent_comp)) = components.get("ParentEntity") {
-                    if let Some(JsonValue::Number(parent_bits)) = parent_comp.get("parent_bits") {
-                        if let Some(parent_id) = parent_bits.as_u64() {
-                            children_map.entry(parent_id).or_default().push(*entity_id);
-                        }
+            // Helper to extract parent ID from ChildOf component
+            // Bevy's ChildOf(Entity) can serialize in different ways depending on serde config
+            fn extract_parent_id(child_of_value: &JsonValue) -> Option<u64> {
+                match child_of_value {
+                    // Direct number (ChildOf as tuple struct serialized to number)
+                    JsonValue::Number(n) => n.as_u64(),
+                    // Object with various possible field names
+                    JsonValue::Object(obj) => {
+                        // Try common patterns: "0" (tuple index), "bits", "parent", "parent_bits"
+                        obj.get("0")
+                            .or_else(|| obj.get("bits"))
+                            .or_else(|| obj.get("parent"))
+                            .or_else(|| obj.get("parent_bits"))
+                            .and_then(|v| v.as_u64())
                     }
+                    // Array (tuple struct as array)
+                    JsonValue::Array(arr) => arr.first().and_then(|v| v.as_u64()),
+                    _ => None,
                 }
             }
 
-            // Second pass: find root entities (those without ParentEntity)
+            // First pass: collect all parent-child relationships
             for (entity_id, components) in &all_entities {
-                if !components.contains_key("ParentEntity") {
+                // Check for Bevy's ChildOf component (primary) or legacy ParentEntity (fallback)
+                let parent_id = components.get("ChildOf")
+                    .and_then(extract_parent_id)
+                    .or_else(|| {
+                        // Fallback: check for legacy ParentEntity component
+                        components.get("ParentEntity")
+                            .and_then(|v| v.as_object())
+                            .and_then(|obj| obj.get("parent_bits"))
+                            .and_then(|v| v.as_u64())
+                    });
+
+                if let Some(parent_id) = parent_id {
+                    children_map.entry(parent_id).or_default().push(*entity_id);
+                }
+            }
+
+            // Second pass: find root entities (those without ChildOf or ParentEntity)
+            for (entity_id, components) in &all_entities {
+                if !components.contains_key("ChildOf") && !components.contains_key("ParentEntity") {
                     roots.push(*entity_id);
                 }
             }
@@ -684,25 +1162,116 @@ use pl3xus_sync::{
                 // Full-page embedded view with fixed viewport height
                 view! {
             <div class="fixed inset-0 w-full h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-50 flex flex-col overflow-hidden">
-                <header class="border-b border-white/5 bg-slate-900/80 backdrop-blur-sm shadow-sm px-4 py-3 flex items-center justify-between flex-shrink-0">
-                    <div>
-                        <h1 class="text-lg font-semibold tracking-tight">"Pl3xus DevTools"</h1>
-                        <p class="text-xs text-slate-400">"Realtime ECS inspector & mutation console"</p>
-                    </div>
-                    <div class="flex items-center gap-3 text-xs">
-                        <span class="px-2 py-1 rounded-full border border-slate-700 bg-slate-900">
-                            {move || format!("{} · {}", connection_label(), ws_url)}
-                        </span>
-                        <button
-                            class="px-3 py-1 rounded bg-emerald-500 text-slate-950 font-medium disabled:opacity-50"
-                            on:click=move |_| open()
-                            disabled=move || ready_state.get() == ConnectionReadyState::Open
-                        >"Connect"</button>
-                        <button
-                            class="px-3 py-1 rounded bg-slate-700 text-slate-50 disabled:opacity-50"
-                            on:click=move |_| close()
-                            disabled=move || ready_state.get() != ConnectionReadyState::Open
-                        >"Disconnect"</button>
+                <header class="border-b border-white/5 bg-slate-900/80 backdrop-blur-sm shadow-sm flex-shrink-0">
+                    <div class="px-4 py-3 flex items-center justify-between">
+                        <div class="flex items-center gap-6">
+                            <div>
+                                <h1 class="text-lg font-semibold tracking-tight">"Pl3xus DevTools"</h1>
+                                <p class="text-xs text-slate-400">"Realtime ECS inspector & query/mutation console"</p>
+                            </div>
+                            // Tab navigation
+                            <nav class="flex items-center gap-1">
+                                <button
+                                    class=move || {
+                                        let base = "px-3 py-1.5 text-xs font-medium rounded-md transition-colors";
+                                        if active_tab.get() == DevToolsTab::World {
+                                            format!("{base} bg-indigo-600 text-white")
+                                        } else {
+                                            format!("{base} text-slate-400 hover:text-slate-200 hover:bg-slate-800")
+                                        }
+                                    }
+                                    on:click=move |_| active_tab.set(DevToolsTab::World)
+                                >
+                                    <span class="flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        "World"
+                                    </span>
+                                </button>
+                                <button
+                                    class=move || {
+                                        let base = "px-3 py-1.5 text-xs font-medium rounded-md transition-colors";
+                                        if active_tab.get() == DevToolsTab::Queries {
+                                            format!("{base} bg-indigo-600 text-white")
+                                        } else {
+                                            format!("{base} text-slate-400 hover:text-slate-200 hover:bg-slate-800")
+                                        }
+                                    }
+                                    on:click=move |_| active_tab.set(DevToolsTab::Queries)
+                                >
+                                    <span class="flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        "Queries"
+                                        {
+                                            let ctx = app_context_for_queries_badge.clone();
+                                            move || {
+                                                if let Some(ref ctx) = ctx {
+                                                    let count = ctx.query_cache.lock().unwrap().len();
+                                                    if count > 0 {
+                                                        return view! {
+                                                            <span class="ml-1 px-1.5 py-0.5 text-[9px] bg-slate-700 rounded-full">{count}</span>
+                                                        }.into_any();
+                                                    }
+                                                }
+                                                view! { <span></span> }.into_any()
+                                            }
+                                        }
+                                    </span>
+                                </button>
+                                <button
+                                    class=move || {
+                                        let base = "px-3 py-1.5 text-xs font-medium rounded-md transition-colors";
+                                        if active_tab.get() == DevToolsTab::Mutations {
+                                            format!("{base} bg-indigo-600 text-white")
+                                        } else {
+                                            format!("{base} text-slate-400 hover:text-slate-200 hover:bg-slate-800")
+                                        }
+                                    }
+                                    on:click=move |_| active_tab.set(DevToolsTab::Mutations)
+                                >
+                                    <span class="flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                        </svg>
+                                        "Mutations"
+                                        {
+                                            let ctx = app_context_for_mutations_badge.clone();
+                                            move || {
+                                                if let Some(ref ctx) = ctx {
+                                                    let pending = ctx.mutations.get().values()
+                                                        .filter(|m| m.status.is_none())
+                                                        .count();
+                                                    if pending > 0 {
+                                                        return view! {
+                                                            <span class="ml-1 px-1.5 py-0.5 text-[9px] bg-blue-600 rounded-full animate-pulse">{pending}</span>
+                                                        }.into_any();
+                                                    }
+                                                }
+                                                view! { <span></span> }.into_any()
+                                            }
+                                        }
+                                    </span>
+                                </button>
+                            </nav>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs">
+                            <span class="px-2 py-1 rounded-full border border-slate-700 bg-slate-900">
+                                {move || format!("{} · {}", connection_label(), ws_url)}
+                            </span>
+                            <button
+                                class="px-3 py-1 rounded bg-emerald-500 text-slate-950 font-medium disabled:opacity-50"
+                                on:click=move |_| open()
+                                disabled=move || ready_state.get() == ConnectionReadyState::Open
+                            >"Connect"</button>
+                            <button
+                                class="px-3 py-1 rounded bg-slate-700 text-slate-50 disabled:opacity-50"
+                                on:click=move |_| close()
+                                disabled=move || ready_state.get() != ConnectionReadyState::Open
+                            >"Disconnect"</button>
+                        </div>
                     </div>
                 </header>
 
@@ -729,7 +1298,29 @@ use pl3xus_sync::{
                     </div>
                 </Show>
 
-                <main class="flex-1 overflow-hidden grid grid-cols-12 gap-4 p-4 min-h-0">
+                <main class="flex-1 overflow-hidden p-4 min-h-0">
+                    // Tab content based on active tab
+                    {
+                        let ctx = app_context_for_tabs.clone();
+                        move || match active_tab.get() {
+                        DevToolsTab::Queries => {
+                            view! {
+                                <div class="h-full rounded-2xl border border-white/5 bg-slate-900/70 backdrop-blur-sm shadow-lg shadow-black/40 p-4">
+                                    <QueryExplorer app_context=ctx.clone() />
+                                </div>
+                            }.into_any()
+                        }
+                        DevToolsTab::Mutations => {
+                            view! {
+                                <div class="h-full rounded-2xl border border-white/5 bg-slate-900/70 backdrop-blur-sm shadow-lg shadow-black/40 p-4">
+                                    <MutationExplorer app_context=ctx.clone() />
+                                </div>
+                            }.into_any()
+                        }
+                        DevToolsTab::World => {
+                            // World Inspector (original content)
+                            view! {
+                                <div class="h-full grid grid-cols-12 gap-4">
                     <section class="col-span-3 flex flex-col gap-3 min-h-0">
                         <div class="rounded-2xl border border-white/5 bg-slate-900/70 backdrop-blur-sm shadow-lg shadow-black/40 p-3 flex flex-col min-h-0 h-full">
                             <div class="flex items-center justify-between mb-2 flex-shrink-0">
@@ -1122,6 +1713,10 @@ use pl3xus_sync::{
                             </Show>
                         </div>
                     </section>
+                                </div>
+                            }.into_any()
+                        }
+                    }}
                 </main>
             </div>
         }.into_any()
@@ -1182,7 +1777,12 @@ use pl3xus_sync::{
                                 <div class="relative w-[95vw] h-[90vh] max-w-[1800px] rounded-2xl shadow-2xl overflow-hidden border border-white/10">
                                     // Render the full DevTools UI inside the modal
                                     // Call DevTools recursively with Embedded mode
-                                    <DevTools ws_url=ws_url registry=registry.clone() mode=DevToolsMode::Embedded />
+                                    {
+                                        match app_context_for_widget.clone() {
+                                            Some(ctx) => view! { <DevTools ws_url=ws_url registry=registry.clone() mode=DevToolsMode::Embedded app_context=ctx /> }.into_any(),
+                                            None => view! { <DevTools ws_url=ws_url registry=registry.clone() mode=DevToolsMode::Embedded /> }.into_any(),
+                                        }
+                                    }
 
                                     // Action buttons at bottom-left (away from Connect button)
                                     <div class="absolute bottom-4 left-4 z-10 flex gap-2">

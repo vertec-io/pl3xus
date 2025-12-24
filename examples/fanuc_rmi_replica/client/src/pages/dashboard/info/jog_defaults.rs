@@ -1,7 +1,7 @@
 //! Jog Defaults Panel - Configure per-robot jog speed and step defaults.
 
 use leptos::prelude::*;
-use pl3xus_client::{use_entity_component, use_mut_component};
+use pl3xus_client::{use_sync_context, use_entity_component, use_mut_component, EntityControl};
 use fanuc_replica_types::{ConnectionState, JogSettingsState};
 use super::NumberInput;
 use crate::pages::dashboard::use_system_entity;
@@ -9,11 +9,15 @@ use crate::pages::dashboard::use_system_entity;
 /// Jog Defaults Panel - Configure per-robot jog speed and step defaults
 #[component]
 pub fn JogDefaultsPanel() -> impl IntoView {
+    let ctx = use_sync_context();
     let system_ctx = use_system_entity();
 
     // Subscribe to entity-specific components
     // All these components live on the robot entity
     let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
+
+    // Subscribe to entity control on the System entity (control is at hierarchy level)
+    let (control_state, _) = use_entity_component::<EntityControl, _>(move || system_ctx.system_entity_id.get());
 
     // Use the new mutation hook for jog settings - provides read + write + mutation state
     let jog_handle = use_mut_component::<JogSettingsState, _>(move || system_ctx.robot_entity_id.get());
@@ -21,6 +25,13 @@ pub fn JogDefaultsPanel() -> impl IntoView {
     let jog_value = jog_handle.value;
 
     let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
+
+    // Check if THIS client has control (using System entity)
+    let has_control = Memo::new(move |_| {
+        let my_id = ctx.my_connection_id.get();
+        let state = control_state.get();
+        Some(state.client_id) == my_id
+    });
 
     // Local state for editing
     let (cart_speed, set_cart_speed) = signal(String::new());
@@ -59,12 +70,17 @@ pub fn JogDefaultsPanel() -> impl IntoView {
     view! {
         <Show when=move || robot_connected.get()>
             <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-3 shrink-0">
-                <h3 class="text-[10px] font-semibold text-[#00d9ff] mb-2 uppercase tracking-wide flex items-center group">
-                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
-                    "Jog Defaults"
-                </h3>
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-[10px] font-semibold text-[#00d9ff] uppercase tracking-wide flex items-center group">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        "Jog Defaults"
+                    </h3>
+                    <Show when=move || !has_control.get()>
+                        <span class="text-[8px] text-[#ff4444] bg-[#ff444420] px-1.5 py-0.5 rounded">"No Control"</span>
+                    </Show>
+                </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     // Cartesian Jog Defaults
@@ -81,6 +97,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                                     }
                                     min=0.1
                                     max=1000.0
+                                    disabled=Signal::derive(move || !has_control.get())
                                 />
                             </div>
                             <div>
@@ -93,6 +110,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                                     }
                                     min=0.1
                                     max=100.0
+                                    disabled=Signal::derive(move || !has_control.get())
                                 />
                             </div>
                         </div>
@@ -112,6 +130,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                                     }
                                     min=0.1
                                     max=100.0
+                                    disabled=Signal::derive(move || !has_control.get())
                                 />
                             </div>
                             <div>
@@ -124,6 +143,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                                     }
                                     min=0.1
                                     max=90.0
+                                    disabled=Signal::derive(move || !has_control.get())
                                 />
                             </div>
                         </div>

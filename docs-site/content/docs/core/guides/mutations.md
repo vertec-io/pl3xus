@@ -1,312 +1,302 @@
 ---
-title: Component Mutations Guide
+title: Mutations
 ---
-# Component Mutations Guide
+# Mutations
 
-This guide covers how clients can modify server-side ECS components through the mutation system in pl3xus_sync and pl3xus_client.
-
----
-
-## Overview
-
-Mutations allow web clients to request changes to server-side component data. The flow is:
-
-1. **Client** sends a `MutateComponent` message with the new component value
-2. **Server** validates the mutation through the `MutationAuthorizer` (if configured)
-3. **Server** applies the change to the ECS world (if authorized)
-4. **Server** sends back a `MutationResponse` with the result
-5. **Server** broadcasts the updated component to all subscribers
+Mutations let clients request changes to server state. pl3xus provides a TanStack Query-inspired API for ergonomic mutation handling with loading states, error handling, and response callbacks.
 
 ---
 
-## Server-Side Configuration
+## Quick Start
 
-### Basic Setup
-
-Register components for synchronization in your Bevy server:
+### Client: Send a Mutation
 
 ```rust
-use bevy::prelude::*;
-use pl3xus_sync::{AppPl3xusSyncExt, Pl3xusSyncPlugin};
-use pl3xus_websockets::WebSocketProvider;
+use pl3xus_client::use_mutation;
 
-fn main() {
-    let mut app = App::new();
-    
-    // Add the sync plugin
-    app.add_plugins(Pl3xusSyncPlugin::<WebSocketProvider>::default());
-    
-    // Register components for sync (mutations enabled by default)
-    app.sync_component::<Position>(None);
-    app.sync_component::<Velocity>(None);
-    
-    app.run();
-}
-```
-
-### Mutation Authorization
-
-By default, all mutations from any client are allowed. For production systems, you should implement authorization.
-
-#### Option 1: Server-Only Mode
-
-Disable all client mutations - only server-side code can modify components:
-
-```rust
-use pl3xus_sync::MutationAuthorizerResource;
-
-app.insert_resource(MutationAuthorizerResource::server_only());
-```
-
-#### Option 2: Custom Authorization with Closure
-
-Use a closure for simple authorization logic:
-
-```rust
-use pl3xus_sync::{MutationAuthorizerResource, MutationStatus};
-use bevy::prelude::*;
-
-app.insert_resource(MutationAuthorizerResource::from_fn(
-    |world, mutation| {
-        // Only allow Position mutations
-        if mutation.component_type == "Position" {
-            MutationStatus::Ok
-        } else {
-            MutationStatus::Forbidden
+#[component]
+fn UpdateButton() -> impl IntoView {
+    // Create a mutation handle with a response handler
+    let mutation = use_mutation::<UpdatePosition>(|result| {
+        match result {
+            Ok(response) => log!("Updated: {:?}", response),
+            Err(e) => log!("Error: {}", e),
         }
-    }
-));
-```
+    });
 
-#### Option 3: Implement MutationAuthorizer Trait
-
-For complex authorization logic, implement the trait directly:
-
-```rust
-use pl3xus_sync::{
-    MutationAuthorizer, MutationAuthContext, MutationAuthorizerResource, 
-    MutationStatus, QueuedMutation
-};
-use std::sync::Arc;
-
-struct MyAuthorizer {
-    allowed_components: Vec<&'static str>,
-}
-
-impl MutationAuthorizer for MyAuthorizer {
-    fn authorize(&self, ctx: &MutationAuthContext, mutation: &QueuedMutation) -> MutationStatus {
-        // Check if component type is allowed
-        if self.allowed_components.contains(&mutation.component_type.as_str()) {
-            MutationStatus::Ok
-        } else {
-            MutationStatus::Forbidden
-        }
+    view! {
+        <button
+            on:click=move |_| mutation.send(UpdatePosition { x: 10.0, y: 20.0 })
+            disabled=move || mutation.is_loading()
+        >
+            {move || if mutation.is_loading() { "Saving..." } else { "Update" }}
+        </button>
     }
 }
+```
 
-// Install the authorizer
-app.insert_resource(MutationAuthorizerResource {
-    inner: Arc::new(MyAuthorizer {
-        allowed_components: vec!["Position", "Velocity"],
-    }),
+### Server: Handle the Mutation
+
+```rust
+use pl3xus_sync::AppRequestRegistrationExt;
+
+// Register the request handler
+app.request::<UpdatePosition, NP>().register();
+
+// Handle the request
+fn handle_update_position(
+    mut requests: MessageReader<Request<UpdatePosition>>,
+    mut query: Query<&mut Position>,
+    net: Res<Network<NP>>,
+) {
+    for request in requests.read() {
+        // Apply the update
+        if let Ok(mut pos) = query.get_single_mut() {
+            pos.x = request.x;
+            pos.y = request.y;
+        }
+
+        // Send response
+        net.send(request.source(), UpdatePositionResponse { success: true });
+    }
+}
+```
+
+---
+
+## Mutation Types
+
+### Non-Targeted Mutations
+
+For operations that don't target a specific entity:
+
+```rust
+// Client
+let mutation = use_mutation::<CreateRobot>(|result| {
+    if let Ok(response) = result {
+        log!("Created robot: {}", response.robot_id);
+    }
 });
+
+mutation.send(CreateRobot { name: "Robot-1".into() });
 ```
 
-### Hierarchy-Aware Authorization
+### Targeted Mutations
 
-For entity hierarchies where control of a parent grants control over children:
+For operations on a specific entity (with authorization):
 
 ```rust
-use pl3xus_sync::{has_control_hierarchical, MutationAuthorizerResource, MutationStatus};
-use bevy::prelude::*;
+// Client
+let mutation = use_mutation_targeted::<SetSpeed>(|result| {
+    match result {
+        Ok(_) => toast.success("Speed updated"),
+        Err(e) => toast.error(format!("Failed: {e}")),
+    }
+});
 
-// Your control marker component
-#[derive(Component)]
-struct EntityOwner {
-    connection_id: pl3xus_common::ConnectionId,
-}
+// Send to a specific entity
+mutation.send(entity_id, SetSpeed { value: 100.0 });
+```
 
-app.insert_resource(MutationAuthorizerResource::from_fn(
-    |world, mutation| {
-        let entity = bevy::prelude::Entity::from_bits(mutation.entity.bits);
-        
-        // Check if this connection owns the entity or any ancestor
-        if has_control_hierarchical::<EntityOwner, _>(
-            world,
-            entity,
-            |owner| owner.connection_id == mutation.connection_id
-        ) {
-            MutationStatus::Ok
-        } else {
-            MutationStatus::Forbidden
+```rust
+// Server - register with authorization
+app.request::<SetSpeed, NP>()
+    .targeted()
+    .with_default_entity_policy()  // Requires EntityControl
+    .register();
+
+// Handler receives AuthorizedRequest
+fn handle_set_speed(
+    mut requests: MessageReader<AuthorizedRequest<SetSpeed>>,
+    mut query: Query<&mut Speed>,
+) {
+    for request in requests.read() {
+        let entity = request.entity();  // Already authorized!
+        if let Ok(mut speed) = query.get_mut(entity) {
+            speed.value = request.value;
         }
     }
-));
-```
-
----
-
-## Client-Side Implementation
-
-### Using SyncFieldInput (Recommended)
-
-The easiest way to enable mutations is with the `SyncFieldInput` component:
-
-```rust
-use pl3xus_client::SyncFieldInput;
-use leptos::prelude::*;
-
-#[component]
-fn PositionEditor(entity_id: u64) -> impl IntoView {
-    view! {
-        <div class="editor">
-            <label>
-                "X: "
-                <SyncFieldInput<Position, f32>
-                    entity_id=entity_id
-                    field_accessor=|pos: &Position| pos.x
-                    field_mutator=|pos: &Position, new_x: f32| {
-                        Position { x: new_x, y: pos.y }
-                    }
-                    input_type="number"
-                />
-            </label>
-        </div>
-    }
-}
-```
-
-**Features:**
-- Input retains focus when server updates arrive
-- Press **Enter** to send mutation to server
-- Click away to **discard changes** and revert to server value
-- Controlled input pattern prevents update loops
-
-### Using SyncContext Directly
-
-For more control, use the `SyncContext` directly:
-
-```rust
-use pl3xus_client::{use_sync_context, SyncComponent};
-use leptos::prelude::*;
-
-#[component]
-fn ManualMutation(entity_id: u64) -> impl IntoView {
-    let ctx = use_sync_context();
-
-    let send_mutation = move |_| {
-        let new_position = Position { x: 100.0, y: 200.0 };
-
-        // Send mutation and get request ID for tracking
-        let request_id = ctx.mutate(entity_id, new_position);
-
-        // Optionally track the mutation status
-        leptos::logging::log!("Mutation sent with request_id: {}", request_id);
-    };
-
-    view! {
-        <button on:click=send_mutation>"Set Position to (100, 200)"</button>
-    }
 }
 ```
 
 ---
 
-## Mutation Status Values
+## MutationHandle API
 
-The server responds with one of these statuses:
+The `use_mutation` hook returns a `MutationHandle` with these methods:
 
-| Status | Meaning |
-|--------|---------|
-| `Ok` | Mutation was applied successfully |
-| `Forbidden` | Authorization denied the mutation |
-| `NotFound` | Entity or component not found |
-| `ValidationError` | Value failed validation |
-| `InternalError` | Server-side error occurred |
+| Method | Description |
+|--------|-------------|
+| `send(request)` | Send the mutation request |
+| `is_loading()` | Returns `true` while waiting for response |
+| `is_success()` | Returns `true` if last mutation succeeded |
+| `is_error()` | Returns `true` if last mutation failed |
+| `data()` | Returns `Option<&Response>` for successful response |
+| `error()` | Returns `Option<&str>` for error message |
+| `reset()` | Reset state to idle |
+
+### Example: Full State Handling
+
+```rust
+let mutation = use_mutation::<SaveSettings>(|_| {});
+
+view! {
+    <button
+        on:click=move |_| mutation.send(settings.get())
+        disabled=move || mutation.is_loading()
+    >
+        {move || match () {
+            _ if mutation.is_loading() => "Saving...",
+            _ if mutation.is_success() => "Saved ✓",
+            _ if mutation.is_error() => "Failed ✗",
+            _ => "Save",
+        }}
+    </button>
+
+    <Show when=move || mutation.is_error()>
+        <p class="error">{move || mutation.error().unwrap_or_default()}</p>
+    </Show>
+}
+```
+
+---
+
+## Server Authorization
+
+### Default Entity Policy
+
+The most common pattern - requires the client to have `EntityControl`:
+
+```rust
+app.request::<WriteValue, NP>()
+    .targeted()
+    .with_default_entity_policy()
+    .register();
+```
+
+This checks:
+1. Does the target entity exist?
+2. Does the client have `EntityControl` of this entity (or a parent)?
+
+### Custom Authorization
+
+For custom authorization logic:
+
+```rust
+use pl3xus_sync::{EntityAccessPolicy, AuthResult};
+
+app.request::<AdminCommand, NP>()
+    .targeted()
+    .with_entity_policy(EntityAccessPolicy::from_fn(|world, ctx, entity| {
+        // Check if user is admin
+        if is_admin(world, ctx.connection_id) {
+            AuthResult::Authorized
+        } else {
+            AuthResult::Denied("Admin access required".into())
+        }
+    }))
+    .register();
+```
+
+---
+
+## Component Mutations
+
+For mutating synced components directly (not via request/response):
+
+### Server: Register with Handler
+
+```rust
+app.sync_component_builder::<JogSettings>()
+    .with_handler::<NP>(handle_jog_settings_mutation)
+    .targeted()
+    .with_default_entity_policy()
+    .build();
+
+fn handle_jog_settings_mutation(
+    mut mutations: MessageReader<AuthorizedComponentMutation<JogSettings>>,
+    mut query: Query<&mut JogSettings>,
+) {
+    for mutation in mutations.read() {
+        if let Ok(mut settings) = query.get_mut(mutation.entity()) {
+            *settings = mutation.into_inner();
+        }
+    }
+}
+```
+
+### Client: Use `use_mut_component`
+
+```rust
+let (settings, mutate) = use_mut_component::<JogSettings>(entity_id);
+
+// Read current value
+let current = settings.get();
+
+// Mutate with new value
+mutate(JogSettings { speed: 50.0, ..current });
+```
 
 ---
 
 ## Best Practices
 
-### 1. Always Implement Authorization in Production
-
-Never deploy without a `MutationAuthorizer`:
+### 1. Always Handle Errors
 
 ```rust
-// ❌ BAD: No authorization in production
-app.sync_component::<Position>(None);
-
-// ✅ GOOD: Explicit authorization
-app.insert_resource(MutationAuthorizerResource::from_fn(|world, mutation| {
-    // Your authorization logic here
-    validate_mutation(world, mutation)
-}));
+let mutation = use_mutation::<SaveData>(|result| {
+    match result {
+        Ok(_) => { /* success */ },
+        Err(e) => {
+            // Log, show toast, update UI state
+            toast.error(format!("Save failed: {e}"));
+        }
+    }
+});
 ```
 
-### 2. Use Optimistic Updates Carefully
-
-The client doesn't update its local state until the server confirms. This prevents desync but means there's a brief delay:
+### 2. Disable UI During Loading
 
 ```rust
-// Server confirms → broadcasts update → client receives
-// No local optimistic update by design
+<button disabled=move || mutation.is_loading()>
+    {move || if mutation.is_loading() { "Saving..." } else { "Save" }}
+</button>
 ```
 
-### 3. Handle Mutation Failures Gracefully
+### 3. Use Targeted Mutations for Entity Operations
 
 ```rust
-// Track mutation status in your UI
-let mutations = use_mutation_status();
+// ❌ Don't pass entity_id in the request body
+struct UpdateRobot { entity_id: u64, speed: f32 }
 
-view! {
-    <Show when=move || mutations.get(&request_id).map(|s| s.is_error()).unwrap_or(false)>
-        <div class="error">"Failed to save changes"</div>
-    </Show>
+// ✅ Use targeted mutations
+struct UpdateRobotSpeed { speed: f32 }
+mutation.send(entity_id, UpdateRobotSpeed { speed: 100.0 });
+```
+
+### 4. Server-Side Validation
+
+Always validate on the server, even if you validate on the client:
+
+```rust
+fn handle_set_speed(mut requests: MessageReader<AuthorizedRequest<SetSpeed>>) {
+    for request in requests.read() {
+        // Validate
+        if request.value < 0.0 || request.value > 1000.0 {
+            // Send error response
+            continue;
+        }
+        // Apply...
+    }
 }
 ```
 
-### 4. Validate on Server, Not Just Client
-
-Client-side validation improves UX, but always validate on the server:
-
-```rust
-app.insert_resource(MutationAuthorizerResource::from_fn(|world, mutation| {
-    // Validate the component value
-    if let Ok(pos) = bincode::deserialize::<Position>(&mutation.value) {
-        if pos.x < 0.0 || pos.y < 0.0 {
-            return MutationStatus::ValidationError;
-        }
-    }
-    MutationStatus::Ok
-}));
-```
-
 ---
 
-## Complete Example
+## Related
 
-See the control demo for a complete working example:
-
-```bash
-# Start the server
-cargo run -p control_demo_server
-
-# Start the client (in another terminal)
-cd examples/control-demo/client && trunk serve
-```
-
----
-
-## Related Documentation
-
-- [Sending Messages](./sending-messages.md) - Direct message sending
-- [DevTools](./devtools.md) - Inspect mutations in DevTools
-- [Shared Types](./shared-types.md) - Setting up shared component types
-- [API Reference](https://docs.rs/pl3xus_sync) - Full API documentation
-
----
-
-**Last Updated**: 2025-12-07
-**pl3xus_sync Version**: 0.1
+- [Requests & Queries](./requests.md) - Read-only request patterns
+- [Authorization](./authorization.md) - Deep dive into authorization
+- [Entity Control](./entity-control.md) - Control handoff patterns
 
 

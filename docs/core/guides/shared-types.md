@@ -89,12 +89,9 @@ pub struct Velocity {
     pub dy: f32,
 }
 
-/// Entity display name
-#[cfg_attr(feature = "server", derive(Component))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct EntityName {
-    pub name: String,
-}
+// For entity names, use Bevy's built-in Name component:
+// use bevy::prelude::Name;
+// commands.spawn((Name::new("My Entity"), Position { x: 0.0, y: 0.0 }));
 ```
 
 ---
@@ -127,20 +124,20 @@ use pl3xus_sync::{AppPl3xusSyncExt, Pl3xusSyncPlugin};
 use pl3xus_websockets::WebSocketProvider;
 
 // Import shared types - they include Component trait
-use my_shared_types::{Position, Velocity, EntityName};
+use my_shared_types::{Position, Velocity};
 
 fn main() {
     let mut app = App::new();
-    
+
     // ... other plugins ...
-    
+
     app.add_plugins(Pl3xusSyncPlugin::<WebSocketProvider>::default());
-    
+
     // Register components for synchronization
     app.sync_component::<Position>(None);
     app.sync_component::<Velocity>(None);
-    app.sync_component::<EntityName>(None);
-    
+    // Use Bevy's Name component for entity labels
+
     app.run();
 }
 ```
@@ -175,7 +172,7 @@ use pl3xus_client::{
 use std::sync::Arc;
 
 // Import shared types - plain structs, no Component trait
-use my_shared_types::{Position, Velocity, EntityName};
+use my_shared_types::{Position, Velocity};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -184,7 +181,6 @@ pub fn App() -> impl IntoView {
         ClientTypeRegistry::builder()
             .register::<Position>()
             .register::<Velocity>()
-            .register::<EntityName>()
             .with_devtools_support()
             .build()
     );
@@ -199,22 +195,15 @@ pub fn App() -> impl IntoView {
 #[component]
 fn EntityList() -> impl IntoView {
     let positions = use_sync_component::<Position>();
-    let names = use_sync_component::<EntityName>();
-    
+
     view! {
         <ul>
             <For
                 each=move || positions.get().into_iter()
                 key=|(id, _)| *id
                 children=move |(id, pos)| {
-                    // Look up entity name
-                    let name = names.get()
-                        .get(&id)
-                        .map(|n| n.name.clone())
-                        .unwrap_or_else(|| format!("Entity {}", id));
-                    
                     view! {
-                        <li>{format!("{}: ({:.1}, {:.1})", name, pos.x, pos.y)}</li>
+                        <li>{format!("Entity {}: ({:.1}, {:.1})", id, pos.x, pos.y)}</li>
                     }
                 }
             />
@@ -296,13 +285,11 @@ While not strictly required, it's good practice to register in consistent order:
 // Server
 app.sync_component::<Position>(None);
 app.sync_component::<Velocity>(None);
-app.sync_component::<EntityName>(None);
 
 // Client - same order
 let registry = ClientTypeRegistry::builder()
     .register::<Position>()
     .register::<Velocity>()
-    .register::<EntityName>()
     .build();
 ```
 
@@ -317,7 +304,6 @@ pub fn register_sync_components(app: &mut bevy::prelude::App) {
     use pl3xus_sync::AppPl3xusSyncExt;
     app.sync_component::<Position>(None);
     app.sync_component::<Velocity>(None);
-    app.sync_component::<EntityName>(None);
 }
 
 // Can also add a client-side helper if desired
@@ -336,25 +322,36 @@ If server and client are at different versions, unregistered types appear as raw
 
 ## Entity Hierarchies
 
-For parent/child relationships, include hierarchy types:
+For parent/child relationships, use **Bevy's built-in hierarchy system** instead of custom components:
 
 ```rust
-/// Parent entity reference
-#[cfg_attr(feature = "server", derive(Component))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct ParentEntity {
-    pub parent_bits: u64,
-}
+use bevy::prelude::*;
 
-/// Child entities list
-#[cfg_attr(feature = "server", derive(Component))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct ChildEntities {
-    pub children_bits: Vec<u64>,
-}
+// Spawn a parent entity
+let parent = commands.spawn((
+    Name::new("System"),  // Bevy's built-in Name component
+    SystemConfig::default(),
+)).id();
+
+// Spawn children using ChildOf (Bevy 0.17+)
+commands.spawn((
+    Name::new("Robot A"),
+    ChildOf(parent),  // Creates parent-child relationship
+    RobotConfig::default(),
+));
+
+// Or use the fluent API
+commands.entity(parent).with_children(|builder| {
+    builder.spawn((
+        Name::new("Robot B"),
+        RobotConfig::default(),
+    ));
+});
 ```
 
-> **Note**: These are custom components that mirror Bevy's built-in `Parent`/`Children` but are serializable. See the [DevTools Guide](./devtools.md) for hierarchy visualization.
+Bevy automatically maintains the `Children` component on parent entities. DevTools detects `ChildOf` relationships for hierarchy visualization.
+
+> **Note**: Use Bevy's `Name` component for display names and `ChildOf`/`Children` for hierarchies - these are built-in and don't need custom definitions.
 
 ---
 
@@ -362,7 +359,7 @@ pub struct ChildEntities {
 
 See the `examples/shared/` directory for working examples:
 
-- **`basic_types/`**: Simple Position, Velocity, EntityName
+- **`basic_types/`**: Simple Position, Velocity components
 - **`demo_types/`**: DemoCounter, DemoFlag with hierarchy
 - **`control_demo_types/`**: Robot, RobotStatus for control demo
 

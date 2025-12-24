@@ -2887,6 +2887,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "fanuc_replica_plugins"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bevy",
+ "bevy-tokio-tasks 0.17.0",
+ "fanuc_rmi 0.3.0",
+ "fanuc_rmi 0.5.0",
+ "pl3xus",
+ "pl3xus_common",
+ "pl3xus_macros",
+ "pl3xus_sync",
+ "pl3xus_websockets",
+ "reactive_stores 0.2.5",
+ "rusqlite",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "fanuc_replica_plugins_app"
+version = "0.1.0"
+dependencies = [
+ "bincode 1.3.3",
+ "console_error_panic_hook",
+ "console_log",
+ "fanuc_replica_plugins",
+ "fanuc_rmi 0.5.0",
+ "js-sys",
+ "leptos",
+ "leptos-use",
+ "leptos_router",
+ "log",
+ "pl3xus_client",
+ "pl3xus_common",
+ "reactive_stores 0.2.5",
+ "serde",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fanuc_replica_plugins_server"
+version = "0.1.0"
+dependencies = [
+ "fanuc_replica_plugins",
+]
+
+[[package]]
 name = "fanuc_replica_server"
 version = "0.1.0"
 dependencies = [

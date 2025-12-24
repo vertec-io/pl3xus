@@ -3,7 +3,7 @@
 use leptos::prelude::*;
 use leptos::web_sys;
 
-use pl3xus_client::{use_entity_component, use_mutation, use_request};
+use pl3xus_client::{use_entity_component, use_mutation_targeted, use_targeted_request};
 use fanuc_replica_types::*;
 use crate::components::use_toast;
 use crate::layout::LayoutContext;
@@ -29,10 +29,13 @@ pub fn IoStatusPanel(
     let get_io = move || io_status.get();
     let get_config = move || io_config.get();
 
-    // Request hooks for reading I/O
-    let (read_din_batch, _) = use_request::<ReadDinBatch>();
-    let (read_ain, _) = use_request::<ReadAin>();
-    let (read_gin, _) = use_request::<ReadGin>();
+    // Request hooks for reading I/O (targeted to specific robot)
+    let (read_din_batch, _) = use_targeted_request::<ReadDinBatch>();
+    let (read_ain, _) = use_targeted_request::<ReadAin>();
+    let (read_gin, _) = use_targeted_request::<ReadGin>();
+
+    // Get robot entity ID for targeted requests
+    let robot_entity_id = ctx.robot_entity_id;
 
     // State
     let (collapsed, set_collapsed) = signal(start_collapsed);
@@ -57,14 +60,16 @@ pub fn IoStatusPanel(
         let read_ain = read_ain.clone();
         let read_gin = read_gin.clone();
         move || {
-            // Read all digital inputs as a batch
-            read_din_batch(ReadDinBatch {
-                port_numbers: DEFAULT_PORTS.to_vec(),
-            });
-            // Read analog and group inputs
-            for &port in &DEFAULT_PORTS {
-                read_ain(ReadAin { port_number: port });
-                read_gin(ReadGin { port_number: port });
+            if let Some(entity_id) = robot_entity_id.get() {
+                // Read all digital inputs as a batch
+                read_din_batch(entity_id, ReadDinBatch {
+                    port_numbers: DEFAULT_PORTS.to_vec(),
+                });
+                // Read analog and group inputs
+                for &port in &DEFAULT_PORTS {
+                    read_ain(entity_id, ReadAin { port_number: port });
+                    read_gin(entity_id, ReadGin { port_number: port });
+                }
             }
         }
     };
@@ -287,10 +292,11 @@ fn IOButton(
     value: Signal<bool>,
 ) -> impl IntoView {
     let toast = use_toast();
+    let ctx = use_system_entity();
     let display_name = name.clone();
     let title_name = name;
 
-    let write_dout = use_mutation::<WriteDout>(move |result| {
+    let write_dout = use_mutation_targeted::<WriteDout>(move |result| {
         match result {
             Ok(r) if r.success => {} // Silent success
             Ok(r) => toast.error(format!("DOUT write failed: {}", r.error.as_deref().unwrap_or(""))),
@@ -299,11 +305,13 @@ fn IOButton(
     });
 
     let toggle = move |_| {
-        let current = value.get();
-        write_dout.send(WriteDout {
-            port_number: port,
-            port_value: !current,
-        });
+        if let Some(entity_id) = ctx.robot_entity_id.get() {
+            let current = value.get();
+            write_dout.send(entity_id, WriteDout {
+                port_number: port,
+                port_value: !current,
+            });
+        }
     };
 
     view! {
@@ -354,12 +362,13 @@ fn AnalogOutput(
     value: Signal<f64>,
 ) -> impl IntoView {
     let toast = use_toast();
+    let ctx = use_system_entity();
     let (editing, set_editing) = signal(false);
     let (input_value, set_input_value) = signal(String::new());
     let display_name = name.clone();
     let title_name = name;
 
-    let write_aout = use_mutation::<WriteAout>(move |result| {
+    let write_aout = use_mutation_targeted::<WriteAout>(move |result| {
         match result {
             Ok(r) if r.success => {} // Silent success
             Ok(r) => toast.error(format!("AOUT write failed: {}", r.error.as_deref().unwrap_or(""))),
@@ -369,11 +378,13 @@ fn AnalogOutput(
 
     // Inline submit for blur
     let do_blur_submit = move |_| {
-        if let Ok(new_val) = input_value.get().parse::<f64>() {
-            write_aout.send(WriteAout {
-                port_number: port,
-                port_value: new_val,
-            });
+        if let Some(entity_id) = ctx.robot_entity_id.get() {
+            if let Ok(new_val) = input_value.get().parse::<f64>() {
+                write_aout.send(entity_id, WriteAout {
+                    port_number: port,
+                    port_value: new_val,
+                });
+            }
         }
         set_editing.set(false);
     };
@@ -381,11 +392,13 @@ fn AnalogOutput(
     // For keydown
     let do_key_submit = move |ev: web_sys::KeyboardEvent| {
         if ev.key() == "Enter" {
-            if let Ok(new_val) = input_value.get().parse::<f64>() {
-                write_aout.send(WriteAout {
-                    port_number: port,
-                    port_value: new_val,
-                });
+            if let Some(entity_id) = ctx.robot_entity_id.get() {
+                if let Ok(new_val) = input_value.get().parse::<f64>() {
+                    write_aout.send(entity_id, WriteAout {
+                        port_number: port,
+                        port_value: new_val,
+                    });
+                }
             }
             set_editing.set(false);
         }
@@ -459,12 +472,13 @@ fn GroupOutput(
     value: Signal<u32>,
 ) -> impl IntoView {
     let toast = use_toast();
+    let ctx = use_system_entity();
     let (editing, set_editing) = signal(false);
     let (input_value, set_input_value) = signal(String::new());
     let display_name = name.clone();
     let title_name = name;
 
-    let write_gout = use_mutation::<WriteGout>(move |result| {
+    let write_gout = use_mutation_targeted::<WriteGout>(move |result| {
         match result {
             Ok(r) if r.success => {} // Silent success
             Ok(r) => toast.error(format!("GOUT write failed: {}", r.error.as_deref().unwrap_or(""))),
@@ -474,11 +488,13 @@ fn GroupOutput(
 
     // Inline submit for blur
     let do_blur_submit = move |_| {
-        if let Ok(new_val) = input_value.get().parse::<u32>() {
-            write_gout.send(WriteGout {
-                port_number: port,
-                port_value: new_val,
-            });
+        if let Some(entity_id) = ctx.robot_entity_id.get() {
+            if let Ok(new_val) = input_value.get().parse::<u32>() {
+                write_gout.send(entity_id, WriteGout {
+                    port_number: port,
+                    port_value: new_val,
+                });
+            }
         }
         set_editing.set(false);
     };
@@ -486,11 +502,13 @@ fn GroupOutput(
     // For keydown
     let do_key_submit = move |ev: web_sys::KeyboardEvent| {
         if ev.key() == "Enter" {
-            if let Ok(new_val) = input_value.get().parse::<u32>() {
-                write_gout.send(WriteGout {
-                    port_number: port,
-                    port_value: new_val,
-                });
+            if let Some(entity_id) = ctx.robot_entity_id.get() {
+                if let Ok(new_val) = input_value.get().parse::<u32>() {
+                    write_gout.send(entity_id, WriteGout {
+                        port_number: port,
+                        port_value: new_val,
+                    });
+                }
             }
             set_editing.set(false);
         }

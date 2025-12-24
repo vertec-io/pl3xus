@@ -24,7 +24,7 @@ mod jogging;
 mod plugins;
 
 use database::DatabaseResource;
-use plugins::{SystemPlugin, RobotConnectionPlugin, RobotSyncPlugin, RequestHandlerPlugin, RobotPollingPlugin, ProgramExecutionPlugin, ProgramPlugin};
+use plugins::{SystemPlugin, RobotConnectionPlugin, RobotSyncPlugin, RequestHandlerPlugin, RobotPollingPlugin, ProgramPlugin};
 use fanuc_replica_types::*;
 
 fn main() {
@@ -108,9 +108,12 @@ fn main() {
     // User-configurable components (clients can mutate with proper authorization)
     app.sync_component::<ActiveConfigState>(None);  // User can change active configuration
 
-    // JogSettingsState uses a mutation handler for validation and logging
+    // JogSettingsState uses an authorized mutation handler for validation and logging.
+    // Only clients with control of the robot entity can mutate these settings.
     app.sync_component_builder::<JogSettingsState>()
         .with_handler::<WebSocketProvider, _, _>(jogging::handle_jog_settings_mutation)
+        .targeted()
+        .with_default_entity_policy()
         .build();
 
     // ========================================================================
@@ -138,8 +141,7 @@ fn main() {
         RobotSyncPlugin,            // Driver polling and jogging
         RequestHandlerPlugin,       // Database request handlers
         RobotPollingPlugin,         // Periodic position/status polling
-        ProgramExecutionPlugin,     // Program execution with buffered streaming (LEGACY)
-        ProgramPlugin,              // New orchestrator-based program execution
+        ProgramPlugin,              // Orchestrator-based program execution
     ));
 
     // ========================================================================

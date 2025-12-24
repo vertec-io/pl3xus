@@ -141,6 +141,7 @@ impl Program {
     }
 
     /// Check if all instructions have been completed.
+    #[allow(dead_code)]
     pub fn all_completed(&self) -> bool {
         self.completed_count >= self.total_instructions()
     }
@@ -178,6 +179,7 @@ impl ExecutionBuffer {
     }
 
     /// How many more instructions we can send.
+    #[allow(dead_code)]
     pub fn available_slots(&self) -> usize {
         self.max_in_flight.saturating_sub(self.in_flight_count())
     }
@@ -352,7 +354,7 @@ impl Plugin for ProgramPlugin {
 use bevy_tokio_tasks::TokioTasksRuntime;
 use pl3xus::Network;
 use pl3xus_websockets::WebSocketProvider;
-use super::execution::RmiSentInstructionChannel;
+use super::connection::RmiSentInstructionChannel;
 use super::system::ActiveSystem;
 
 /// Orchestrator system - dispatches instructions from Program to Robot.

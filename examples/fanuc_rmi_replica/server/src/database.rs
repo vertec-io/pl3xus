@@ -93,8 +93,8 @@ impl DatabaseResource {
                 default_r REAL,
                 default_cartesian_jog_speed REAL DEFAULT 10.0,
                 default_cartesian_jog_step REAL DEFAULT 1.0,
-                default_joint_jog_speed REAL DEFAULT 0.1,
-                default_joint_jog_step REAL DEFAULT 0.25,
+                default_joint_jog_speed REAL DEFAULT 10.0,  -- °/s
+                default_joint_jog_step REAL DEFAULT 1.0,    -- degrees
                 default_rotation_jog_speed REAL DEFAULT 5.0,
                 default_rotation_jog_step REAL DEFAULT 1.0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

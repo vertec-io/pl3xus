@@ -183,7 +183,10 @@ fn send_examples(net: Res<Network<WebSocketProvider>>) {
 
 ### MessageReader / MessageWriter
 
-Unlike Bevy's `EventReader`/`EventWriter`, pl3xus uses `MessageReader` and `MessageWriter` for network messages:
+pl3xus uses Bevy 0.17's `MessageReader` and `MessageWriter` for buffered network messages. In Bevy 0.17, the event system was split into:
+
+- **`Event`** - For immediate, observer-based events
+- **`Message`** - For buffered events (what network communication needs)
 
 ```rust
 // Reading incoming messages
@@ -193,9 +196,11 @@ fn receive(mut messages: MessageReader<NetworkData<MyMessage>>) {
 
 // Writing outbound messages (alternative to net.send)
 fn send(mut writer: MessageWriter<OutboundMessage<MyMessage>>) {
-    writer.send(OutboundMessage::broadcast(my_message));
+    writer.write(OutboundMessage::broadcast(my_message));
 }
 ```
+
+See the [Migration Guide](./migration/MIGRATION_0.17.md) for details on the Bevy 0.17 event system changes.
 
 ## Next Steps
 

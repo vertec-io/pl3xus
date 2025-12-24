@@ -1,0 +1,35 @@
+[package]
+name = "fanuc_replica_plugins_app"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+default = []
+devtools = ["pl3xus_client/devtools"]
+
+[dependencies]
+leptos = { version = "0.8", features = ["csr"] }
+leptos_router = { version = "0.8" }
+console_error_panic_hook = "0.1"
+console_log = "1.0"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+wasm-bindgen = "0.2"
+
+# Pl3xus client crate
+pl3xus_client = { path = "../../../crates/pl3xus_client", features = ["stores"] }
+pl3xus_common = { path = "../../../crates/pl3xus_common" }
+bincode = "1.3"
+
+# Plugins with stores feature only (no ecs/server features)
+fanuc_replica_plugins = { path = "../plugins", default-features = false, features = ["stores"] }
+
+# Fanuc RMI types (DTO only, no driver)
+fanuc_rmi = { path = "/home/apino/dev/Fanuc_RMI_API/fanuc_rmi", default-features = false, features = ["DTO"] }
+
+# Reactive stores for fine-grained field access
+reactive_stores = "0.2"
+js-sys = "0.3.83"
+leptos-use = "0.16"
+

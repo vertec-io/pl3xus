@@ -4,12 +4,17 @@
 
 use bevy::prelude::*;
 use bevy::ecs::message::MessageReader;
-use pl3xus::managers::network_request::{AppNetworkRequestMessage, Request};
+use pl3xus::managers::network_request::Request;
 use pl3xus::Network;
 use pl3xus_websockets::WebSocketProvider;
 use pl3xus_sync::control::EntityControl;
-use pl3xus_sync::{AuthorizedRequest, AppInvalidationExt, InvalidationRules, broadcast_invalidations};
+use pl3xus_sync::AuthorizedRequest;
+use pl3xus_sync::authorization::AppBatchRequestRegistrationExt;
+use pl3xus_sync::RequestInvalidateExt;
 use fanuc_replica_types::*;
+
+// Type alias for WebSocket network provider - reduces verbosity
+type WS = WebSocketProvider;
 
 use bevy_tokio_tasks::TokioTasksRuntime;
 use crate::database::DatabaseResource;
@@ -23,77 +28,78 @@ pub struct RequestHandlerPlugin;
 
 impl Plugin for RequestHandlerPlugin {
     fn build(&self, app: &mut App) {
-        // Register request listeners - Robot Connections
-        app.listen_for_request_message::<ListRobotConnections, WebSocketProvider>();
-        app.listen_for_request_message::<GetRobotConfigurations, WebSocketProvider>();
-        app.listen_for_request_message::<CreateRobotConnection, WebSocketProvider>();
-        app.listen_for_request_message::<UpdateRobotConnection, WebSocketProvider>();
-        app.listen_for_request_message::<DeleteRobotConnection, WebSocketProvider>();
-        app.listen_for_request_message::<CreateConfiguration, WebSocketProvider>();
-        app.listen_for_request_message::<UpdateConfiguration, WebSocketProvider>();
-        app.listen_for_request_message::<DeleteConfiguration, WebSocketProvider>();
-        app.listen_for_request_message::<SetDefaultConfiguration, WebSocketProvider>();
-        app.listen_for_request_message::<LoadConfiguration, WebSocketProvider>();
-
-        // Register request listeners - Programs
-        app.listen_for_request_message::<ListPrograms, WebSocketProvider>();
-        app.listen_for_request_message::<GetProgram, WebSocketProvider>();
-        app.listen_for_request_message::<CreateProgram, WebSocketProvider>();
-        app.listen_for_request_message::<DeleteProgram, WebSocketProvider>();
-        app.listen_for_request_message::<UpdateProgramSettings, WebSocketProvider>();
-        app.listen_for_request_message::<UploadCsv, WebSocketProvider>();
-        app.listen_for_request_message::<LoadProgram, WebSocketProvider>();
-        // Note: StartProgram, PauseProgram, ResumeProgram, StopProgram, UnloadProgram are registered
-        // as targeted requests in sync.rs with authorization middleware
-
-        // Register request listeners - Frame/Tool
-        app.listen_for_request_message::<GetActiveFrameTool, WebSocketProvider>();
-        app.listen_for_request_message::<SetActiveFrameTool, WebSocketProvider>();
-        app.listen_for_request_message::<GetFrameData, WebSocketProvider>();
-        app.listen_for_request_message::<WriteFrameData, WebSocketProvider>();
-        app.listen_for_request_message::<GetToolData, WebSocketProvider>();
-        app.listen_for_request_message::<WriteToolData, WebSocketProvider>();
-
-        // Register request listeners - I/O
-        app.listen_for_request_message::<ReadDin, WebSocketProvider>();
-        app.listen_for_request_message::<ReadDinBatch, WebSocketProvider>();
-        app.listen_for_request_message::<WriteDout, WebSocketProvider>();
-        app.listen_for_request_message::<ReadAin, WebSocketProvider>();
-        app.listen_for_request_message::<WriteAout, WebSocketProvider>();
-        app.listen_for_request_message::<ReadGin, WebSocketProvider>();
-        app.listen_for_request_message::<WriteGout, WebSocketProvider>();
-        app.listen_for_request_message::<GetIoConfig, WebSocketProvider>();
-        app.listen_for_request_message::<UpdateIoConfig, WebSocketProvider>();
-
-        // Register request listeners - Settings
-        app.listen_for_request_message::<GetSettings, WebSocketProvider>();
-        app.listen_for_request_message::<UpdateSettings, WebSocketProvider>();
-        app.listen_for_request_message::<ResetDatabase, WebSocketProvider>();
-        app.listen_for_request_message::<GetConnectionStatus, WebSocketProvider>();
-        app.listen_for_request_message::<GetExecutionState, WebSocketProvider>();
-        app.listen_for_request_message::<UpdateJogSettings, WebSocketProvider>();
-
         // =====================================================================
-        // Register Query Invalidation Rules
+        // Request Registration (using pl3xus_sync builder API)
         // =====================================================================
-        // These rules define which queries should be invalidated when mutations succeed.
-        // Handlers call broadcast_invalidations::<RequestType, _>() after successful responses.
-        app.invalidation_rules()
-            // Program mutations
-            .on_success::<CreateProgram>().invalidate("ListPrograms")
-            .on_success::<DeleteProgram>().invalidate("ListPrograms")
-            .on_success::<DeleteProgram>().invalidate("GetProgram")
-            .on_success::<UpdateProgramSettings>().invalidate("GetProgram")
-            .on_success::<UploadCsv>().invalidate("GetProgram")
-            // Robot connection mutations
-            .on_success::<CreateRobotConnection>().invalidate("ListRobotConnections")
-            .on_success::<UpdateRobotConnection>().invalidate("ListRobotConnections")
-            .on_success::<DeleteRobotConnection>().invalidate("ListRobotConnections")
-            // Configuration mutations
-            .on_success::<CreateConfiguration>().invalidate("GetRobotConfigurations")
-            .on_success::<UpdateConfiguration>().invalidate("GetRobotConfigurations")
-            .on_success::<DeleteConfiguration>().invalidate("GetRobotConfigurations")
-            .on_success::<SetDefaultConfiguration>().invalidate("GetRobotConfigurations");
+        //
+        // All requests use the new app.requests::<...>() batch registration API.
+        // This is more concise and makes it easy to add targeting/authorization later.
+        //
+        // Note: StartProgram, PauseProgram, ResumeProgram, StopProgram, UnloadProgram
+        // are registered as targeted requests in sync.rs with authorization middleware.
+        //
+        // Query Invalidation: Rules are defined on request types using
+        // #[derive(Invalidates)] with #[invalidates("QueryName")] attribute.
+        // Handlers call broadcast_invalidations_for::<RequestType, _>(&net, None)
+        // after successful responses.
+
+        // Robot Connections & Configurations
+        app.requests::<(
+            ListRobotConnections,
+            GetRobotConfigurations,
+            CreateRobotConnection,
+            UpdateRobotConnection,
+            DeleteRobotConnection,
+            CreateConfiguration,
+            UpdateConfiguration,
+            DeleteConfiguration,
+            SetDefaultConfiguration,
+            LoadConfiguration,
+        ), WS>().register();
+
+        // Programs
+        app.requests::<(
+            ListPrograms,
+            GetProgram,
+            CreateProgram,
+            DeleteProgram,
+            UpdateProgramSettings,
+            UploadCsv,
+            LoadProgram,
+        ), WS>().register();
+
+        // Frame/Tool
+        app.requests::<(
+            GetActiveFrameTool,
+            SetActiveFrameTool,
+            GetFrameData,
+            WriteFrameData,
+            GetToolData,
+            WriteToolData,
+        ), WS>().register();
+
+        // I/O Operations
+        app.requests::<(
+            ReadDin,
+            ReadDinBatch,
+            WriteDout,
+            ReadAin,
+            WriteAout,
+            ReadGin,
+            WriteGout,
+            GetIoConfig,
+            UpdateIoConfig,
+        ), WS>().register();
+
+        // Settings
+        app.requests::<(
+            GetSettings,
+            UpdateSettings,
+            ResetDatabase,
+            GetConnectionStatus,
+            GetExecutionState,
+            UpdateJogSettings,
+        ), WS>().register();
 
         // Add handler systems - Robot Connections & Configurations
         app.add_systems(Update, (
@@ -209,7 +215,6 @@ fn handle_create_robot_connection(
     mut requests: MessageReader<Request<CreateRobotConnection>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
-    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -238,14 +243,9 @@ fn handle_create_robot_connection(
             }
         };
 
-        let success = response.success;
-        if let Err(e) = request.clone().respond(response) {
+        // respond_and_invalidate automatically broadcasts invalidations on success
+        if let Err(e) = request.clone().respond_and_invalidate(response, &net) {
             error!("Failed to send response: {:?}", e);
-        }
-
-        // Broadcast invalidations if successful
-        if success {
-            broadcast_invalidations::<CreateRobotConnection, _>(&net, &rules, None);
         }
     }
 }
@@ -255,7 +255,6 @@ fn handle_update_robot_connection(
     mut requests: MessageReader<Request<UpdateRobotConnection>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
-    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -282,13 +281,9 @@ fn handle_update_robot_connection(
             }
         };
 
-        let success = response.success;
-        if let Err(e) = request.clone().respond(response) {
+        // respond_and_invalidate automatically broadcasts invalidations on success
+        if let Err(e) = request.clone().respond_and_invalidate(response, &net) {
             error!("Failed to send response: {:?}", e);
-        }
-
-        if success {
-            broadcast_invalidations::<UpdateRobotConnection, _>(&net, &rules, None);
         }
     }
 }
@@ -298,7 +293,6 @@ fn handle_delete_robot_connection(
     mut requests: MessageReader<Request<DeleteRobotConnection>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
-    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -325,13 +319,9 @@ fn handle_delete_robot_connection(
             }
         };
 
-        let success = response.success;
-        if let Err(e) = request.clone().respond(response) {
+        // respond_and_invalidate automatically broadcasts invalidations on success
+        if let Err(e) = request.clone().respond_and_invalidate(response, &net) {
             error!("Failed to send response: {:?}", e);
-        }
-
-        if success {
-            broadcast_invalidations::<DeleteRobotConnection, _>(&net, &rules, None);
         }
     }
 }
@@ -341,7 +331,6 @@ fn handle_create_configuration(
     mut requests: MessageReader<Request<CreateConfiguration>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
-    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -370,13 +359,9 @@ fn handle_create_configuration(
             }
         };
 
-        let success = response.success;
-        if let Err(e) = request.clone().respond(response) {
+        // respond_and_invalidate automatically broadcasts invalidations on success
+        if let Err(e) = request.clone().respond_and_invalidate(response, &net) {
             error!("Failed to send response: {:?}", e);
-        }
-
-        if success {
-            broadcast_invalidations::<CreateConfiguration, _>(&net, &rules, None);
         }
     }
 }
@@ -386,7 +371,6 @@ fn handle_update_configuration(
     mut requests: MessageReader<Request<UpdateConfiguration>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
-    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -413,13 +397,9 @@ fn handle_update_configuration(
             }
         };
 
-        let success = response.success;
-        if let Err(e) = request.clone().respond(response) {
+        // respond_and_invalidate automatically broadcasts invalidations on success
+        if let Err(e) = request.clone().respond_and_invalidate(response, &net) {
             error!("Failed to send response: {:?}", e);
-        }
-
-        if success {
-            broadcast_invalidations::<UpdateConfiguration, _>(&net, &rules, None);
         }
     }
 }
@@ -429,7 +409,6 @@ fn handle_delete_configuration(
     mut requests: MessageReader<Request<DeleteConfiguration>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
-    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -456,13 +435,9 @@ fn handle_delete_configuration(
             }
         };
 
-        let success = response.success;
-        if let Err(e) = request.clone().respond(response) {
+        // respond_and_invalidate automatically broadcasts invalidations on success
+        if let Err(e) = request.clone().respond_and_invalidate(response, &net) {
             error!("Failed to send response: {:?}", e);
-        }
-
-        if success {
-            broadcast_invalidations::<DeleteConfiguration, _>(&net, &rules, None);
         }
     }
 }
@@ -472,7 +447,6 @@ fn handle_set_default_configuration(
     mut requests: MessageReader<Request<SetDefaultConfiguration>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
-    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -499,13 +473,9 @@ fn handle_set_default_configuration(
             }
         };
 
-        let success = response.success;
-        if let Err(e) = request.clone().respond(response) {
+        // respond_and_invalidate automatically broadcasts invalidations on success
+        if let Err(e) = request.clone().respond_and_invalidate(response, &net) {
             error!("Failed to send response: {:?}", e);
-        }
-
-        if success {
-            broadcast_invalidations::<SetDefaultConfiguration, _>(&net, &rules, None);
         }
     }
 }
@@ -640,7 +610,6 @@ fn handle_create_program(
     mut requests: MessageReader<Request<CreateProgram>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
-    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -669,13 +638,9 @@ fn handle_create_program(
             }
         };
 
-        let success = response.success;
-        if let Err(e) = request.clone().respond(response) {
+        // respond_and_invalidate automatically broadcasts invalidations on success
+        if let Err(e) = request.clone().respond_and_invalidate(response, &net) {
             error!("Failed to send response: {:?}", e);
-        }
-
-        if success {
-            broadcast_invalidations::<CreateProgram, _>(&net, &rules, None);
         }
     }
 }
@@ -685,7 +650,6 @@ fn handle_delete_program(
     mut requests: MessageReader<Request<DeleteProgram>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
-    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let program_id = request.get_request().program_id;
@@ -712,13 +676,9 @@ fn handle_delete_program(
             }
         };
 
-        let success = response.success;
-        if let Err(e) = request.clone().respond(response) {
+        // respond_and_invalidate automatically broadcasts invalidations on success
+        if let Err(e) = request.clone().respond_and_invalidate(response, &net) {
             error!("Failed to send response: {:?}", e);
-        }
-
-        if success {
-            broadcast_invalidations::<DeleteProgram, _>(&net, &rules, None);
         }
     }
 }
@@ -728,7 +688,6 @@ fn handle_update_program_settings(
     mut requests: MessageReader<Request<UpdateProgramSettings>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
-    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let req = request.get_request();
@@ -778,14 +737,13 @@ fn handle_update_program_settings(
             }
         };
 
-        let success = response.success;
-        if let Err(e) = request.clone().respond(response) {
+        // respond_and_invalidate_with_keys for keyed invalidation of specific program
+        if let Err(e) = request.clone().respond_and_invalidate_with_keys(
+            response,
+            &net,
+            vec![program_id.to_string()],
+        ) {
             error!("Failed to send response: {:?}", e);
-        }
-
-        if success {
-            // Keyed invalidation for specific program
-            broadcast_invalidations::<UpdateProgramSettings, _>(&net, &rules, Some(vec![program_id.to_string()]));
         }
     }
 }
@@ -795,7 +753,6 @@ fn handle_upload_csv(
     mut requests: MessageReader<Request<UploadCsv>>,
     db: Option<Res<DatabaseResource>>,
     net: Res<Network<WebSocketProvider>>,
-    rules: Res<InvalidationRules>,
 ) {
     for request in requests.read() {
         let inner = request.get_request();
@@ -823,14 +780,13 @@ fn handle_upload_csv(
             }
         };
 
-        let success = response.success;
-        if let Err(e) = request.clone().respond(response) {
+        // respond_and_invalidate_with_keys for keyed invalidation of specific program
+        if let Err(e) = request.clone().respond_and_invalidate_with_keys(
+            response,
+            &net,
+            vec![program_id.to_string()],
+        ) {
             error!("Failed to send response: {:?}", e);
-        }
-
-        if success {
-            // Keyed invalidation for specific program
-            broadcast_invalidations::<UploadCsv, _>(&net, &rules, Some(vec![program_id.to_string()]));
         }
     }
 }

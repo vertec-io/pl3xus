@@ -2912,6 +2912,8 @@ dependencies = [
  "bevy",
  "fanuc_rmi 0.3.0",
  "pl3xus_common",
+ "pl3xus_macros",
+ "pl3xus_sync",
  "reactive_stores 0.2.5",
  "serde",
 ]

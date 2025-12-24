@@ -126,12 +126,19 @@ pub use pl3xus::DeferredResponder;
 // Automatic query invalidation API
 #[cfg(feature = "runtime")]
 pub use invalidation::{
+    // Trait for derive macro
+    Invalidates,
+    // Legacy builder pattern (deprecated)
     InvalidationRule,
     InvalidationRules,
     InvalidationRulesBuilder,
     InvalidationRuleBuilder,
     AppInvalidationExt,
     broadcast_invalidations,
+    // New trait-based broadcast function
+    broadcast_invalidations_for,
+    // Request extension for auto-invalidation
+    RequestInvalidateExt,
 };
 
 #[cfg(feature = "runtime")]

@@ -225,6 +225,40 @@ pub trait ErrorResponse: RequestMessage {
     fn error_response(error: String) -> Self::ResponseMessage;
 }
 
+/// Trait for response types that have a `success` field.
+///
+/// This is used by automatic query invalidation to determine whether a mutation
+/// succeeded without requiring the handler to explicitly check and call
+/// `broadcast_invalidations_for`.
+///
+/// # Convention
+///
+/// Response types with a `pub success: bool` field should implement this trait.
+/// A derive macro is provided for convenience:
+///
+/// ```rust,ignore
+/// #[derive(HasSuccess)]
+/// pub struct CreateProgramResponse {
+///     pub success: bool,
+///     pub program_id: Option<i64>,
+///     pub error: Option<String>,
+/// }
+/// ```
+///
+/// # Manual Implementation
+///
+/// ```rust,ignore
+/// impl HasSuccess for CreateProgramResponse {
+///     fn is_success(&self) -> bool {
+///         self.success
+///     }
+/// }
+/// ```
+pub trait HasSuccess {
+    /// Returns true if this response indicates success.
+    fn is_success(&self) -> bool;
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(bound = "T: Pl3xusMessage")]
 pub struct TargetedMessage<T: Pl3xusMessage> {

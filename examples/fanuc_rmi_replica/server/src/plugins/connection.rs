@@ -10,8 +10,9 @@ use bevy::prelude::*;
 use bevy::ecs::message::MessageReader;
 use bevy_tokio_tasks::TokioTasksRuntime;
 use pl3xus::AppNetworkMessage;
-use pl3xus::managers::network_request::{AppNetworkRequestMessage, Request};
+use pl3xus::managers::network_request::Request;
 use pl3xus_sync::control::EntityControl;
+use pl3xus_sync::AppRequestRegistrationExt;
 use pl3xus_websockets::WebSocketProvider;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -81,7 +82,7 @@ pub struct RobotConnectionPlugin;
 impl Plugin for RobotConnectionPlugin {
     fn build(&self, app: &mut App) {
         // Register ConnectToRobot as a request/response (returns entity_id)
-        app.listen_for_request_message::<ConnectToRobot, WebSocketProvider>();
+        app.request::<ConnectToRobot, WebSocketProvider>().register();
         // DisconnectRobot remains a simple message (no response needed)
         app.register_network_message::<DisconnectRobot, WebSocketProvider>();
 

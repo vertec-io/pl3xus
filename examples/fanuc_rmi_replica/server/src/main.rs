@@ -98,6 +98,12 @@ fn main() {
     app.sync_component::<ConnectionState>(Some(ComponentSyncConfig::read_only_with_message(
         "ConnectionState is read-only. Use ConnectToRobot/DisconnectFromRobot commands."
     )));
+    app.sync_component::<FrameToolDataState>(Some(ComponentSyncConfig::read_only_with_message(
+        "FrameToolDataState is read-only. Use SetActiveFrameTool, WriteFrameData, WriteToolData commands."
+    )));
+    app.sync_component::<IoConfigState>(Some(ComponentSyncConfig::read_only_with_message(
+        "IoConfigState is read-only. Use UpdateIoConfig command to modify I/O display settings."
+    )));
 
     // User-configurable components (clients can mutate with proper authorization)
     app.sync_component::<ActiveConfigState>(None);  // User can change active configuration

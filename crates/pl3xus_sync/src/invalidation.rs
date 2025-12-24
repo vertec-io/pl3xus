@@ -1,31 +1,27 @@
 //! Automatic query invalidation infrastructure.
 //!
-//! This module provides a declarative way to specify which queries should be
-//! invalidated when mutations succeed. Instead of manually broadcasting
-//! `QueryInvalidation` messages in every handler, you declare the relationships
-//! at registration time.
+//! This module provides automatic query invalidation when mutations succeed.
+//! Use the `Invalidates` trait (via derive macro) to declare which queries
+//! a mutation should invalidate.
 //!
 //! # Example
 //!
 //! ```rust,ignore
-//! use pl3xus_sync::{AppInvalidationExt, MutationResponse};
+//! use pl3xus_macros::Invalidates;
 //!
-//! // Implement MutationResponse for your response types
-//! impl MutationResponse for CreateProgramResponse {
-//!     fn is_success(&self) -> bool {
-//!         self.success
-//!     }
-//! }
+//! // Use derive macro to declare invalidation rules
+//! #[derive(Invalidates)]
+//! #[invalidates("ListPrograms")]
+//! pub struct CreateProgram { ... }
 //!
-//! // Register invalidation rules in your plugin
-//! impl Plugin for RequestHandlerPlugin {
-//!     fn build(&self, app: &mut App) {
-//!         app.invalidation_rules()
-//!             .on_success::<CreateProgram>().invalidate("ListPrograms")
-//!             .on_success::<DeleteProgram>().invalidate("ListPrograms");
-//!     }
-//! }
+//! // Multiple invalidations
+//! #[derive(Invalidates)]
+//! #[invalidates("ListPrograms", "GetProgram")]
+//! pub struct DeleteProgram { ... }
 //! ```
+//!
+//! The framework automatically broadcasts invalidations after successful mutations.
+//! For edge cases, use `broadcast_invalidations_for` as an escape hatch.
 
 use bevy::prelude::*;
 use pl3xus_common::RequestMessage;
@@ -34,7 +30,43 @@ use std::sync::Arc;
 
 use crate::messages::{QueryInvalidation, SyncServerMessage};
 
+// =============================================================================
+// Invalidates Trait
+// =============================================================================
 
+/// Trait for mutation request types that specify which queries to invalidate.
+///
+/// Implement this trait (typically via derive macro) to declare which queries
+/// should be invalidated when this mutation succeeds.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_macros::Invalidates;
+///
+/// #[derive(Invalidates)]
+/// #[invalidates("ListPrograms")]
+/// pub struct CreateProgram { ... }
+/// ```
+///
+/// Or implement manually:
+///
+/// ```rust,ignore
+/// impl Invalidates for CreateProgram {
+///     fn invalidates() -> &'static [&'static str] {
+///         &["ListPrograms"]
+///     }
+/// }
+/// ```
+pub trait Invalidates {
+    /// Returns the list of query type names that should be invalidated
+    /// when this mutation succeeds.
+    fn invalidates() -> &'static [&'static str];
+}
+
+// =============================================================================
+// Legacy Builder Pattern (Deprecated)
+// =============================================================================
 
 /// A single invalidation rule.
 #[derive(Clone)]
@@ -213,6 +245,166 @@ pub fn broadcast_invalidations<T, NP>(
                 request_type
             );
         }
+    }
+}
+
+/// Broadcast query invalidations using the `Invalidates` trait.
+///
+/// This is the preferred way to broadcast invalidations when using the
+/// derive macro pattern. It reads the query types from the trait implementation
+/// instead of requiring a separate `InvalidationRules` resource.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// #[derive(Invalidates)]
+/// #[invalidates("ListPrograms")]
+/// pub struct CreateProgram { ... }
+///
+/// fn handle_create_program(...) {
+///     for request in requests.read() {
+///         let response = CreateProgramResponse { success: true, ... };
+///         if let Ok(()) = request.respond(response.clone()) {
+///             if response.success {
+///                 broadcast_invalidations_for::<CreateProgram, _>(&net, None);
+///             }
+///         }
+///     }
+/// }
+/// ```
+pub fn broadcast_invalidations_for<T, NP>(
+    net: &Network<NP>,
+    keys: Option<Vec<String>>,
+) where
+    T: Invalidates,
+    NP: NetworkProvider,
+{
+    let query_types = T::invalidates();
+
+    if !query_types.is_empty() {
+        let invalidation = QueryInvalidation {
+            query_types: query_types.iter().map(|s| s.to_string()).collect(),
+            keys,
+        };
+        net.broadcast(SyncServerMessage::QueryInvalidation(invalidation));
+        debug!(
+            "📢 Auto-invalidated queries {:?} after successful mutation",
+            query_types
+        );
+    }
+}
+
+// =============================================================================
+// Request Extension for Auto-Invalidation
+// =============================================================================
+
+use pl3xus::managers::network_request::Request;
+use pl3xus_common::HasSuccess;
+use pl3xus::error::NetworkError;
+
+/// Extension trait for `Request<T>` that adds automatic invalidation support.
+///
+/// When the request type implements `Invalidates` and the response implements
+/// `HasSuccess`, this provides a convenient `respond_and_invalidate` method
+/// that automatically broadcasts query invalidations on success.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use pl3xus_sync::RequestInvalidateExt;
+///
+/// #[derive(Invalidates)]
+/// #[invalidates("ListPrograms")]
+/// pub struct CreateProgram { ... }
+///
+/// #[derive(HasSuccess)]
+/// pub struct CreateProgramResponse {
+///     pub success: bool,
+///     pub program_id: Option<i64>,
+///     pub error: Option<String>,
+/// }
+///
+/// fn handle_create_program(
+///     mut requests: MessageReader<Request<CreateProgram>>,
+///     net: Res<Network<WebSocketProvider>>,
+/// ) {
+///     for request in requests.read() {
+///         let response = CreateProgramResponse { success: true, ... };
+///         // This single line sends the response AND broadcasts invalidations if success
+///         request.respond_and_invalidate(response, &net);
+///     }
+/// }
+/// ```
+pub trait RequestInvalidateExt<T: RequestMessage> {
+    /// Respond to the request and automatically broadcast query invalidations
+    /// if the response indicates success.
+    ///
+    /// This combines `respond()` and `broadcast_invalidations_for()` into a
+    /// single call, reducing boilerplate in mutation handlers.
+    fn respond_and_invalidate<NP: NetworkProvider>(
+        self,
+        response: T::ResponseMessage,
+        net: &Network<NP>,
+    ) -> Result<(), NetworkError>
+    where
+        T: Invalidates,
+        T::ResponseMessage: HasSuccess;
+
+    /// Respond to the request and automatically broadcast keyed query invalidations
+    /// if the response indicates success.
+    ///
+    /// Use this variant when invalidating specific cache entries (e.g., a specific program).
+    fn respond_and_invalidate_with_keys<NP: NetworkProvider>(
+        self,
+        response: T::ResponseMessage,
+        net: &Network<NP>,
+        keys: Vec<String>,
+    ) -> Result<(), NetworkError>
+    where
+        T: Invalidates,
+        T::ResponseMessage: HasSuccess;
+}
+
+impl<T: RequestMessage> RequestInvalidateExt<T> for Request<T> {
+    fn respond_and_invalidate<NP: NetworkProvider>(
+        self,
+        response: T::ResponseMessage,
+        net: &Network<NP>,
+    ) -> Result<(), NetworkError>
+    where
+        T: Invalidates,
+        T::ResponseMessage: HasSuccess,
+    {
+        let is_success = response.is_success();
+        let result = self.respond(response);
+
+        // Broadcast invalidations after successful response
+        if result.is_ok() && is_success {
+            broadcast_invalidations_for::<T, NP>(net, None);
+        }
+
+        result
+    }
+
+    fn respond_and_invalidate_with_keys<NP: NetworkProvider>(
+        self,
+        response: T::ResponseMessage,
+        net: &Network<NP>,
+        keys: Vec<String>,
+    ) -> Result<(), NetworkError>
+    where
+        T: Invalidates,
+        T::ResponseMessage: HasSuccess,
+    {
+        let is_success = response.is_success();
+        let result = self.respond(response);
+
+        // Broadcast keyed invalidations after successful response
+        if result.is_ok() && is_success {
+            broadcast_invalidations_for::<T, NP>(net, Some(keys));
+        }
+
+        result
     }
 }
 

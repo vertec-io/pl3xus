@@ -5,6 +5,12 @@
 //! - **Network Messages**: Direct usages of `fanuc_rmi::dto` types where possible, custom types for App logic.
 //! - **DTOs**: Data transfer objects for API communication.
 //! - **Request/Response**: Use pl3xus_common::RequestMessage for correlated request/response patterns.
+//!
+//! # Automatic Query Invalidation
+//!
+//! Mutation request types use the `#[derive(Invalidates)]` macro (server feature only)
+//! to declare which queries should be invalidated on success. This enables automatic
+//! cache invalidation without manual broadcasting in handlers.
 
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
@@ -20,6 +26,18 @@ pub use fanuc_rmi::dto;
 
 // Re-export RequestMessage and ErrorResponse traits for implementing request types
 pub use pl3xus_common::{RequestMessage, ErrorResponse};
+
+// Server-only: automatic query invalidation support
+// Only export the derive macros - they generate `impl pl3xus_sync::Invalidates for T`
+// and `impl pl3xus_common::HasSuccess for T` respectively
+#[cfg(feature = "server")]
+pub use pl3xus_macros::Invalidates;
+
+// Re-export HasSuccess derive macro for response types with success: bool field
+// This enables the respond_and_invalidate() auto-invalidation pattern
+// Server-only because it's only used in server handlers
+#[cfg(feature = "server")]
+pub use pl3xus_macros::HasSuccess;
 
 // ============================================================================
 //                          SYNCED COMPONENTS (Wrapped DTOs)
@@ -709,6 +727,8 @@ impl RequestMessage for GetProgram {
 
 /// Request to create a new program.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("ListPrograms"))]
 pub struct CreateProgram {
     pub name: String,
     pub description: Option<String>,
@@ -716,6 +736,7 @@ pub struct CreateProgram {
 
 /// Response for creating a program.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct CreateProgramResponse {
     pub success: bool,
     pub program_id: Option<i64>,
@@ -728,12 +749,15 @@ impl RequestMessage for CreateProgram {
 
 /// Request to delete a program.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("ListPrograms", "GetProgram"))]
 pub struct DeleteProgram {
     pub program_id: i64,
 }
 
 /// Response for deleting a program.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct DeleteProgramResponse {
     pub success: bool,
     pub error: Option<String>,
@@ -745,6 +769,8 @@ impl RequestMessage for DeleteProgram {
 
 /// Request to update program settings (start/end positions, speed, termination).
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetProgram"))]
 pub struct UpdateProgramSettings {
     pub program_id: i64,
     // Start position (approach move before toolpath)
@@ -769,6 +795,7 @@ pub struct UpdateProgramSettings {
 
 /// Response for updating program settings.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct UpdateProgramSettingsResponse {
     pub success: bool,
     pub error: Option<String>,
@@ -780,6 +807,8 @@ impl RequestMessage for UpdateProgramSettings {
 
 /// Request to upload CSV content to a program.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetProgram"))]
 pub struct UploadCsv {
     pub program_id: i64,
     pub csv_content: String,
@@ -800,6 +829,7 @@ pub struct CsvStartPosition {
 
 /// Response for uploading CSV.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct UploadCsvResponse {
     pub success: bool,
     pub lines_imported: Option<i32>,
@@ -841,6 +871,8 @@ impl RequestMessage for ListRobotConnections {
 
 /// Request to create a new robot connection with configurations.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("ListRobotConnections"))]
 pub struct CreateRobotConnection {
     // Connection details
     pub name: String,
@@ -871,6 +903,7 @@ impl RequestMessage for CreateRobotConnection {
 
 /// Response for creating a robot connection.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct CreateRobotConnectionResponse {
     pub robot_id: i64,
     pub success: bool,
@@ -1351,6 +1384,8 @@ impl RequestMessage for WriteToolData {
 // Robot Connection Management - CreateRobotConnection is defined above with RequestMessage impl
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("ListRobotConnections"))]
 pub struct UpdateRobotConnection {
     pub id: i64,
     pub name: Option<String>,
@@ -1360,6 +1395,7 @@ pub struct UpdateRobotConnection {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct UpdateRobotConnectionResponse {
     pub success: bool,
     pub error: Option<String>,
@@ -1370,11 +1406,14 @@ impl RequestMessage for UpdateRobotConnection {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("ListRobotConnections"))]
 pub struct DeleteRobotConnection {
     pub id: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct DeleteRobotConnectionResponse {
     pub success: bool,
     pub error: Option<String>,
@@ -1396,6 +1435,8 @@ impl RequestMessage for GetRobotConfigurations {
 
 /// Request to create a new configuration for a robot.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetRobotConfigurations"))]
 pub struct CreateConfiguration {
     pub robot_connection_id: i64,
     pub name: String,
@@ -1416,6 +1457,7 @@ impl RequestMessage for CreateConfiguration {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct CreateConfigurationResponse {
     pub success: bool,
     pub configuration_id: i64,
@@ -1424,6 +1466,8 @@ pub struct CreateConfigurationResponse {
 
 /// Request to update an existing configuration.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetRobotConfigurations"))]
 pub struct UpdateConfiguration {
     pub id: i64,
     pub name: Option<String>,
@@ -1444,6 +1488,7 @@ impl RequestMessage for UpdateConfiguration {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct UpdateConfigurationResponse {
     pub success: bool,
     pub error: Option<String>,
@@ -1451,6 +1496,8 @@ pub struct UpdateConfigurationResponse {
 
 /// Request to delete a configuration.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetRobotConfigurations"))]
 pub struct DeleteConfiguration {
     pub id: i64,
 }
@@ -1460,6 +1507,7 @@ impl RequestMessage for DeleteConfiguration {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct DeleteConfigurationResponse {
     pub success: bool,
     pub error: Option<String>,
@@ -1477,6 +1525,8 @@ pub struct LoadConfigurationResponse {
 
 /// Request to set a configuration as the default for its robot.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetRobotConfigurations"))]
 pub struct SetDefaultConfiguration {
     pub id: i64,
 }
@@ -1486,6 +1536,7 @@ impl RequestMessage for SetDefaultConfiguration {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct SetDefaultConfigurationResponse {
     pub success: bool,
     pub error: Option<String>,

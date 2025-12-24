@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-server = ["dep:bevy"]
+server = ["dep:bevy", "dep:pl3xus_sync", "dep:pl3xus_macros"]
 stores = ["dep:reactive_stores"]
 
 [dependencies]
@@ -13,3 +13,7 @@ fanuc_rmi = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git", features =
 bevy = { version = "0.17", default-features = false, features = ["multi_threaded", "bevy_log"], optional = true }
 pl3xus_common = { path = "../../../crates/pl3xus_common" }
 reactive_stores = { version = "0.2", optional = true }
+
+# Server-only dependencies for automatic query invalidation
+pl3xus_sync = { path = "../../../crates/pl3xus_sync", optional = true }
+pl3xus_macros = { path = "../../../crates/pl3xus_macros", optional = true }

@@ -1,14 +1,16 @@
-# December 2025 Session: Index
+# Fanuc RMI Replica Completion - Index
+
+**Last Updated**: December 24, 2025
 
 ## Documents in This Folder
 
 | Document | Purpose |
 |----------|---------|
-| [START_HERE.md](./START_HERE.md) | **Read this first** - Quick orientation for continuing work |
+| [START_HERE.md](./START_HERE.md) | **Read this first** - Master handoff document |
+| [OUTSTANDING_TASKS.md](./OUTSTANDING_TASKS.md) | Remaining work with priorities and effort estimates |
+| [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) | Step-by-step implementation guide |
+| [ACCOMPLISHMENTS.md](./ACCOMPLISHMENTS.md) | What was completed in December 2025 sessions |
 | [CONTEXT_AND_BACKGROUND.md](./CONTEXT_AND_BACKGROUND.md) | Deep technical context on pl3xus and fanuc_rmi_replica |
-| [ACCOMPLISHMENTS.md](./ACCOMPLISHMENTS.md) | What was completed this session |
-| [OUTSTANDING_TASKS.md](./OUTSTANDING_TASKS.md) | Remaining work with priorities |
-| [NEXT_STEPS.md](./NEXT_STEPS.md) | Recommended approach for continuation |
 
 ## Related Research Documents
 
@@ -37,15 +39,19 @@ These documents from other research topics are relevant to understand the curren
 
 ## How to Use This Folder
 
-1. **Starting a new session**: Read START_HERE.md first
-2. **Need deep context**: Read CONTEXT_AND_BACKGROUND.md
+1. **Starting fresh**: Read START_HERE.md first
+2. **Need step-by-step guide**: Read IMPLEMENTATION_PLAN.md
 3. **Want to know what's done**: Read ACCOMPLISHMENTS.md
-4. **Want to know what's left**: Read OUTSTANDING_TASKS.md
-5. **Ready to work**: Read NEXT_STEPS.md
+4. **Need deep context**: Read CONTEXT_AND_BACKGROUND.md
 
-## Session Date
+## Summary
 
-**December 23, 2025**
+**Total Outstanding Work**: ~10 hours across 8 tasks
 
-This session focused on API redesign (TanStack Query-inspired), fixing entity targeting bugs, and migrating all client code to the new patterns.
+| Priority | Tasks | Effort |
+|----------|-------|--------|
+| P1: Code Quality | 1 | 20 min |
+| P2: API Consistency | 4 | 4 hr |
+| P3: UX Improvements | ✅ | COMPLETE |
+| P4: Future Enhancements | 3 | 6 hr |
 

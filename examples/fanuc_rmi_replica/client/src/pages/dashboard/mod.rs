@@ -25,21 +25,21 @@ pub fn DashboardView() -> impl IntoView {
     view! {
         <div class="flex-1 flex flex-col overflow-hidden">
             // Tab bar with navigation links
-            <div class="flex border-b border-[#ffffff08] shrink-0">
+            <div class="flex border-b border-border/8 shrink-0">
                 <a
                     href="/dashboard/control"
                     class=move || if is_control() {
-                        "px-4 py-2 text-[10px] font-medium text-[#00d9ff] border-b-2 border-[#00d9ff] transition-colors"
+                        "px-4 py-2 text-[10px] font-medium text-primary border-b-2 border-primary transition-colors"
                     } else {
-                        "px-4 py-2 text-[10px] font-medium text-[#666666] hover:text-[#888888] transition-colors"
+                        "px-4 py-2 text-[10px] font-medium text-muted-foreground hover:text-muted-foreground transition-colors"
                     }
                 >"Control"</a>
                 <a
                     href="/dashboard/info"
                     class=move || if !is_control() {
-                        "px-4 py-2 text-[10px] font-medium text-[#00d9ff] border-b-2 border-[#00d9ff] transition-colors"
+                        "px-4 py-2 text-[10px] font-medium text-primary border-b-2 border-primary transition-colors"
                     } else {
-                        "px-4 py-2 text-[10px] font-medium text-[#666666] hover:text-[#888888] transition-colors"
+                        "px-4 py-2 text-[10px] font-medium text-muted-foreground hover:text-muted-foreground transition-colors"
                     }
                 >"Configuration"</a>
             </div>

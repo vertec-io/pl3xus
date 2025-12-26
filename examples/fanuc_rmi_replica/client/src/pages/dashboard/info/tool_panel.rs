@@ -92,9 +92,9 @@ pub fn ToolManagementPanel() -> impl IntoView {
 
     view! {
         <Show when=move || robot_connected.get()>
-            <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-2">
+            <div class="bg-background rounded border border-border/8 p-2">
                 <div class="flex items-center justify-between mb-1.5">
-                    <h3 class="text-[10px] font-semibold text-[#00d9ff] uppercase tracking-wide flex items-center group">
+                    <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center group">
                         <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -103,11 +103,11 @@ pub fn ToolManagementPanel() -> impl IntoView {
                     </h3>
                     <div class="flex items-center gap-1">
                         <Show when=move || !has_control.get()>
-                            <span class="text-[8px] text-[#ff4444] bg-[#ff444420] px-1.5 py-0.5 rounded">"No Control"</span>
+                            <span class="text-[8px] text-destructive bg-destructive/20 px-1.5 py-0.5 rounded">"No Control"</span>
                         </Show>
                         // View toggle button
                         <button
-                            class="text-[8px] text-[#666666] hover:text-[#00d9ff] px-1.5 py-0.5 border border-[#ffffff08] rounded"
+                            class="text-[8px] text-muted-foreground hover:text-primary px-1.5 py-0.5 border border-border/8 rounded"
                             on:click=move |_| {
                                 if view_mode.get() == "buttons" {
                                     set_view_mode.set("dropdown");
@@ -129,9 +129,9 @@ pub fn ToolManagementPanel() -> impl IntoView {
                         <div class="flex items-center gap-2">
                             <select
                                 class=move || if is_disabled() {
-                                    "flex-1 bg-[#111111] border border-[#ffffff15] rounded px-2 py-1 text-[10px] text-[#555555] opacity-50 cursor-not-allowed"
+                                    "flex-1 bg-card border border-border/8 rounded px-2 py-1 text-[10px] text-muted-foreground opacity-50 cursor-not-allowed"
                                 } else {
-                                    "flex-1 bg-[#111111] border border-[#ffffff15] rounded px-2 py-1 text-[10px] text-white"
+                                    "flex-1 bg-card border border-border/8 rounded px-2 py-1 text-[10px] text-white"
                                 }
                                 disabled=is_disabled
                                 on:change=move |ev| {
@@ -153,7 +153,7 @@ pub fn ToolManagementPanel() -> impl IntoView {
                             // Apply button
                             <Show when=has_pending>
                                 <button
-                                    class="px-2 py-1 text-[9px] bg-[#00d9ff20] text-[#00d9ff] border border-[#00d9ff] rounded hover:bg-[#00d9ff30]"
+                                    class="px-2 py-1 text-[9px] bg-primary/20 text-primary border border-primary rounded hover:bg-primary/30"
                                     on:click=move |_| {
                                         if let (Some(tool), Some(entity_bits)) = (pending_tool.get(), robot_entity_bits()) {
                                             let frame = active_frame.get();
@@ -186,13 +186,13 @@ pub fn ToolManagementPanel() -> impl IntoView {
                                             let disabled = is_disabled();
 
                                             if disabled {
-                                                "bg-[#111111] border border-[#ffffff08] text-[#444444] text-[9px] py-1 rounded opacity-50 cursor-not-allowed"
+                                                "bg-card border border-border/8 text-muted text-[9px] py-1 rounded opacity-50 cursor-not-allowed"
                                             } else if selected && active {
-                                                "bg-[#00d9ff20] border border-[#00d9ff] text-[#00d9ff] text-[9px] py-1 rounded font-medium"
+                                                "bg-primary/20 border border-primary text-primary text-[9px] py-1 rounded font-medium"
                                             } else if selected {
-                                                "bg-[#ffaa0020] border border-[#ffaa00] text-[#ffaa00] text-[9px] py-1 rounded font-medium"
+                                                "bg-warning/20 border border-warning text-warning text-[9px] py-1 rounded font-medium"
                                             } else {
-                                                "bg-[#111111] border border-[#ffffff08] text-[#555555] text-[9px] py-1 rounded hover:border-[#ffffff20] hover:text-[#888888]"
+                                                "bg-card border border-border/8 text-muted-foreground text-[9px] py-1 rounded hover:border-border/8 hover:text-muted-foreground"
                                             }
                                         }}
                                         disabled=is_disabled
@@ -209,7 +209,7 @@ pub fn ToolManagementPanel() -> impl IntoView {
                         // Apply button (only show if pending changes and have control)
                         <Show when=has_pending>
                             <button
-                                class="w-full px-2 py-1 text-[9px] bg-[#00d9ff20] text-[#00d9ff] border border-[#00d9ff] rounded hover:bg-[#00d9ff30]"
+                                class="w-full px-2 py-1 text-[9px] bg-primary/20 text-primary border border-primary rounded hover:bg-primary/30"
                                 on:click=move |_| {
                                     if let (Some(tool), Some(entity_bits)) = (pending_tool.get(), robot_entity_bits()) {
                                         let frame = active_frame.get();

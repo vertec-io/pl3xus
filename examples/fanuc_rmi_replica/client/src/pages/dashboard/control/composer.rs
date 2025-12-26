@@ -312,16 +312,16 @@ pub fn CommandComposerModal() -> impl IntoView {
 
     view! {
         <div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-            <div class="bg-[#0d0d0d] border border-[#ffffff15] rounded-lg w-[600px] max-h-[90vh] flex flex-col">
+            <div class="bg-background border border-border/8 rounded-lg w-[600px] max-h-[90vh] flex flex-col">
                 // Header
-                <div class="flex items-center justify-between p-3 border-b border-[#ffffff08]">
+                <div class="flex items-center justify-between p-3 border-b border-border/8">
                     <h2 class="text-sm font-semibold text-white flex items-center gap-2">
-                        <svg class="w-4 h-4 text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                         </svg>
                         "Command Composer"
                     </h2>
-                    <button class="text-[#666666] hover:text-white" on:click=close_modal>
+                    <button class="text-muted-foreground hover:text-white" on:click=close_modal>
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
@@ -332,9 +332,9 @@ pub fn CommandComposerModal() -> impl IntoView {
                 <div class="flex-1 overflow-y-auto p-4 space-y-4">
                     // Instruction Type Selection
                     <div class="space-y-2">
-                        <label class="text-[10px] text-[#888888] uppercase tracking-wide">"Motion Type"</label>
+                        <label class="text-[10px] text-muted-foreground uppercase tracking-wide">"Motion Type"</label>
                         <select
-                            class="w-full bg-[#111111] border border-[#00d9ff40] rounded px-3 py-2 text-[12px] text-white focus:border-[#00d9ff] focus:outline-none"
+                            class="w-full bg-card border border-primary/40 rounded px-3 py-2 text-[12px] text-white focus:border-primary focus:outline-none"
                             on:change=move |ev| {
                                 let val = event_target_value(&ev);
                                 let itype = match val.as_str() {
@@ -352,7 +352,7 @@ pub fn CommandComposerModal() -> impl IntoView {
                             <option value="joint_abs" selected=move || instr_type.get() == InstructionType::JointAbsolute>"Joint Absolute"</option>
                             <option value="joint_rel" selected=move || instr_type.get() == InstructionType::JointRelative>"Joint Relative"</option>
                         </select>
-                        <div class="text-[9px] text-[#666666]">
+                        <div class="text-[9px] text-muted-foreground">
                             {move || match instr_type.get() {
                                 InstructionType::LinearAbsolute => "Move to absolute Cartesian position in a straight line",
                                 InstructionType::LinearRelative => "Move by relative Cartesian offset in a straight line",
@@ -365,7 +365,7 @@ pub fn CommandComposerModal() -> impl IntoView {
                     // Position Inputs
                     <div class="space-y-2">
                         <div class="flex items-center justify-between">
-                            <label class="text-[10px] text-[#888888] uppercase tracking-wide">
+                            <label class="text-[10px] text-muted-foreground uppercase tracking-wide">
                                 {move || {
                                     let itype = instr_type.get();
                                     if !itype.is_cartesian() && !itype.is_absolute() { "Joint Offsets" }
@@ -376,13 +376,13 @@ pub fn CommandComposerModal() -> impl IntoView {
                             </label>
                             <div class="flex gap-2">
                                 <button
-                                    class="text-[9px] text-[#00d9ff] hover:underline"
+                                    class="text-[9px] text-primary hover:underline"
                                     on:click=set_to_zero
                                 >
                                     "Set to Zero"
                                 </button>
                                 <button
-                                    class="text-[9px] text-[#00d9ff] hover:underline"
+                                    class="text-[9px] text-primary hover:underline"
                                     on:click=load_current
                                 >
                                     "Load Current"
@@ -418,12 +418,12 @@ pub fn CommandComposerModal() -> impl IntoView {
                     // Motion Parameters
                     <div class="grid grid-cols-2 gap-3">
                         <div class="space-y-1">
-                            <label class="text-[10px] text-[#888888] uppercase tracking-wide">"Speed"</label>
+                            <label class="text-[10px] text-muted-foreground uppercase tracking-wide">"Speed"</label>
                             <div class="flex">
                                 <input
                                     type="text"
                                     inputmode="decimal"
-                                    class="flex-1 bg-[#111111] border border-[#ffffff08] rounded-l px-2 py-1.5 text-[11px] text-white focus:border-[#00d9ff] focus:outline-none text-center"
+                                    class="flex-1 bg-card border border-border/8 rounded-l px-2 py-1.5 text-[11px] text-white focus:border-primary focus:outline-none text-center"
                                     prop:value=move || format!("{:.1}", speed.get())
                                     on:input=move |ev| {
                                         if let Ok(v) = event_target_value(&ev).parse::<f64>() {
@@ -431,13 +431,13 @@ pub fn CommandComposerModal() -> impl IntoView {
                                         }
                                     }
                                 />
-                                <span class="bg-[#1a1a1a] border border-l-0 border-[#ffffff08] rounded-r px-2 py-1.5 text-[9px] text-[#666666]">"mm/s"</span>
+                                <span class="bg-popover border border-l-0 border-border/8 rounded-r px-2 py-1.5 text-[9px] text-muted-foreground">"mm/s"</span>
                             </div>
                         </div>
                         <div class="space-y-1">
-                            <label class="text-[10px] text-[#888888] uppercase tracking-wide">"Termination"</label>
+                            <label class="text-[10px] text-muted-foreground uppercase tracking-wide">"Termination"</label>
                             <select
-                                class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[11px] text-white focus:border-[#00d9ff] focus:outline-none"
+                                class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[11px] text-white focus:border-primary focus:outline-none"
                                 prop:value=move || term_type.get()
                                 on:change=move |ev| set_term_type.set(event_target_value(&ev))
                             >
@@ -449,22 +449,22 @@ pub fn CommandComposerModal() -> impl IntoView {
                 </div>
 
                 // Footer
-                <div class="flex justify-between p-3 border-t border-[#ffffff08]">
+                <div class="flex justify-between p-3 border-t border-border/8">
                     <button
-                        class="bg-[#1a1a1a] border border-[#ffffff15] text-[#cccccc] text-[10px] px-4 py-1.5 rounded hover:bg-[#222222]"
+                        class="bg-popover border border-border/8 text-foreground text-[10px] px-4 py-1.5 rounded hover:bg-secondary"
                         on:click=close_modal
                     >
                         "Cancel"
                     </button>
                     <div class="flex gap-2">
                         <button
-                            class="bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] text-[10px] px-4 py-1.5 rounded hover:bg-[#00d9ff30]"
+                            class="bg-primary/20 border border-primary/40 text-primary text-[10px] px-4 py-1.5 rounded hover:bg-primary/30"
                             on:click=move |_| apply_command.get_value()()
                         >
                             "Apply"
                         </button>
                         <button
-                            class="bg-[#22c55e] text-black text-[10px] px-4 py-1.5 rounded hover:bg-[#1ea34b] font-medium"
+                            class="bg-success text-black text-[10px] px-4 py-1.5 rounded hover:bg-success font-medium"
                             on:click=move |_| execute_command()
                         >
                             "▶ Execute Now"
@@ -508,12 +508,12 @@ where
 
     view! {
         <div class="space-y-1">
-            <label class="text-[9px] text-[#666666] text-center block">{label}</label>
+            <label class="text-[9px] text-muted-foreground text-center block">{label}</label>
             <div class="flex">
                 <input
                     type="text"
                     inputmode="decimal"
-                    class="flex-1 min-w-0 bg-[#111111] border border-[#ffffff08] rounded-l px-1 py-1 text-[10px] text-white focus:outline-none focus:border-[#00d9ff] text-center"
+                    class="flex-1 min-w-0 bg-card border border-border/8 rounded-l px-1 py-1 text-[10px] text-white focus:outline-none focus:border-primary text-center"
                     prop:value=move || text.get()
                     on:focus=move |_| set_is_editing.set(true)
                     on:blur=move |_| {
@@ -542,7 +542,7 @@ where
                         }
                     }
                 />
-                <span class="bg-[#1a1a1a] border border-l-0 border-[#ffffff08] rounded-r px-1 py-1 text-[8px] text-[#666666]">{unit}</span>
+                <span class="bg-popover border border-l-0 border-border/8 rounded-r px-1 py-1 text-[8px] text-muted-foreground">{unit}</span>
             </div>
         </div>
     }

@@ -69,26 +69,26 @@ pub fn JogDefaultsPanel() -> impl IntoView {
 
     view! {
         <Show when=move || robot_connected.get()>
-            <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-3 shrink-0">
+            <div class="bg-background rounded border border-border/8 p-3 shrink-0">
                 <div class="flex items-center justify-between mb-2">
-                    <h3 class="text-[10px] font-semibold text-[#00d9ff] uppercase tracking-wide flex items-center group">
+                    <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center group">
                         <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                         </svg>
                         "Jog Defaults"
                     </h3>
                     <Show when=move || !has_control.get()>
-                        <span class="text-[8px] text-[#ff4444] bg-[#ff444420] px-1.5 py-0.5 rounded">"No Control"</span>
+                        <span class="text-[8px] text-destructive bg-destructive/20 px-1.5 py-0.5 rounded">"No Control"</span>
                     </Show>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     // Cartesian Jog Defaults
-                    <div class="bg-[#111111] rounded p-2 border border-[#ffffff08]">
-                        <div class="text-[9px] text-[#666666] mb-1.5">"Cartesian Jog"</div>
+                    <div class="bg-card rounded p-2 border border-border/8">
+                        <div class="text-[9px] text-muted-foreground mb-1.5">"Cartesian Jog"</div>
                         <div class="grid grid-cols-2 gap-2">
                             <div>
-                                <label class="text-[8px] text-[#555555] block mb-0.5">"Speed (mm/s)"</label>
+                                <label class="text-[8px] text-muted-foreground block mb-0.5">"Speed (mm/s)"</label>
                                 <NumberInput
                                     value=Signal::derive(move || cart_speed.get())
                                     on_input=move |val: String| {
@@ -101,7 +101,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                                 />
                             </div>
                             <div>
-                                <label class="text-[8px] text-[#555555] block mb-0.5">"Step (mm)"</label>
+                                <label class="text-[8px] text-muted-foreground block mb-0.5">"Step (mm)"</label>
                                 <NumberInput
                                     value=Signal::derive(move || cart_step.get())
                                     on_input=move |val: String| {
@@ -117,11 +117,11 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                     </div>
 
                     // Joint Jog Defaults
-                    <div class="bg-[#111111] rounded p-2 border border-[#ffffff08]">
-                        <div class="text-[9px] text-[#666666] mb-1.5">"Joint Jog"</div>
+                    <div class="bg-card rounded p-2 border border-border/8">
+                        <div class="text-[9px] text-muted-foreground mb-1.5">"Joint Jog"</div>
                         <div class="grid grid-cols-2 gap-2">
                             <div>
-                                <label class="text-[8px] text-[#555555] block mb-0.5">"Speed (°/s)"</label>
+                                <label class="text-[8px] text-muted-foreground block mb-0.5">"Speed (°/s)"</label>
                                 <NumberInput
                                     value=Signal::derive(move || joint_speed.get())
                                     on_input=move |val: String| {
@@ -134,7 +134,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                                 />
                             </div>
                             <div>
-                                <label class="text-[8px] text-[#555555] block mb-0.5">"Step (°)"</label>
+                                <label class="text-[8px] text-muted-foreground block mb-0.5">"Step (°)"</label>
                                 <NumberInput
                                     value=Signal::derive(move || joint_step.get())
                                     on_input=move |val: String| {
@@ -154,7 +154,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                 <Show when=move || has_changes.get()>
                     <div class="flex justify-end mt-2 gap-2">
                         <button
-                            class="px-3 py-1 text-[9px] bg-[#1a1a1a] border border-[#ffffff08] text-[#888888] rounded hover:text-white"
+                            class="px-3 py-1 text-[9px] bg-popover border border-border/8 text-muted-foreground rounded hover:text-white"
                             on:click=move |_| {
                                 // Reset to synced settings
                                 let settings = jog_value.get();
@@ -168,7 +168,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                             "Cancel"
                         </button>
                         <button
-                            class="px-3 py-1 text-[9px] bg-[#ffaa0020] text-[#ffaa00] border border-[#ffaa00] rounded hover:bg-[#ffaa0030]"
+                            class="px-3 py-1 text-[9px] bg-warning/20 text-warning border border-warning rounded hover:bg-warning/30"
                             on:click=move |_| {
                                 // Build new settings from edited values
                                 let current = jog_value.get();

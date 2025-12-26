@@ -1,0 +1,17 @@
+# Trunk configuration for development
+# See: https://trunkrs.dev/configuration/
+
+[build]
+# Disable subresource integrity hashes during development
+# This prevents the white-screen issue when hot-reload causes hash mismatches
+# NOTE: Re-enable for production builds!
+no_sri = true
+
+[watch]
+# Ignore these directories to avoid unnecessary rebuilds
+ignore = ["./dist", "./target"]
+
+[serve]
+# Development server settings
+port = 8080
+

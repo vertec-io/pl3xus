@@ -1,0 +1,629 @@
+/* ============================================
+   FANUC RMI REPLICA - SOPHISTICATED THEME SYSTEM
+   ============================================
+
+   Design Philosophy:
+   - Industrial robotics UI with dense data displays
+   - Inspired by: Linear, Vercel, Stripe, Bloomberg Terminal
+   - Focus on readability, subtle depth, and professional aesthetics
+
+   Theme Categories:
+   1. Professional Dark - Minimal, sophisticated dark themes
+   2. Glass/Translucent - Modern glassmorphism effects
+   3. Vibrant Accent - Distinctive accent colors on dark
+   4. Light Themes - Clean, readable light modes
+   ============================================ */
+
+:root {
+  /* Industrial Dark - The Default (shadcn-inspired) */
+  --background: 0 0% 4%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 7%;
+  --card-foreground: 0 0% 98%;
+  --popover: 0 0% 9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 189 94% 43%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 12%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 0 0% 12%;
+  --muted-foreground: 0 0% 55%;
+  --accent: 0 0% 12%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 142 71% 45%;
+  --warning: 38 92% 50%;
+  --border: 0 0% 18%;
+  --input: 0 0% 12%;
+  --ring: 189 94% 43%;
+
+  /* Subtle styling - shadcn aesthetic */
+  --radius: 0.5rem;
+  --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --blur: 0px;
+  --border-opacity: 1;
+
+  /* Extended tokens for sophisticated styling */
+  --glow: none;
+  --header-bg: 0 0% 5%;
+  --surface-1: 0 0% 8%;
+  --surface-2: 0 0% 10%;
+}
+
+/* ============================================
+   PROFESSIONAL DARK THEMES
+   Minimal, sophisticated, corporate-ready
+   ============================================ */
+
+/* Indigo Knight - Deep navy with electric indigo glow (Linear-inspired) */
+.theme-indigo {
+  --background: 230 25% 5%;
+  --foreground: 220 15% 93%;
+  --card: 230 22% 8%;
+  --card-foreground: 220 15% 93%;
+  --popover: 230 20% 10%;
+  --popover-foreground: 220 15% 93%;
+  --muted: 230 18% 12%;
+  --muted-foreground: 225 12% 55%;
+  --primary: 245 85% 65%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 230 18% 14%;
+  --secondary-foreground: 220 15% 93%;
+  --accent: 230 18% 14%;
+  --accent-foreground: 220 15% 93%;
+  --border: 230 15% 20%;
+  --border-opacity: 0.6;
+  --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.4);
+  --glow: 0 0 20px -5px rgba(129, 140, 248, 0.15);
+  --header-bg: 230 25% 6%;
+  --surface-1: 230 22% 9%;
+  --surface-2: 230 20% 11%;
+}
+
+/* Emerald Grove - Matrix-inspired green terminal aesthetic */
+.theme-emerald {
+  --background: 150 20% 4%;
+  --foreground: 145 15% 90%;
+  --card: 150 18% 6%;
+  --card-foreground: 145 15% 90%;
+  --popover: 150 16% 8%;
+  --popover-foreground: 145 15% 90%;
+  --muted: 150 14% 11%;
+  --muted-foreground: 145 10% 52%;
+  --primary: 155 70% 42%;
+  --primary-foreground: 155 90% 5%;
+  --secondary: 150 14% 13%;
+  --secondary-foreground: 145 15% 90%;
+  --accent: 150 14% 13%;
+  --accent-foreground: 145 15% 90%;
+  --border: 150 12% 18%;
+  --border-opacity: 0.5;
+  --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.5);
+  --glow: 0 0 15px -5px rgba(52, 211, 153, 0.1);
+  --header-bg: 150 20% 5%;
+  --surface-1: 150 18% 7%;
+  --surface-2: 150 16% 9%;
+}
+
+/* Slate Blue - Corporate professional with blue undertones (Stripe-inspired) */
+.theme-slate {
+  --background: 222 30% 7%;
+  --foreground: 215 20% 94%;
+  --card: 222 28% 9%;
+  --card-foreground: 215 20% 94%;
+  --popover: 222 26% 11%;
+  --popover-foreground: 215 20% 94%;
+  --muted: 220 24% 13%;
+  --muted-foreground: 218 15% 55%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 24% 15%;
+  --secondary-foreground: 215 20% 94%;
+  --accent: 220 24% 15%;
+  --accent-foreground: 215 20% 94%;
+  --border: 220 20% 22%;
+  --border-opacity: 0.5;
+  --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.35);
+  --header-bg: 222 30% 7%;
+  --surface-1: 222 28% 10%;
+  --surface-2: 222 26% 12%;
+}
+
+/* Obsidian Sharp - Pure black, minimal, monochrome (Bloomberg-inspired) */
+.theme-obsidian {
+  --background: 0 0% 2%;
+  --foreground: 0 0% 92%;
+  --card: 0 0% 5%;
+  --card-foreground: 0 0% 92%;
+  --popover: 0 0% 7%;
+  --popover-foreground: 0 0% 92%;
+  --muted: 0 0% 10%;
+  --muted-foreground: 0 0% 50%;
+  --primary: 0 0% 100%;
+  --primary-foreground: 0 0% 5%;
+  --secondary: 0 0% 12%;
+  --secondary-foreground: 0 0% 92%;
+  --accent: 0 0% 12%;
+  --accent-foreground: 0 0% 92%;
+  --border: 0 0% 18%;
+  --border-opacity: 0.4;
+  --radius: 0.25rem;
+  --shadow: none;
+  --header-bg: 0 0% 3%;
+  --surface-1: 0 0% 6%;
+  --surface-2: 0 0% 8%;
+}
+
+/* Coffee Bean - Warm carbon with brown undertones */
+.theme-coffee {
+  --background: 25 15% 5%;
+  --foreground: 30 10% 92%;
+  --card: 25 14% 8%;
+  --card-foreground: 30 10% 92%;
+  --popover: 25 12% 10%;
+  --popover-foreground: 30 10% 92%;
+  --muted: 25 10% 13%;
+  --muted-foreground: 28 8% 52%;
+  --primary: 28 80% 52%;
+  --primary-foreground: 28 90% 8%;
+  --secondary: 25 10% 15%;
+  --secondary-foreground: 30 10% 92%;
+  --accent: 25 10% 15%;
+  --accent-foreground: 30 10% 92%;
+  --border: 25 8% 20%;
+  --border-opacity: 0.5;
+  --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.45);
+  --header-bg: 25 15% 6%;
+  --surface-1: 25 14% 9%;
+  --surface-2: 25 12% 11%;
+}
+
+/* ============================================
+   VIBRANT ACCENT THEMES
+   Distinctive accent colors on sophisticated dark bases
+   ============================================ */
+
+/* Cyberpunk - Magenta/cyan neon with high contrast */
+.theme-cyber {
+  --background: 280 25% 4%;
+  --foreground: 280 8% 94%;
+  --card: 280 22% 7%;
+  --card-foreground: 280 8% 94%;
+  --popover: 280 20% 9%;
+  --popover-foreground: 280 8% 94%;
+  --muted: 280 18% 12%;
+  --muted-foreground: 280 8% 55%;
+  --primary: 310 95% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 280 18% 14%;
+  --secondary-foreground: 280 8% 94%;
+  --accent: 185 100% 50%;
+  --accent-foreground: 185 100% 8%;
+  --border: 280 15% 20%;
+  --border-opacity: 0.5;
+  --shadow: 0 4px 24px -6px rgba(217, 70, 239, 0.2);
+  --glow: 0 0 30px -8px rgba(217, 70, 239, 0.25);
+  --header-bg: 280 25% 5%;
+  --surface-1: 280 22% 8%;
+  --surface-2: 280 20% 10%;
+}
+
+/* Rose Carbon - Elegant pink on dark carbon */
+.theme-rose {
+  --background: 350 18% 5%;
+  --foreground: 350 8% 93%;
+  --card: 350 16% 8%;
+  --card-foreground: 350 8% 93%;
+  --popover: 350 14% 10%;
+  --popover-foreground: 350 8% 93%;
+  --muted: 350 12% 13%;
+  --muted-foreground: 350 6% 55%;
+  --primary: 350 85% 55%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 350 12% 15%;
+  --secondary-foreground: 350 8% 93%;
+  --accent: 350 12% 15%;
+  --accent-foreground: 350 8% 93%;
+  --border: 350 10% 20%;
+  --border-opacity: 0.5;
+  --shadow: 0 2px 10px -3px rgb(0 0 0 / 0.45);
+  --glow: 0 0 20px -6px rgba(251, 113, 133, 0.12);
+  --header-bg: 350 18% 6%;
+  --surface-1: 350 16% 9%;
+  --surface-2: 350 14% 11%;
+}
+
+/* Amber Glow - Warm industrial with orange accent */
+.theme-amber {
+  --background: 32 18% 5%;
+  --foreground: 35 10% 92%;
+  --card: 32 16% 8%;
+  --card-foreground: 35 10% 92%;
+  --popover: 32 14% 10%;
+  --popover-foreground: 35 10% 92%;
+  --muted: 32 12% 13%;
+  --muted-foreground: 32 8% 55%;
+  --primary: 38 95% 52%;
+  --primary-foreground: 38 100% 8%;
+  --secondary: 32 12% 15%;
+  --secondary-foreground: 35 10% 92%;
+  --accent: 32 12% 15%;
+  --accent-foreground: 35 10% 92%;
+  --border: 32 10% 20%;
+  --border-opacity: 0.5;
+  --shadow: 0 2px 10px -3px rgb(0 0 0 / 0.45);
+  --glow: 0 0 20px -6px rgba(251, 191, 36, 0.1);
+  --header-bg: 32 18% 6%;
+  --surface-1: 32 16% 9%;
+  --surface-2: 32 14% 11%;
+}
+
+/* Midnight Teal - Cool aquatic depth */
+.theme-teal {
+  --background: 185 25% 5%;
+  --foreground: 180 12% 92%;
+  --card: 185 22% 8%;
+  --card-foreground: 180 12% 92%;
+  --popover: 185 20% 10%;
+  --popover-foreground: 180 12% 92%;
+  --muted: 185 18% 12%;
+  --muted-foreground: 180 10% 55%;
+  --primary: 175 85% 42%;
+  --primary-foreground: 175 95% 5%;
+  --secondary: 185 18% 14%;
+  --secondary-foreground: 180 12% 92%;
+  --accent: 185 18% 14%;
+  --accent-foreground: 180 12% 92%;
+  --border: 185 15% 20%;
+  --border-opacity: 0.5;
+  --shadow: 0 2px 10px -3px rgb(0 0 0 / 0.45);
+  --glow: 0 0 20px -6px rgba(45, 212, 191, 0.1);
+  --header-bg: 185 25% 6%;
+  --surface-1: 185 22% 9%;
+  --surface-2: 185 20% 11%;
+}
+
+/* Neon Pulse - Violet/purple glow */
+.theme-neon {
+  --background: 270 25% 5%;
+  --foreground: 265 10% 93%;
+  --card: 270 22% 8%;
+  --card-foreground: 265 10% 93%;
+  --popover: 270 20% 10%;
+  --popover-foreground: 265 10% 93%;
+  --muted: 270 18% 12%;
+  --muted-foreground: 265 8% 55%;
+  --primary: 270 95% 62%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 270 18% 14%;
+  --secondary-foreground: 265 10% 93%;
+  --accent: 270 18% 14%;
+  --accent-foreground: 265 10% 93%;
+  --border: 270 15% 20%;
+  --border-opacity: 0.5;
+  --shadow: 0 4px 20px -5px rgba(168, 85, 247, 0.18);
+  --glow: 0 0 25px -6px rgba(168, 85, 247, 0.2);
+  --header-bg: 270 25% 6%;
+  --surface-1: 270 22% 9%;
+  --surface-2: 270 20% 11%;
+}
+
+/* ============================================
+   GLASS/TRANSLUCENT THEMES
+   Modern glassmorphism with backdrop blur
+   Note: Blur effects require backdrop-filter support
+   ============================================ */
+
+/* Arctic Frost - Light frosted glass (Apple-inspired) */
+.theme-arctic {
+  --background: 215 25% 96%;
+  --foreground: 220 40% 10%;
+  --card: 210 30% 98%;
+  --card-foreground: 220 40% 10%;
+  --popover: 210 25% 99%;
+  --popover-foreground: 220 40% 10%;
+  --muted: 215 20% 92%;
+  --muted-foreground: 220 15% 42%;
+  --primary: 220 90% 52%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 215 20% 94%;
+  --secondary-foreground: 220 40% 10%;
+  --accent: 215 20% 94%;
+  --accent-foreground: 220 40% 10%;
+  --border: 220 18% 82%;
+  --border-opacity: 0.6;
+  --radius: 0.75rem;
+  --blur: 20px;
+  --shadow: 0 4px 12px -2px rgb(0 0 0 / 0.06), 0 2px 6px -2px rgb(0 0 0 / 0.04);
+  --header-bg: 215 25% 97%;
+  --surface-1: 215 22% 95%;
+  --surface-2: 215 20% 93%;
+}
+
+/* Forest Mist - Soft sage glass (light) */
+.theme-mist {
+  --background: 145 22% 95%;
+  --foreground: 150 35% 12%;
+  --card: 145 28% 97%;
+  --card-foreground: 150 35% 12%;
+  --popover: 145 25% 98%;
+  --popover-foreground: 150 35% 12%;
+  --muted: 145 18% 90%;
+  --muted-foreground: 150 12% 42%;
+  --primary: 150 70% 38%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 145 18% 92%;
+  --secondary-foreground: 150 35% 12%;
+  --accent: 145 18% 92%;
+  --accent-foreground: 150 35% 12%;
+  --border: 145 15% 78%;
+  --border-opacity: 0.5;
+  --radius: 0.625rem;
+  --blur: 16px;
+  --shadow: 0 4px 12px -2px rgb(0 0 0 / 0.05), 0 2px 6px -2px rgb(0 0 0 / 0.03);
+  --header-bg: 145 22% 96%;
+  --surface-1: 145 20% 94%;
+  --surface-2: 145 18% 92%;
+}
+
+/* Glass Dark - Deep frosted glass with blue tint */
+.theme-glass-dark {
+  --background: 225 35% 6%;
+  --foreground: 220 18% 93%;
+  --card: 225 32% 10%;
+  --card-foreground: 220 18% 93%;
+  --popover: 225 30% 12%;
+  --popover-foreground: 220 18% 93%;
+  --muted: 225 28% 14%;
+  --muted-foreground: 220 12% 55%;
+  --primary: 220 95% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 225 28% 16%;
+  --secondary-foreground: 220 18% 93%;
+  --accent: 225 28% 16%;
+  --accent-foreground: 220 18% 93%;
+  --border: 225 22% 22%;
+  --border-opacity: 0.45;
+  --radius: 0.75rem;
+  --blur: 24px;
+  --shadow: 0 8px 32px -8px rgb(0 0 0 / 0.5), 0 4px 16px -4px rgb(0 0 0 / 0.35);
+  --glow: 0 0 30px -10px rgba(96, 165, 250, 0.12);
+  --header-bg: 225 35% 7%;
+  --surface-1: 225 32% 11%;
+  --surface-2: 225 30% 13%;
+}
+
+/* Deep Space - Cosmic purple glass */
+.theme-space {
+  --background: 255 30% 5%;
+  --foreground: 255 12% 93%;
+  --card: 255 28% 9%;
+  --card-foreground: 255 12% 93%;
+  --popover: 255 26% 11%;
+  --popover-foreground: 255 12% 93%;
+  --muted: 255 24% 13%;
+  --muted-foreground: 255 10% 55%;
+  --primary: 255 90% 65%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 255 24% 15%;
+  --secondary-foreground: 255 12% 93%;
+  --accent: 255 24% 15%;
+  --accent-foreground: 255 12% 93%;
+  --border: 255 20% 20%;
+  --border-opacity: 0.4;
+  --radius: 0.875rem;
+  --blur: 20px;
+  --shadow: 0 8px 32px -8px rgba(139, 92, 246, 0.18), 0 4px 16px -4px rgb(0 0 0 / 0.4);
+  --glow: 0 0 35px -10px rgba(167, 139, 250, 0.15);
+  --header-bg: 255 30% 6%;
+  --surface-1: 255 28% 10%;
+  --surface-2: 255 26% 12%;
+}
+
+/* ============================================
+   LIGHT THEMES
+   Clean, readable, professional light modes
+   ============================================ */
+
+/* Industrial Light - Clean white (shadcn light) */
+.theme-light {
+  --background: 0 0% 100%;
+  --foreground: 220 40% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 40% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 40% 10%;
+  --muted: 220 15% 96%;
+  --muted-foreground: 220 10% 45%;
+  --primary: 189 94% 40%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 15% 96%;
+  --secondary-foreground: 220 40% 10%;
+  --accent: 220 15% 96%;
+  --accent-foreground: 220 40% 10%;
+  --border: 220 15% 88%;
+  --border-opacity: 1;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.03);
+  --header-bg: 220 15% 98%;
+  --surface-1: 220 15% 97%;
+  --surface-2: 220 15% 95%;
+}
+
+/* Retro Slate - Warm cream with chunky shadows */
+.theme-retro {
+  --background: 42 35% 96%;
+  --foreground: 35 45% 12%;
+  --card: 42 40% 98%;
+  --card-foreground: 35 45% 12%;
+  --popover: 42 35% 99%;
+  --popover-foreground: 35 45% 12%;
+  --muted: 38 25% 91%;
+  --muted-foreground: 35 18% 42%;
+  --primary: 25 95% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 38 25% 93%;
+  --secondary-foreground: 35 45% 12%;
+  --accent: 38 25% 93%;
+  --accent-foreground: 35 45% 12%;
+  --border: 35 18% 78%;
+  --border-opacity: 1;
+  --radius: 0.625rem;
+  --shadow: 3px 3px 0px 0px rgba(0, 0, 0, 0.06);
+  --header-bg: 42 35% 97%;
+  --surface-1: 42 32% 95%;
+  --surface-2: 42 28% 93%;
+}
+
+/* ============================================
+   SPECIALTY ACCENT THEMES
+   Additional distinctive color themes
+   ============================================ */
+
+/* Deep Ocean - Navy with teal accents */
+.theme-ocean {
+  --background: 215 40% 5%;
+  --foreground: 200 15% 93%;
+  --card: 215 38% 8%;
+  --card-foreground: 200 15% 93%;
+  --popover: 215 36% 10%;
+  --popover-foreground: 200 15% 93%;
+  --muted: 215 32% 13%;
+  --muted-foreground: 205 12% 55%;
+  --primary: 185 95% 42%;
+  --primary-foreground: 185 100% 5%;
+  --secondary: 215 32% 15%;
+  --secondary-foreground: 200 15% 93%;
+  --accent: 215 32% 15%;
+  --accent-foreground: 200 15% 93%;
+  --border: 215 25% 20%;
+  --border-opacity: 0.5;
+  --shadow: 0 2px 10px -3px rgb(0 0 0 / 0.5);
+  --glow: 0 0 20px -6px rgba(56, 189, 248, 0.1);
+  --header-bg: 215 40% 6%;
+  --surface-1: 215 38% 9%;
+  --surface-2: 215 36% 11%;
+}
+
+/* Solar Flare - Dark with warm orange glow */
+.theme-solar {
+  --background: 28 22% 5%;
+  --foreground: 35 12% 92%;
+  --card: 28 20% 8%;
+  --card-foreground: 35 12% 92%;
+  --popover: 28 18% 10%;
+  --popover-foreground: 35 12% 92%;
+  --muted: 28 16% 13%;
+  --muted-foreground: 30 10% 55%;
+  --primary: 35 100% 52%;
+  --primary-foreground: 35 100% 8%;
+  --secondary: 28 16% 15%;
+  --secondary-foreground: 35 12% 92%;
+  --accent: 22 95% 52%;
+  --accent-foreground: 22 100% 8%;
+  --border: 28 12% 20%;
+  --border-opacity: 0.5;
+  --shadow: 0 4px 20px -5px rgba(251, 146, 60, 0.12);
+  --glow: 0 0 25px -8px rgba(251, 146, 60, 0.15);
+  --header-bg: 28 22% 6%;
+  --surface-1: 28 20% 9%;
+  --surface-2: 28 18% 11%;
+}
+
+/* Crimson Peak - Deep red professional */
+.theme-crimson {
+  --background: 0 22% 5%;
+  --foreground: 0 8% 93%;
+  --card: 0 20% 8%;
+  --card-foreground: 0 8% 93%;
+  --popover: 0 18% 10%;
+  --popover-foreground: 0 8% 93%;
+  --muted: 0 16% 13%;
+  --muted-foreground: 0 6% 55%;
+  --primary: 0 85% 52%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 16% 15%;
+  --secondary-foreground: 0 8% 93%;
+  --accent: 0 16% 15%;
+  --accent-foreground: 0 8% 93%;
+  --border: 0 12% 20%;
+  --border-opacity: 0.5;
+  --shadow: 0 2px 10px -3px rgb(0 0 0 / 0.5);
+  --glow: 0 0 20px -6px rgba(248, 113, 113, 0.1);
+  --header-bg: 0 22% 6%;
+  --surface-1: 0 20% 9%;
+  --surface-2: 0 18% 11%;
+}
+
+/* Blood Moon - Crimson with dramatic glow */
+.theme-blood {
+  --background: 0 35% 4%;
+  --foreground: 0 12% 93%;
+  --card: 0 32% 7%;
+  --card-foreground: 0 12% 93%;
+  --popover: 0 30% 9%;
+  --popover-foreground: 0 12% 93%;
+  --muted: 0 28% 11%;
+  --muted-foreground: 0 10% 52%;
+  --primary: 0 90% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 28% 13%;
+  --secondary-foreground: 0 12% 93%;
+  --accent: 0 28% 13%;
+  --accent-foreground: 0 12% 93%;
+  --border: 0 22% 18%;
+  --border-opacity: 0.5;
+  --shadow: 0 4px 20px -5px rgba(239, 68, 68, 0.15);
+  --glow: 0 0 30px -8px rgba(239, 68, 68, 0.18);
+  --header-bg: 0 35% 5%;
+  --surface-1: 0 32% 8%;
+  --surface-2: 0 30% 10%;
+}
+
+/* Golden Hour - Luxurious dark with gold accents */
+.theme-gold {
+  --background: 42 18% 5%;
+  --foreground: 45 10% 92%;
+  --card: 42 16% 8%;
+  --card-foreground: 45 10% 92%;
+  --popover: 42 14% 10%;
+  --popover-foreground: 45 10% 92%;
+  --muted: 42 12% 13%;
+  --muted-foreground: 42 8% 55%;
+  --primary: 45 95% 48%;
+  --primary-foreground: 45 100% 8%;
+  --secondary: 42 12% 15%;
+  --secondary-foreground: 45 10% 92%;
+  --accent: 42 12% 15%;
+  --accent-foreground: 45 10% 92%;
+  --border: 42 10% 20%;
+  --border-opacity: 0.5;
+  --shadow: 0 2px 10px -3px rgb(0 0 0 / 0.5);
+  --glow: 0 0 20px -6px rgba(250, 204, 21, 0.08);
+  --header-bg: 42 18% 6%;
+  --surface-1: 42 16% 9%;
+  --surface-2: 42 14% 11%;
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth theme transitions */
+*, *::before, *::after {
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Utility class for glow effects */
+.glow {
+  box-shadow: var(--glow, none);
+}

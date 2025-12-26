@@ -150,9 +150,9 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
     // Note: TargetedMutationHandle is Copy, so it can be used directly in closures
 
     view! {
-        <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] flex flex-col overflow-hidden">
-            <div class="flex items-center justify-between p-2 border-b border-[#ffffff08] shrink-0">
-                <h3 class="text-[10px] font-semibold text-[#00d9ff] uppercase tracking-wide flex items-center">
+        <div class="bg-card backdrop-blur-theme rounded-theme border border-border shadow-theme flex flex-col overflow-hidden transition-all duration-300">
+            <div class="flex items-center justify-between p-2 border-b border-border/8 shrink-0">
+                <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center">
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
@@ -161,13 +161,13 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                 // === Server-Driven Action Buttons ===
                 // Button visibility is determined entirely by server's can_* flags.
                 <div class="flex items-center gap-1">
-                    <span class="text-[8px] text-[#666666] mr-1">
+                    <span class="text-[8px] text-muted-foreground mr-1">
                         {move || format!("{} lines", lines().len())}
                     </span>
                     // Load button - server tells us when loading is available
                     <Show when=can_load>
                         <button
-                            class="bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] text-[8px] px-2 py-0.5 rounded hover:bg-[#00d9ff30]"
+                            class="bg-primary/20 border border-primary/40 text-primary text-[8px] px-2 py-0.5 rounded hover:bg-primary/30"
                             on:click=move |_| set_show_load_modal.set(true)
                         >
                             "📂 Load"
@@ -176,7 +176,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Run button - server tells us when starting is available
                     <Show when=move || can_start()>
                         <button
-                            class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
+                            class="bg-success/20 border border-success/40 text-success text-[8px] px-2 py-0.5 rounded hover:bg-success/30"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     start.send(entity_id, StartProgram);
@@ -189,7 +189,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Pause button - server tells us when pausing is available
                     <Show when=move || can_pause()>
                         <button
-                            class="bg-[#f59e0b20] border border-[#f59e0b40] text-[#f59e0b] text-[8px] px-2 py-0.5 rounded hover:bg-[#f59e0b30]"
+                            class="bg-warning/20 border border-warning/40 text-warning text-[8px] px-2 py-0.5 rounded hover:bg-warning/30"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     pause.send(entity_id, PauseProgram);
@@ -202,7 +202,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Resume button - server tells us when resuming is available
                     <Show when=move || can_resume()>
                         <button
-                            class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30]"
+                            class="bg-success/20 border border-success/40 text-success text-[8px] px-2 py-0.5 rounded hover:bg-success/30"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     resume.send(entity_id, ResumeProgram);
@@ -215,7 +215,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Stop button - server tells us when stopping is available
                     <Show when=move || can_stop()>
                         <button
-                            class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430]"
+                            class="bg-destructive/20 border border-destructive/40 text-destructive text-[8px] px-2 py-0.5 rounded hover:bg-destructive/30"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     stop.send(entity_id, StopProgram);
@@ -228,7 +228,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Unload button - server tells us when unloading is available
                     <Show when=move || can_unload()>
                         <button
-                            class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430] flex items-center gap-1"
+                            class="bg-destructive/20 border border-destructive/40 text-destructive text-[8px] px-2 py-0.5 rounded hover:bg-destructive/30 flex items-center gap-1"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     unload.send(entity_id, UnloadProgram);
@@ -280,14 +280,14 @@ fn ProgramTable(
             <Show
                 when=move || !lines.get().is_empty()
                 fallback=|| view! {
-                    <div class="text-[#555555] text-[9px] text-center py-4 px-2">
+                    <div class="text-muted-foreground text-[9px] text-center py-4 px-2">
                         "No program loaded. Click 'Load' to select a program."
                     </div>
                 }
             >
                 <table class="w-full text-[9px]">
-                    <thead class="sticky top-0 bg-[#0d0d0d]">
-                        <tr class="text-[#666666] border-b border-[#ffffff08]">
+                    <thead class="sticky top-0 bg-background">
+                        <tr class="text-muted-foreground border-b border-border/8">
                             <th class="text-left px-1.5 py-1 w-8">"#"</th>
                             <th class="text-right px-1.5 py-1">"X"</th>
                             <th class="text-right px-1.5 py-1">"Y"</th>
@@ -309,16 +309,16 @@ fn ProgramTable(
                                 let term = line.term_type.clone();
                                 view! {
                                     <tr class=move || format!(
-                                        "border-b border-[#ffffff05] {}",
-                                        if executing.get() == line_num as i32 { "bg-[#00d9ff20] text-[#00d9ff]" } else { "text-[#cccccc]" }
+                                        "border-b border-border/4 {}",
+                                        if executing.get() == line_num as i32 { "bg-primary/20 text-primary" } else { "text-foreground" }
                                     )>
-                                        <td class="px-1.5 py-0.5 text-[#555555] font-mono">{line_num}</td>
+                                        <td class="px-1.5 py-0.5 text-muted-foreground font-mono">{line_num}</td>
                                         <td class="px-1.5 py-0.5 text-right font-mono tabular-nums">{format!("{:.2}", line.x)}</td>
                                         <td class="px-1.5 py-0.5 text-right font-mono tabular-nums">{format!("{:.2}", line.y)}</td>
                                         <td class="px-1.5 py-0.5 text-right font-mono tabular-nums">{format!("{:.2}", line.z)}</td>
-                                        <td class="px-1.5 py-0.5 text-right font-mono tabular-nums text-[#888888]">{format!("{:.1}", line.w)}</td>
-                                        <td class="px-1.5 py-0.5 text-right font-mono tabular-nums text-[#888888]">{format!("{:.1}", line.p)}</td>
-                                        <td class="px-1.5 py-0.5 text-right font-mono tabular-nums text-[#888888]">{format!("{:.1}", line.r)}</td>
+                                        <td class="px-1.5 py-0.5 text-right font-mono tabular-nums text-muted-foreground">{format!("{:.1}", line.w)}</td>
+                                        <td class="px-1.5 py-0.5 text-right font-mono tabular-nums text-muted-foreground">{format!("{:.1}", line.p)}</td>
+                                        <td class="px-1.5 py-0.5 text-right font-mono tabular-nums text-muted-foreground">{format!("{:.1}", line.r)}</td>
                                         <td class="px-1.5 py-0.5 text-right font-mono tabular-nums">{format!("{:.0}", line.speed)}</td>
                                         <td class="px-1.5 py-0.5 text-center">{term}</td>
                                     </tr>
@@ -345,20 +345,20 @@ fn ProgramProgressBar(
     };
 
     view! {
-        <div class="px-2 py-1 border-b border-[#ffffff08] bg-[#0d0d0d]">
+        <div class="px-2 py-1 border-b border-border/8 bg-background">
             <div class="flex items-center gap-2">
                 <span class=move || format!("text-[8px] font-medium uppercase {}",
-                    if is_paused.get() { "text-[#f59e0b]" } else { "text-[#22c55e]" }
+                    if is_paused.get() { "text-warning" } else { "text-success" }
                 )>
                     {move || if is_paused.get() { "paused" } else { "running" }}
                 </span>
-                <div class="flex-1 h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden">
+                <div class="flex-1 h-1.5 bg-popover rounded-full overflow-hidden">
                     <div
-                        class="h-full bg-gradient-to-r from-[#00d9ff] to-[#22c55e] transition-all duration-300"
+                        class="h-full bg-gradient-to-r from-primary to-success transition-all duration-300"
                         style=move || format!("width: {}%", progress_percent())
                     />
                 </div>
-                <span class="text-[8px] text-[#666666] font-mono tabular-nums min-w-[60px] text-right">
+                <span class="text-[8px] text-muted-foreground font-mono tabular-nums min-w-[60px] text-right">
                     {move || format!("{} / {} ({:.0}%)", current_line.get(), total_lines.get(), progress_percent())}
                 </span>
             </div>

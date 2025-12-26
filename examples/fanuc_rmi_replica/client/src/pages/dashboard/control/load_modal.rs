@@ -68,17 +68,17 @@ where
 
     view! {
         <div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-            <div class="bg-[#0d0d0d] border border-[#ffffff15] rounded-lg w-[500px] max-h-[80vh] flex flex-col">
+            <div class="bg-background border border-border/8 rounded-lg w-[500px] max-h-[80vh] flex flex-col">
                 // Header
-                <div class="flex items-center justify-between p-3 border-b border-[#ffffff08]">
+                <div class="flex items-center justify-between p-3 border-b border-border/8">
                     <h2 class="text-sm font-semibold text-white flex items-center gap-2">
-                        <svg class="w-4 h-4 text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"/>
                         </svg>
                         "Load Program"
                     </h2>
                     <button
-                        class="text-[#666666] hover:text-white"
+                        class="text-muted-foreground hover:text-white"
                         on:click=move |_| on_close_header()
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -90,12 +90,12 @@ where
                 // Content
                 <div class="flex-1 overflow-y-auto p-3">
                     <Show when=move || is_loading()>
-                        <div class="text-center py-8 text-[#666666] text-sm">
+                        <div class="text-center py-8 text-muted-foreground text-sm">
                             "Loading programs..."
                         </div>
                     </Show>
                     <Show when=move || !is_loading() && programs.get().is_empty()>
-                        <div class="text-center py-8 text-[#666666] text-sm">
+                        <div class="text-center py-8 text-muted-foreground text-sm">
                             "No programs available. Create a program in the Programs page."
                         </div>
                     </Show>
@@ -114,21 +114,21 @@ where
                                         class=move || format!(
                                             "w-full text-left p-2 rounded border transition-colors {}",
                                             if is_selected() {
-                                                "bg-[#00d9ff20] border-[#00d9ff] text-white"
+                                                "bg-primary/20 border-primary text-white"
                                             } else {
-                                                "bg-[#111111] border-[#ffffff08] text-[#cccccc] hover:bg-[#1a1a1a] hover:border-[#ffffff15]"
+                                                "bg-card border-border/8 text-foreground hover:bg-popover hover:border-border/8"
                                             }
                                         )
                                         on:click=move |_| set_selected_id.set(Some(id))
                                     >
                                         <div class="flex items-center justify-between">
                                             <span class="text-[11px] font-medium">{name.clone()}</span>
-                                            <span class="text-[9px] text-[#666666]">
+                                            <span class="text-[9px] text-muted-foreground">
                                                 {format!("{} lines", line_count)}
                                             </span>
                                         </div>
                                         <Show when=move || has_description>
-                                            <div class="text-[9px] text-[#888888] mt-0.5">
+                                            <div class="text-[9px] text-muted-foreground mt-0.5">
                                                 {description_text.clone()}
                                             </div>
                                         </Show>
@@ -140,9 +140,9 @@ where
                 </div>
 
                 // Footer
-                <div class="flex justify-end gap-2 p-3 border-t border-[#ffffff08]">
+                <div class="flex justify-end gap-2 p-3 border-t border-border/8">
                     <button
-                        class="bg-[#1a1a1a] border border-[#ffffff15] text-[#cccccc] text-[10px] px-4 py-1.5 rounded hover:bg-[#222222]"
+                        class="bg-popover border border-border/8 text-foreground text-[10px] px-4 py-1.5 rounded hover:bg-secondary"
                         on:click=move |_| on_close_cancel()
                     >
                         "Cancel"
@@ -151,9 +151,9 @@ where
                         class=move || format!(
                             "text-[10px] px-4 py-1.5 rounded transition-colors {}",
                             if selected_id.get().is_some() && !load.is_loading() {
-                                "bg-[#00d9ff] text-black hover:bg-[#00c4e6]"
+                                "bg-primary text-black hover:bg-primary"
                             } else {
-                                "bg-[#333333] text-[#666666] cursor-not-allowed"
+                                "bg-muted text-muted-foreground cursor-not-allowed"
                             }
                         )
                         disabled=move || selected_id.get().is_none() || load.is_loading()

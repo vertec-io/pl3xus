@@ -19,8 +19,8 @@ pub fn PositionDisplay() -> impl IntoView {
     let get_joints = move || joints.get();
 
     view! {
-        <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-2">
-            <h2 class="text-[10px] font-semibold text-[#00d9ff] mb-1.5 uppercase tracking-wide">"Position"</h2>
+        <div class="bg-background rounded border border-border/8 p-2">
+            <h2 class="text-[10px] font-semibold text-primary mb-1.5 uppercase tracking-wide">"Position"</h2>
             
             // Cartesian Position
             <div class="grid grid-cols-3 gap-1 mb-2">
@@ -33,7 +33,7 @@ pub fn PositionDisplay() -> impl IntoView {
             </div>
             
             // Joint Angles
-            <h2 class="text-[10px] font-semibold text-[#00d9ff] mb-1.5 uppercase tracking-wide">"Joint Angles"</h2>
+            <h2 class="text-[10px] font-semibold text-primary mb-1.5 uppercase tracking-wide">"Joint Angles"</h2>
             <div class="grid grid-cols-3 gap-1">
                 <PositionItem label="J1" value=move || get_joints().j1 />
                 <PositionItem label="J2" value=move || get_joints().j2 />
@@ -50,9 +50,9 @@ pub fn PositionDisplay() -> impl IntoView {
 fn PositionItem<F>(label: &'static str, value: F) -> impl IntoView 
 where F: Fn() -> f32 + Copy + Send + Sync + 'static {
     view! {
-        <div class="flex justify-between items-center bg-[#111111] rounded px-1.5 py-1">
-             <span class="text-[#888888] text-[10px] font-medium">{label}</span>
-             <span class="text-[11px] font-mono text-[#aaaaaa] tabular-nums">
+        <div class="flex justify-between items-center bg-card rounded px-1.5 py-1">
+             <span class="text-muted-foreground text-[10px] font-medium">{label}</span>
+             <span class="text-[11px] font-mono text-muted-foreground tabular-nums">
                 {move || format!("{:.2}", value())}
              </span>
         </div>

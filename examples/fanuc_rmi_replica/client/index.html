@@ -6,31 +6,117 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fanuc RMI Replica</title>
 
-    <!-- Using Tailwind CDN for immediate utility class support as seen in the source code -->
+    <!-- Using Tailwind CDN with custom config -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="assets/globals.css">
+
+    <script>
+        /**
+         * NOTE: Using Tailwind CDN for quick prototyping in this replica.
+         * In a production environment, you should use a standard PostCSS build pipeline.
+         *
+         * Theme System: Sophisticated theming with 22 themes across 4 categories:
+         * - Professional Dark: Industrial, Obsidian, Slate, Coffee, Indigo
+         * - Glass/Translucent: Arctic, Mist, Glass Dark, Deep Space
+         * - Vibrant Accent: Cyber, Rose, Amber, Teal, Neon, Crimson, Blood, Gold, Solar, Ocean, Emerald
+         * - Light: Industrial Light, Retro
+         */
+        tailwind.config = {
+            theme: {
+                extend: {
+                    borderColor: {
+                        DEFAULT: "hsl(var(--border) / var(--border-opacity))",
+                    },
+                    colors: {
+                        background: ({ opacityValue }) => opacityValue ? `hsl(var(--background) / ${opacityValue})` : "hsl(var(--background))",
+                        foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--foreground) / ${opacityValue})` : "hsl(var(--foreground))",
+                        card: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--card) / ${opacityValue})` : "hsl(var(--card))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--card-foreground) / ${opacityValue})` : "hsl(var(--card-foreground))",
+                        },
+                        popover: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--popover) / ${opacityValue})` : "hsl(var(--popover))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--popover-foreground) / ${opacityValue})` : "hsl(var(--popover-foreground))",
+                        },
+                        primary: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--primary) / ${opacityValue})` : "hsl(var(--primary))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--primary-foreground) / ${opacityValue})` : "hsl(var(--primary-foreground))",
+                        },
+                        secondary: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--secondary) / ${opacityValue})` : "hsl(var(--secondary))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--secondary-foreground) / ${opacityValue})` : "hsl(var(--secondary-foreground))",
+                        },
+                        muted: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--muted) / ${opacityValue})` : "hsl(var(--muted))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--muted-foreground) / ${opacityValue})` : "hsl(var(--muted-foreground))",
+                        },
+                        accent: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--accent) / ${opacityValue})` : "hsl(var(--accent))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--accent-foreground) / ${opacityValue})` : "hsl(var(--accent-foreground))",
+                        },
+                        destructive: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--destructive) / ${opacityValue})` : "hsl(var(--destructive))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--destructive-foreground) / ${opacityValue})` : "hsl(var(--destructive-foreground))",
+                        },
+                        success: ({ opacityValue }) => opacityValue ? `hsl(var(--success) / ${opacityValue})` : "hsl(var(--success))",
+                        warning: ({ opacityValue }) => opacityValue ? `hsl(var(--warning) / ${opacityValue})` : "hsl(var(--warning))",
+                        border: ({ opacityValue }) => opacityValue ? `hsl(var(--border) / ${opacityValue})` : "hsl(var(--border) / var(--border-opacity))",
+                        input: ({ opacityValue }) => opacityValue ? `hsl(var(--input) / ${opacityValue})` : "hsl(var(--input))",
+                        ring: ({ opacityValue }) => opacityValue ? `hsl(var(--ring) / ${opacityValue})` : "hsl(var(--ring))",
+                        // Extended surface colors for layered UI
+                        surface: {
+                            1: ({ opacityValue }) => opacityValue ? `hsl(var(--surface-1) / ${opacityValue})` : "hsl(var(--surface-1, var(--card)))",
+                            2: ({ opacityValue }) => opacityValue ? `hsl(var(--surface-2) / ${opacityValue})` : "hsl(var(--surface-2, var(--muted)))",
+                        },
+                        header: ({ opacityValue }) => opacityValue ? `hsl(var(--header-bg) / ${opacityValue})` : "hsl(var(--header-bg, var(--card)))",
+                    },
+                    borderRadius: {
+                        theme: "var(--radius)",
+                        DEFAULT: "var(--radius)",
+                        lg: "var(--radius)",
+                        md: "calc(var(--radius) - 2px)",
+                        sm: "calc(var(--radius) - 4px)",
+                    },
+                    boxShadow: {
+                        theme: "var(--shadow)",
+                        glow: "var(--glow, none)",
+                    },
+                    backdropBlur: {
+                        theme: "var(--blur)",
+                    }
+                }
+            }
+        }
+    </script>
 
     <!-- Trunk hook to build the Rust WASM -->
     <link data-trunk rel="rust" data-wasm-opt="z" />
     <link data-trunk rel="copy-dir" href="assets" />
 
     <style>
-        /* Custom scrollbar to match the industrial look */
+        /* Custom scrollbar - theme-aware using CSS variables */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
 
         ::-webkit-scrollbar-track {
-            background: #1a1a1a;
+            background: hsl(var(--muted));
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #374151;
+            background: hsl(var(--border) / 0.5);
             border-radius: 4px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: #4b5563;
+            background: hsl(var(--border) / 0.7);
+        }
+
+        /* Selection styling */
+        ::selection {
+            background: hsl(var(--primary) / 0.3);
+            color: hsl(var(--foreground));
         }
     </style>
 </head>

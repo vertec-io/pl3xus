@@ -81,19 +81,19 @@ pub fn JogControls() -> impl IntoView {
     };
 
     view! {
-        <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-2">
+        <div class="bg-background rounded border border-border/8 p-2">
             <div class="flex items-center justify-between mb-2">
-                <h2 class="text-[10px] font-semibold text-[#00d9ff] uppercase tracking-wide">"Jog Control"</h2>
+                <h2 class="text-[10px] font-semibold text-primary uppercase tracking-wide">"Jog Control"</h2>
                 <Show when=move || !has_control()>
-                    <span class="text-[8px] text-[#ff4444] bg-[#ff444420] px-1.5 py-0.5 rounded">"No Control"</span>
+                    <span class="text-[8px] text-destructive bg-destructive/20 px-1.5 py-0.5 rounded">"No Control"</span>
                 </Show>
             </div>
 
             // Cartesian Settings (X/Y/Z) - Editable
-            <div class="text-[8px] text-[#666666] mb-1">"Cartesian (X/Y/Z)"</div>
+            <div class="text-[8px] text-muted-foreground mb-1">"Cartesian (X/Y/Z)"</div>
             <div class="grid grid-cols-2 gap-2 mb-2">
-                <div class="bg-[#111111] rounded p-1.5">
-                    <div class="text-[8px] text-[#666666] mb-1">"Speed (mm/s)"</div>
+                <div class="bg-card rounded p-1.5">
+                    <div class="text-[8px] text-muted-foreground mb-1">"Speed (mm/s)"</div>
                     <JogSettingInput
                         server_value=Signal::derive(move || jog_settings.get().cartesian_jog_speed)
                         on_submit=move |val| {
@@ -104,8 +104,8 @@ pub fn JogControls() -> impl IntoView {
                         disabled=Signal::derive(move || !has_control())
                     />
                 </div>
-                <div class="bg-[#111111] rounded p-1.5">
-                    <div class="text-[8px] text-[#666666] mb-1">"Step (mm)"</div>
+                <div class="bg-card rounded p-1.5">
+                    <div class="text-[8px] text-muted-foreground mb-1">"Step (mm)"</div>
                     <JogSettingInput
                         server_value=Signal::derive(move || jog_settings.get().cartesian_jog_step)
                         on_submit=move |val| {
@@ -132,10 +132,10 @@ pub fn JogControls() -> impl IntoView {
             </div>
 
             // Rotation Settings (W/P/R) - Editable
-            <div class="text-[8px] text-[#666666] mb-1">"Rotation (W/P/R)"</div>
+            <div class="text-[8px] text-muted-foreground mb-1">"Rotation (W/P/R)"</div>
             <div class="grid grid-cols-2 gap-2 mb-2">
-                <div class="bg-[#111111] rounded p-1.5">
-                    <div class="text-[8px] text-[#666666] mb-1">"Speed (°/s)"</div>
+                <div class="bg-card rounded p-1.5">
+                    <div class="text-[8px] text-muted-foreground mb-1">"Speed (°/s)"</div>
                     <JogSettingInput
                         server_value=Signal::derive(move || jog_settings.get().rotation_jog_speed)
                         on_submit=move |val| {
@@ -146,8 +146,8 @@ pub fn JogControls() -> impl IntoView {
                         disabled=Signal::derive(move || !has_control())
                     />
                 </div>
-                <div class="bg-[#111111] rounded p-1.5">
-                    <div class="text-[8px] text-[#666666] mb-1">"Step (°)"</div>
+                <div class="bg-card rounded p-1.5">
+                    <div class="text-[8px] text-muted-foreground mb-1">"Step (°)"</div>
                     <JogSettingInput
                         server_value=Signal::derive(move || jog_settings.get().rotation_jog_step)
                         on_submit=move |val| {
@@ -243,9 +243,9 @@ where
 
     let input_class = move || {
         if disabled.get() {
-            "w-full bg-[#0a0a0a] rounded px-1.5 py-1 text-[#555555] text-[11px] text-right font-mono border border-[#ffffff08] cursor-not-allowed"
+            "w-full bg-background rounded px-1.5 py-1 text-muted-foreground text-[11px] text-right font-mono border border-border/8 cursor-not-allowed"
         } else {
-            "w-full bg-[#0a0a0a] rounded px-1.5 py-1 text-white text-[11px] text-right font-mono border border-[#ffffff08] focus:border-[#00d9ff] focus:outline-none"
+            "w-full bg-background rounded px-1.5 py-1 text-white text-[11px] text-right font-mono border border-border/8 focus:border-primary focus:outline-none"
         }
     };
 
@@ -274,9 +274,9 @@ where F: Fn(JogAxis, JogDirection) + Clone + 'static {
     view! {
         <button
             class=move || if disabled.get() {
-                "bg-[#111111] border border-[#ffffff08] text-[#444444] font-semibold py-1.5 rounded text-center text-[10px] cursor-not-allowed opacity-50"
+                "bg-card border border-border/8 text-muted font-semibold py-1.5 rounded text-center text-[10px] cursor-not-allowed opacity-50"
             } else {
-                "bg-[#111111] hover:bg-[#00d9ff] border border-[#ffffff08] hover:border-[#00d9ff] text-white hover:text-black font-semibold py-1.5 rounded transition-colors text-center text-[10px]"
+                "bg-card hover:bg-primary border border-border/8 hover:border-primary text-white hover:text-black font-semibold py-1.5 rounded transition-colors text-center text-[10px]"
             }
             disabled=move || disabled.get()
             on:click=do_jog

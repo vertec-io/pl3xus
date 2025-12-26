@@ -1,0 +1,39 @@
+/* Ocean Theme (Deep Blues and Cyans) */
+:root {
+    --background: 222 47% 11%;
+    /* Deep Navy */
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 15%;
+    /* Slightly lighter navy */
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 13%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 199 89% 48%;
+    /* Ocean Blue */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 217 32% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 32% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 199 89% 25%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 160 84% 39%;
+    --warning: 48 96% 53%;
+
+    --border: 217 32% 100% / 0.1;
+    --input: 217 32% 100% / 0.1;
+    --ring: 199 89% 48%;
+
+    --radius: 0.5rem;
+    /* Softer corners for the ocean theme */
+}

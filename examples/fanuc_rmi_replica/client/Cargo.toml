@@ -16,6 +16,7 @@ console_log = "1.0"
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 wasm-bindgen = "0.2"
+serde_json = "1.0"
 
 # Pl3xus client crate
 pl3xus_client = { path = "../../../crates/pl3xus_client", features = ["stores"] }

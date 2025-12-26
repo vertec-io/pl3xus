@@ -12,6 +12,7 @@ mod app;
 mod components;
 mod layout;
 mod pages;
+mod theme;
 
 fn main() {
     console_error_panic_hook::set_once();

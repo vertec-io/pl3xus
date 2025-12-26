@@ -18,6 +18,7 @@ use fanuc_replica_types::{ActiveSystem, ActiveRobot};
 use crate::pages::MainWorkspace;
 use crate::pages::dashboard::context::WorkspaceContext;
 use crate::pages::dashboard::SystemEntityContext;
+use crate::components::ThemeModal;
 
 /// Desktop layout context - provides shared state across layout components.
 #[derive(Clone, Copy)]
@@ -35,6 +36,8 @@ pub struct LayoutContext {
     pub show_program_browser: RwSignal<bool>,
     /// Currently selected/open program ID - persists across navigation.
     pub selected_program_id: RwSignal<Option<i64>>,
+    /// Whether the theme selection modal is visible.
+    pub show_themes: RwSignal<bool>,
 }
 
 impl LayoutContext {
@@ -46,6 +49,7 @@ impl LayoutContext {
             io_popped: RwSignal::new(false),
             show_program_browser: RwSignal::new(false),
             selected_program_id: RwSignal::new(None),
+            show_themes: RwSignal::new(false),
         }
     }
 }
@@ -89,7 +93,7 @@ pub fn DesktopLayout() -> impl IntoView {
     };
 
     view! {
-        <div class="h-screen w-screen flex flex-col bg-[#0a0a0a] overflow-hidden">
+        <div class="h-screen w-screen flex flex-col bg-background overflow-hidden">
             // Header
             <TopBar/>
 
@@ -106,6 +110,8 @@ pub fn DesktopLayout() -> impl IntoView {
                     <RightPanel/>
                 </Show>
             </div>
+
+            <ThemeModal show=layout_ctx.show_themes />
         </div>
 
         // NOTE: ExecutionStateHandler has been REMOVED as part of the architecture refactor.

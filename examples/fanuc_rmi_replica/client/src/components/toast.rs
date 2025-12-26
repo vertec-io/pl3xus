@@ -141,10 +141,10 @@ fn ToastContainer(ctx: ToastContext) -> impl IntoView {
 #[component]
 fn ToastItem(toast: Toast, on_dismiss: impl Fn() + 'static) -> impl IntoView {
     let (bg_class, icon) = match toast.toast_type {
-        ToastType::Success => ("bg-[#22c55e20] border-[#22c55e40] text-[#22c55e]", "✓"),
-        ToastType::Error => ("bg-[#ff444420] border-[#ff444440] text-[#ff4444]", "✕"),
-        ToastType::Warning => ("bg-[#f59e0b20] border-[#f59e0b40] text-[#f59e0b]", "⚠"),
-        ToastType::Info => ("bg-[#00d9ff20] border-[#00d9ff40] text-[#00d9ff]", "ℹ"),
+        ToastType::Success => ("bg-success/20 border-success/40 text-success", "✓"),
+        ToastType::Error => ("bg-destructive/20 border-destructive/40 text-destructive", "✕"),
+        ToastType::Warning => ("bg-warning/20 border-warning/40 text-warning", "⚠"),
+        ToastType::Info => ("bg-primary/20 border-primary/40 text-primary", "ℹ"),
     };
 
     view! {
@@ -152,7 +152,7 @@ fn ToastItem(toast: Toast, on_dismiss: impl Fn() + 'static) -> impl IntoView {
             <span class="text-sm">{icon}</span>
             <span class="text-[11px] flex-1">{toast.message}</span>
             <button
-                class="text-[#666666] hover:text-white text-xs"
+                class="text-muted-foreground hover:text-white text-xs"
                 on:click=move |_| on_dismiss()
             >
                 "×"

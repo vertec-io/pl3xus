@@ -104,15 +104,15 @@ pub fn InfoTab() -> impl IntoView {
                 }
             }>
                 <div class="h-full flex items-center justify-center">
-                    <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-8 max-w-md text-center">
-                        <svg class="w-16 h-16 mx-auto mb-4 text-[#666666]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="bg-background rounded border border-border/8 p-8 max-w-md text-center">
+                        <svg class="w-16 h-16 mx-auto mb-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
                         </svg>
                         <h2 class="text-lg font-semibold text-white mb-2">"No Robot Connected"</h2>
-                        <p class="text-sm text-[#888888] mb-4">
+                        <p class="text-sm text-muted-foreground mb-4">
                             "Connect to a robot to view and configure frame/tool settings, jog defaults, and arm configuration."
                         </p>
-                        <p class="text-xs text-[#666666]">
+                        <p class="text-xs text-muted-foreground">
                             "Use the Settings panel to create a robot connection, then connect from the Dashboard."
                         </p>
                     </div>

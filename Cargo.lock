@@ -2883,6 +2883,7 @@ dependencies = [
  "pl3xus_common",
  "reactive_stores 0.2.5",
  "serde",
+ "serde_json",
  "wasm-bindgen",
 ]
 

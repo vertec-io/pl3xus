@@ -28,11 +28,11 @@ pub fn NumberInput(
             type="text"
             inputmode="decimal"
             class=move || format!(
-                "w-full bg-[#0a0a0a] rounded px-2 py-1 text-[10px] text-white {} {}",
+                "w-full bg-background rounded px-2 py-1 text-[10px] text-white {} {}",
                 if is_valid() {
-                    "border border-[#ffffff15]"
+                    "border border-border/8"
                 } else {
-                    "border-2 border-[#ff4444]"
+                    "border-2 border-destructive"
                 },
                 if disabled.get() { "opacity-50 cursor-not-allowed" } else { "" }
             )

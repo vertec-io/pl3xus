@@ -8,6 +8,7 @@ use leptos_router::hooks::use_navigate;
 use pl3xus_client::{use_entity_component, use_sync_context, use_connection, use_query_keyed, use_message, use_request, ControlRequest, ControlResponse, EntityControl, ConnectionReadyState};
 use fanuc_replica_plugins::*;
 use crate::pages::dashboard::use_system_entity;
+use crate::components::ThemeModal;
 
 /// Top bar with connection status, robot info, and settings.
 #[component]
@@ -113,12 +114,40 @@ pub fn TopBar() -> impl IntoView {
                     <ControlButton/>
                 </Show>
 
+                // Theme button - always visible
+                <ThemeButton/>
+
                 // Settings button - shows quick settings popup (only show when WebSocket connected)
                 <Show when=move || ws_connected.get()>
                     <QuickSettingsButton/>
                 </Show>
             </div>
         </header>
+    }
+}
+
+/// Theme button with dropdown for selecting themes
+#[component]
+fn ThemeButton() -> impl IntoView {
+    let show_modal = RwSignal::new(false);
+
+    view! {
+        <div class="relative">
+            <button
+                class="p-1.5 rounded hover:bg-border/10 transition-colors"
+                title="Change theme"
+                on:click=move |_| show_modal.update(|v| *v = !*v)
+            >
+                // Palette icon
+                <svg class="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+                </svg>
+            </button>
+
+            <Show when=move || show_modal.get()>
+                <ThemeModal show=show_modal/>
+            </Show>
+        </div>
     }
 }
 

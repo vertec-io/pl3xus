@@ -21,17 +21,17 @@ pub fn PositionDisplay() -> impl IntoView {
     view! {
         <div class="bg-background rounded border border-border/8 p-2">
             <h2 class="text-[10px] font-semibold text-primary mb-1.5 uppercase tracking-wide">"Position"</h2>
-            
+
             // Cartesian Position
             <div class="grid grid-cols-3 gap-1 mb-2">
-                <PositionItem label="X" value=move || get_pos().x as f32 />
-                <PositionItem label="Y" value=move || get_pos().y as f32 />
-                <PositionItem label="Z" value=move || get_pos().z as f32 />
-                <PositionItem label="W" value=move || get_pos().w as f32 />
-                <PositionItem label="P" value=move || get_pos().p as f32 />
-                <PositionItem label="R" value=move || get_pos().r as f32 />
+                <PositionItem label="X" value=move || get_pos().x />
+                <PositionItem label="Y" value=move || get_pos().y />
+                <PositionItem label="Z" value=move || get_pos().z />
+                <PositionItem label="W" value=move || get_pos().w />
+                <PositionItem label="P" value=move || get_pos().p />
+                <PositionItem label="R" value=move || get_pos().r />
             </div>
-            
+
             // Joint Angles
             <h2 class="text-[10px] font-semibold text-primary mb-1.5 uppercase tracking-wide">"Joint Angles"</h2>
             <div class="grid grid-cols-3 gap-1">
@@ -46,9 +46,13 @@ pub fn PositionDisplay() -> impl IntoView {
     }
 }
 
+/// Generic display item component for numeric values
 #[component]
-fn PositionItem<F>(label: &'static str, value: F) -> impl IntoView 
-where F: Fn() -> f32 + Copy + Send + Sync + 'static {
+fn PositionItem<F, T>(label: &'static str, value: F) -> impl IntoView
+where
+    F: Fn() -> T + Copy + Send + Sync + 'static,
+    T: std::fmt::Display + Copy + 'static,
+{
     view! {
         <div class="flex justify-between items-center bg-card rounded px-1.5 py-1">
              <span class="text-muted-foreground text-[10px] font-medium">{label}</span>

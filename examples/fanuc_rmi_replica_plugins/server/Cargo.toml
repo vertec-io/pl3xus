@@ -8,3 +8,6 @@ publish = false
 # Import plugins with full server features
 fanuc_replica_plugins = { path = "../plugins", features = ["ecs", "server"] }
 
+# Re-export fanuc_rmi with full features for the server binary
+fanuc_rmi = { workspace = true, features = ["driver", "logging", "DTO"] }
+

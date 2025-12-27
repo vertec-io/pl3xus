@@ -22,10 +22,7 @@ use bevy::prelude::*;
 use reactive_stores::Store;
 
 // Re-export FANUC DTO types for easy access
-// Use fanuc_rmi_dto for client, fanuc_rmi for server (with driver features)
-#[cfg(not(feature = "server"))]
-pub use fanuc_rmi_dto::dto;
-#[cfg(feature = "server")]
+// All features use the same fanuc_rmi crate with different feature flags
 pub use fanuc_rmi::dto;
 
 // Re-export RequestMessage and ErrorResponse traits for implementing request types

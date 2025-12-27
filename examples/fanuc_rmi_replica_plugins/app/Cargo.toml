@@ -9,27 +9,27 @@ default = []
 devtools = ["pl3xus_client/devtools"]
 
 [dependencies]
-leptos = { version = "0.8", features = ["csr"] }
-leptos_router = { version = "0.8" }
+leptos = { workspace = true, features = ["csr"] }
+leptos_router.workspace = true
 console_error_panic_hook = "0.1"
 console_log = "1.0"
 log = "0.4"
-serde = { version = "1.0", features = ["derive"] }
+serde.workspace = true
 wasm-bindgen = "0.2"
 
 # Pl3xus client crate
-pl3xus_client = { path = "../../../crates/pl3xus_client", features = ["stores"] }
-pl3xus_common = { path = "../../../crates/pl3xus_common" }
+pl3xus_client = { workspace = true, features = ["stores"] }
+pl3xus_common.workspace = true
 bincode = "1.3"
 
 # Plugins with stores feature only (no ecs/server features)
 fanuc_replica_plugins = { path = "../plugins", default-features = false, features = ["stores"] }
 
-# Fanuc RMI types (DTO only, no driver)
-fanuc_rmi = { path = "/home/apino/dev/Fanuc_RMI_API/fanuc_rmi", default-features = false, features = ["DTO"] }
+# Fanuc RMI types (DTO only, no driver) - uses same workspace dep as plugins
+fanuc_rmi = { workspace = true, default-features = false, features = ["DTO"] }
 
 # Reactive stores for fine-grained field access
-reactive_stores = "0.2"
+reactive_stores.workspace = true
 js-sys = "0.3.83"
 leptos-use = "0.16"
 serde_json = "1.0.147"

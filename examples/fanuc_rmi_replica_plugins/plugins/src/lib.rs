@@ -36,10 +36,10 @@ pub use core::{CorePlugin, DatabaseResource, init_database};
 // Re-export robot types (all of them)
 pub use robot::*;
 
-// Re-export FANUC DTO types (fanuc_rmi_dto is the DTO-only version of fanuc_rmi)
-pub use fanuc_rmi_dto as fanuc_rmi_types;
-pub use fanuc_rmi_dto::dto;
-pub use fanuc_rmi_dto::{SpeedType, TermType};
+// Re-export FANUC DTO types (same crate for all features, different feature flags)
+pub use fanuc_rmi as fanuc_rmi_types;
+pub use fanuc_rmi::dto;
+pub use fanuc_rmi::{SpeedType, TermType};
 
 // Re-export pl3xus common types (always available via ecs or stores)
 #[cfg(any(feature = "ecs", feature = "stores"))]

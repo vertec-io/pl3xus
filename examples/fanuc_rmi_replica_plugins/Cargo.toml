@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+    "app",
+    "plugins",
+    "server",
+]
+
+[workspace.dependencies]
+# Shared fanuc_rmi dependency - all workspace members use the same version
+# This prevents type mismatches between different versions
+# IMPORTANT: default-features = false to avoid pulling tokio into WASM builds
+fanuc_rmi = { path = "/home/apino/dev/Fanuc_RMI_API/fanuc_rmi", default-features = false }
+
+# Pl3xus dependencies - adjust paths when copying this template
+pl3xus = { path = "../../crates/pl3xus", features = ["debug_messages"] }
+pl3xus_client = { path = "../../crates/pl3xus_client" }
+pl3xus_common = { path = "../../crates/pl3xus_common" }
+pl3xus_sync = { path = "../../crates/pl3xus_sync" }
+pl3xus_macros = { path = "../../crates/pl3xus_macros" }
+pl3xus_websockets = { path = "../../crates/pl3xus_websockets" }
+
+# Common dependencies
+bevy = { version = "0.17", default-features = false }
+bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_tasks" }
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.28", features = ["full"] }
+
+# Leptos dependencies (for WASM app)
+leptos = { version = "0.8" }
+leptos_router = { version = "0.8" }
+reactive_stores = { version = "0.2" }
+

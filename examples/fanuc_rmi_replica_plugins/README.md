@@ -30,13 +30,15 @@ plugins/src/
 
 ## Quick Start
 
+This is a **standalone workspace** that can be copied and used independently.
+
 ### 1. Start the FANUC Simulator
 
 The simulator emulates a FANUC robot controller. Open a terminal:
 
 ```bash
 # Navigate to the Fanuc_RMI_API repository
-cd /home/apino/dev/Fanuc_RMI_API
+cd path/to/Fanuc_RMI_API
 
 # Run in realtime mode (recommended - simulates actual robot timing)
 cargo run -p sim -- --realtime
@@ -56,11 +58,9 @@ You should see:
 
 ### 2. Start the Server
 
-In a new terminal:
+In a new terminal, from this workspace root:
 
 ```bash
-cd /home/apino/dev/pl3xus
-
 # Run the server
 cargo run -p fanuc_replica_plugins_server
 ```
@@ -75,10 +75,10 @@ INFO fanuc_replica_plugins::core::plugin: ✅ FANUC Replica Server listening on 
 
 ### 3. Start the Client App
 
-In a new terminal:
+In a new terminal, from this workspace root:
 
 ```bash
-cd /home/apino/dev/pl3xus/examples/fanuc_rmi_replica_plugins/app
+cd app
 
 # Build and serve with trunk
 trunk serve --port 8084 --open

@@ -22,11 +22,10 @@ members = [
     "examples/shared/fanuc_replica_types",
     "examples/fanuc_rmi_replica/server",
     "examples/fanuc_rmi_replica/client",
-    # Plugin-based structure example
-    "examples/fanuc_rmi_replica_plugins/plugins",
-    "examples/fanuc_rmi_replica_plugins/server",
-    "examples/fanuc_rmi_replica_plugins/app",
 ]
+
+# Plugin-based structure example is a standalone workspace
+exclude = ["examples/fanuc_rmi_replica_plugins"]
 
 [workspace.package]
 rust-version = "1.88.0"
@@ -48,6 +47,7 @@ pl3xus_client = { path = "crates/pl3xus_client" }
 pl3xus_sync = { path = "crates/pl3xus_sync", default-features = false }
 pl3xus_websockets = { path = "crates/pl3xus_websockets" }
 pl3xus_common = { path = "crates/pl3xus_common" }
+pl3xus_macros = { path = "crates/pl3xus_macros" }
 
 # Example shared types
 basic_types = { path = "examples/shared/basic_types" }
@@ -57,13 +57,19 @@ fanuc_real_types = { path = "examples/shared/fanuc_real_types" }
 control_demo_types = { path = "examples/shared/control_demo_types" }
 fanuc_replica_types = { path = "examples/shared/fanuc_replica_types" }
 
+# FANUC RMI - shared across plugins with different feature flags
+fanuc_rmi = { path = "/home/apino/dev/Fanuc_RMI_API/fanuc_rmi" }
+
 # Common dependencies
 bevy = { version = "0.17", default-features = false, features = ["multi_threaded", "bevy_log"] }
+bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_tasks" }
 bincode = { version = "2.0.1", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.28", features = ["full"] }
 
 # Leptos dependencies (for WASM clients)
 leptos = { version = "0.8.12", features = ["csr"] }
+leptos_router = { version = "0.8" }
 leptos-use = "0.16.3"
 reactive_graph = "0.2"
 reactive_stores = "0.2"

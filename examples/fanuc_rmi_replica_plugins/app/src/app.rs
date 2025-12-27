@@ -12,6 +12,7 @@ use fanuc_replica_plugins::*;
 
 use crate::components::ToastProvider;
 use crate::layout::{DesktopLayout, FloatingJogControls, FloatingIOStatus, ControlResponseHandler, ConnectionStateHandler, ProgramNotificationHandler, ConsoleLogHandler, ServerNotificationHandler};
+use crate::theme::provide_theme_context;
 
 /// Build the client type registry with all synced components.
 fn build_registry() -> Arc<ClientTypeRegistry> {
@@ -43,6 +44,9 @@ fn build_registry() -> Arc<ClientTypeRegistry> {
 /// Root application component.
 #[component]
 pub fn App() -> impl IntoView {
+    // Provide theme context at the root level
+    provide_theme_context();
+
     let registry = build_registry();
     let ws_url = "ws://127.0.0.1:8083/sync";
 

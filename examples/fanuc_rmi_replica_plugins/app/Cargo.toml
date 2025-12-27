@@ -32,4 +32,5 @@ fanuc_rmi = { path = "/home/apino/dev/Fanuc_RMI_API/fanuc_rmi", default-features
 reactive_stores = "0.2"
 js-sys = "0.3.83"
 leptos-use = "0.16"
+serde_json = "1.0.147"
 

@@ -7,6 +7,7 @@ mod io_status;
 mod robot_wizard;
 mod error_log;
 mod toast;
+mod theme_modal;
 
 pub use status_panel::StatusPanel;
 pub use position_display::PositionDisplay;
@@ -15,3 +16,4 @@ pub use io_status::IoStatusPanel;
 pub use robot_wizard::RobotCreationWizard;
 pub use error_log::ErrorLog;
 pub use toast::{ToastProvider, ToastType, use_toast};
+pub use theme_modal::ThemeModal;

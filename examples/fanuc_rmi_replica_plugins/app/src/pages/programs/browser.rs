@@ -15,16 +15,16 @@ pub fn ProgramBrowser(
     let layout_ctx = use_context::<LayoutContext>().expect("LayoutContext not found");
 
     view! {
-        <div class="w-64 bg-[#0a0a0a] rounded border border-[#ffffff08] flex flex-col overflow-hidden shrink-0">
-            <div class="flex items-center justify-between p-2 border-b border-[#ffffff08]">
-                <h3 class="text-[10px] font-semibold text-[#00d9ff] uppercase tracking-wide flex items-center">
+        <div class="w-64 bg-background rounded border border-border/8 flex flex-col overflow-hidden shrink-0">
+            <div class="flex items-center justify-between p-2 border-b border-border/8">
+                <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center">
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
                     </svg>
                     "Programs"
                 </h3>
                 <button
-                    class="text-[#666666] hover:text-white"
+                    class="text-muted-foreground hover:text-foreground"
                     on:click=move |_| layout_ctx.show_program_browser.set(false)
                     title="Close browser"
                 >
@@ -38,7 +38,7 @@ pub fn ProgramBrowser(
                     let progs = programs.get();
                     if progs.is_empty() {
                         Either::Left(view! {
-                            <div class="text-[#555555] text-[9px] text-center py-4">
+                            <div class="text-muted-foreground text-[9px] text-center py-4">
                                 "No programs saved"
                             </div>
                         })
@@ -53,9 +53,9 @@ pub fn ProgramBrowser(
                                     class={move || format!(
                                         "w-full text-left p-2 rounded border text-[9px] transition-colors {}",
                                         if is_selected() {
-                                            "bg-[#00d9ff10] border-[#00d9ff40] text-white"
+                                            "bg-[#00d9ff10] border-[#00d9ff40] text-foreground"
                                         } else {
-                                            "bg-[#111111] border-[#ffffff08] text-[#888888] hover:border-[#ffffff20]"
+                                            "bg-card border-border/8 text-muted-foreground hover:border-border/20"
                                         }
                                     )}
                                     on:click={
@@ -64,7 +64,7 @@ pub fn ProgramBrowser(
                                     }
                                 >
                                     <div class="font-medium text-[10px] mb-0.5">{prog_name}</div>
-                                    <div class="text-[#555555]">{lines_str}</div>
+                                    <div class="text-muted-foreground">{lines_str}</div>
                                 </button>
                             }
                         }).collect_view())

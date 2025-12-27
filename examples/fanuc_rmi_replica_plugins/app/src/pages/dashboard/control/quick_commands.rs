@@ -169,8 +169,8 @@ pub fn QuickCommandsPanel() -> impl IntoView {
     };
 
     view! {
-        <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-2 shrink-0">
-            <h3 class="text-[10px] font-semibold text-[#00d9ff] uppercase tracking-wide flex items-center mb-2">
+        <div class="bg-background rounded border border-border/8 p-2 shrink-0">
+            <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center mb-2">
                 <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                 </svg>
@@ -179,7 +179,7 @@ pub fn QuickCommandsPanel() -> impl IntoView {
             <div class="flex gap-2 flex-wrap items-center">
                 // Initialize button
                 <button
-                    class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[9px] px-3 py-1.5 rounded hover:bg-[#22c55e30] flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="bg-[#22c55e20] border border-[#22c55e40] text-success text-[9px] px-3 py-1.5 rounded hover:bg-success/20 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled=move || !robot_connected.get()
                     on:click=init_click
                 >
@@ -190,7 +190,7 @@ pub fn QuickCommandsPanel() -> impl IntoView {
                 </button>
                 // Reset button
                 <button
-                    class="bg-[#f59e0b20] border border-[#f59e0b40] text-[#f59e0b] text-[9px] px-3 py-1.5 rounded hover:bg-[#f59e0b30] flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="bg-[#f59e0b20] border border-[#f59e0b40] text-warning text-[9px] px-3 py-1.5 rounded hover:bg-warning/20 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled=move || !robot_connected.get()
                     on:click=reset_click
                 >
@@ -201,7 +201,7 @@ pub fn QuickCommandsPanel() -> impl IntoView {
                 </button>
                 // Abort button
                 <button
-                    class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[9px] px-3 py-1.5 rounded hover:bg-[#ff444430] flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="bg-destructive/15 border border-destructive/25 text-destructive text-[9px] px-3 py-1.5 rounded hover:bg-destructive/20 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled=move || !robot_connected.get()
                     on:click=abort_click
                 >
@@ -212,17 +212,17 @@ pub fn QuickCommandsPanel() -> impl IntoView {
                 </button>
 
                 // Speed Override Slider
-                <div class="flex items-center gap-2 ml-auto bg-[#1a1a1a] rounded px-2 py-1 border border-[#ffffff10]">
-                    <svg class="w-3 h-3 text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex items-center gap-2 ml-auto bg-popover rounded px-2 py-1 border border-border/10">
+                    <svg class="w-3 h-3 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
-                    <span class="text-[9px] text-gray-400 whitespace-nowrap">"Speed:"</span>
+                    <span class="text-[9px] text-muted-foreground whitespace-nowrap">"Speed:"</span>
                     <input
                         type="range"
                         min="0"
                         max="100"
                         step="5"
-                        class="w-20 h-1 bg-[#333] rounded-lg appearance-none cursor-pointer accent-[#00d9ff]"
+                        class="w-20 h-1 bg-[#333] rounded-lg appearance-none cursor-pointer accent-primary"
                         prop:value=move || display_speed()
                         disabled=move || !robot_connected.get()
                         on:mousedown=move |_| set_user_editing.set(true)
@@ -245,7 +245,7 @@ pub fn QuickCommandsPanel() -> impl IntoView {
                             }
                         }
                     />
-                    <span class="text-[10px] text-[#00d9ff] font-mono w-8 text-right">
+                    <span class="text-[10px] text-primary font-mono w-8 text-right">
                         {move || format!("{}%", display_speed())}
                     </span>
                 </div>

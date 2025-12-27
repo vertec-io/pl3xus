@@ -36,9 +36,9 @@ pub fn SettingsView() -> impl IntoView {
     view! {
         <div class="h-full flex flex-col">
             // Header
-            <div class="h-8 border-b border-[#ffffff08] flex items-center px-3 shrink-0 bg-[#0d0d0d]">
-                <h2 class="text-[11px] font-semibold text-white flex items-center">
-                    <svg class="w-3.5 h-3.5 mr-1.5 text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="h-8 border-b border-border/8 flex items-center px-3 shrink-0 bg-background">
+                <h2 class="text-[11px] font-semibold text-foreground flex items-center">
+                    <svg class="w-3.5 h-3.5 mr-1.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
@@ -104,12 +104,12 @@ fn RobotBrowser(
     view! {
         <div class="w-56 flex flex-col gap-2 shrink-0">
             // Robot Connections section
-            <div class="bg-[#0d0d0d] border border-[#ffffff08] rounded flex flex-col flex-1 min-h-0">
+            <div class="bg-background border border-border/8 rounded flex flex-col flex-1 min-h-0">
                 // Header
-                <div class="h-7 border-b border-[#ffffff08] flex items-center justify-between px-2 shrink-0">
-                    <span class="text-[9px] font-semibold text-[#888888] uppercase tracking-wide">"Robot Connections"</span>
+                <div class="h-7 border-b border-border/8 flex items-center justify-between px-2 shrink-0">
+                    <span class="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">"Robot Connections"</span>
                     <button
-                        class="text-[8px] px-1.5 py-0.5 bg-[#00d9ff20] text-[#00d9ff] rounded hover:bg-[#00d9ff30]"
+                        class="text-[8px] px-1.5 py-0.5 bg-[#00d9ff20] text-primary rounded hover:bg-primary/20"
                         on:click=move |_| set_show_add_robot.set(true)
                     >
                         "+ Add"
@@ -121,12 +121,12 @@ fn RobotBrowser(
                     {move || {
                         if robots_query.is_loading() && robots_query.data().is_none() {
                             view! {
-                                <div class="text-[9px] text-[#555555] text-center py-4">"Loading..."</div>
+                                <div class="text-[9px] text-muted-foreground text-center py-4">"Loading..."</div>
                             }.into_any()
                         } else if let Some(data) = robots_query.data() {
                             if data.connections.is_empty() {
                                 view! {
-                                    <div class="text-[9px] text-[#555555] text-center py-4">
+                                    <div class="text-[9px] text-muted-foreground text-center py-4">
                                         "No saved robots"<br/>
                                         "Click + Add to create one"
                                     </div>
@@ -143,20 +143,20 @@ fn RobotBrowser(
                                         <div
                                             class=move || format!(
                                                 "p-1.5 rounded cursor-pointer group {}",
-                                                if is_selected() { "bg-[#00d9ff15] border border-[#00d9ff30]" } else { "hover:bg-[#ffffff05] border border-transparent" }
+                                                if is_selected() { "bg-[#00d9ff15] border border-primary/20" } else { "hover:bg-[#ffffff05] border border-transparent" }
                                             )
                                             on:click=move |_| set_selected_robot_id.set(Some(robot_id))
                                         >
                                             <div class="flex items-center justify-between">
                                                 <div class="flex items-center gap-1.5 min-w-0">
-                                                    <div class="w-1.5 h-1.5 rounded-full bg-[#666666] shrink-0"></div>
+                                                    <div class="w-1.5 h-1.5 rounded-full bg-muted-foreground shrink-0"></div>
                                                     <div class="min-w-0">
-                                                        <div class="text-[9px] text-white font-medium truncate">{robot_name.clone()}</div>
-                                                        <div class="text-[8px] text-[#555555] truncate">{format!("{}:{}", robot_ip, robot_port)}</div>
+                                                        <div class="text-[9px] text-foreground font-medium truncate">{robot_name.clone()}</div>
+                                                        <div class="text-[8px] text-muted-foreground truncate">{format!("{}:{}", robot_ip, robot_port)}</div>
                                                     </div>
                                                 </div>
                                                 <button
-                                                    class="text-[8px] px-1 py-0.5 text-[#ff4444] opacity-0 group-hover:opacity-100 hover:bg-[#ff444410] rounded"
+                                                    class="text-[8px] px-1 py-0.5 text-destructive opacity-0 group-hover:opacity-100 hover:bg-destructive/10 rounded"
                                                     title="Delete"
                                                     on:click=move |ev| {
                                                         ev.stop_propagation();
@@ -173,7 +173,7 @@ fn RobotBrowser(
                             }
                         } else {
                             view! {
-                                <div class="text-[9px] text-[#555555] text-center py-4">"Failed to load"</div>
+                                <div class="text-[9px] text-muted-foreground text-center py-4">"Failed to load"</div>
                             }.into_any()
                         }
                     }}
@@ -208,28 +208,28 @@ fn SystemSettingsPanel() -> impl IntoView {
     });
 
     view! {
-        <div class="bg-[#0d0d0d] border border-[#ffffff08] rounded">
-            <div class="h-7 border-b border-[#ffffff08] flex items-center px-2">
-                <span class="text-[9px] font-semibold text-[#888888] uppercase tracking-wide">"System"</span>
+        <div class="bg-background border border-border/8 rounded">
+            <div class="h-7 border-b border-border/8 flex items-center px-2">
+                <span class="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">"System"</span>
             </div>
             <div class="p-2 space-y-2">
                 // Version info
                 <div class="text-[8px]">
-                    <span class="text-[#555555]">"Version: "</span>
-                    <span class="text-[#888888] font-mono">"0.8.0"</span>
+                    <span class="text-muted-foreground">"Version: "</span>
+                    <span class="text-muted-foreground font-mono">"0.8.0"</span>
                 </div>
                 <div class="text-[8px]">
-                    <span class="text-[#555555]">"RMI Protocol: "</span>
-                    <span class="text-[#888888] font-mono">"v5+"</span>
+                    <span class="text-muted-foreground">"RMI Protocol: "</span>
+                    <span class="text-muted-foreground font-mono">"v5+"</span>
                 </div>
 
                 // Reset database button with inline confirmation
-                <div class="pt-2 border-t border-[#ffffff08]">
+                <div class="pt-2 border-t border-border/8">
                     <Show
                         when=move || confirm_reset.get()
                         fallback=move || view! {
                             <button
-                                class="w-full text-[8px] px-2 py-1 bg-[#ff444410] border border-[#ff444420] text-[#ff4444] rounded hover:bg-[#ff444420]"
+                                class="w-full text-[8px] px-2 py-1 bg-destructive/10 border border-destructive/15 text-destructive rounded hover:bg-destructive/15"
                                 on:click=move |_| set_confirm_reset.set(true)
                             >
                                 "Reset Database"
@@ -237,10 +237,10 @@ fn SystemSettingsPanel() -> impl IntoView {
                         }
                     >
                         <div class="space-y-1">
-                            <p class="text-[8px] text-[#ff4444]">"Delete all data?"</p>
+                            <p class="text-[8px] text-destructive">"Delete all data?"</p>
                             <div class="flex gap-1">
                                 <button
-                                    class="flex-1 text-[8px] px-2 py-1 bg-[#ff4444] text-white rounded hover:bg-[#ff5555]"
+                                    class="flex-1 text-[8px] px-2 py-1 bg-destructive text-foreground rounded hover:bg-destructive"
                                     on:click=move |_| {
                                         reset_database.send(ResetDatabase);
                                     }
@@ -248,7 +248,7 @@ fn SystemSettingsPanel() -> impl IntoView {
                                     "Yes"
                                 </button>
                                 <button
-                                    class="flex-1 text-[8px] px-2 py-1 bg-[#1a1a1a] border border-[#ffffff08] text-[#888888] rounded hover:text-white"
+                                    class="flex-1 text-[8px] px-2 py-1 bg-popover border border-border/8 text-muted-foreground rounded hover:text-foreground"
                                     on:click=move |_| set_confirm_reset.set(false)
                                 >
                                     "No"
@@ -477,7 +477,7 @@ fn RobotSettingsPanel(
     // No Effects needed - handlers are called exactly once per response.
 
     view! {
-        <div class="flex-1 bg-[#0a0a0a] rounded border border-[#ffffff08] flex flex-col min-h-0">
+        <div class="flex-1 bg-background rounded border border-border/8 flex flex-col min-h-0">
             {move || {
                 if let Some(robot) = selected_robot.with_value(|f| f()) {
                     let robot_id = robot.id;
@@ -485,25 +485,25 @@ fn RobotSettingsPanel(
 
                     view! {
                         // Header with robot name
-                        <div class="flex items-center justify-between p-3 border-b border-[#ffffff08]">
-                            <h3 class="text-[11px] font-semibold text-white flex items-center">
-                                <svg class="w-4 h-4 mr-2 text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="flex items-center justify-between p-3 border-b border-border/8">
+                            <h3 class="text-[11px] font-semibold text-foreground flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
                                 </svg>
                                 "Robot Settings: "
-                                <span class="text-[#00d9ff] ml-1">{robot_name}</span>
+                                <span class="text-primary ml-1">{robot_name}</span>
                             </h3>
                             <div class="flex items-center gap-2">
                                 {move || save_status.get().map(|s| view! {
-                                    <span class="text-[9px] text-[#22c55e]">{s}</span>
+                                    <span class="text-[9px] text-success">{s}</span>
                                 })}
                                 <button
                                     class=move || format!(
                                         "text-[9px] px-3 py-1 rounded transition-colors {}",
                                         if has_changes.get() {
-                                            "bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] hover:bg-[#22c55e30]"
+                                            "bg-[#22c55e20] border border-[#22c55e40] text-success hover:bg-success/20"
                                         } else {
-                                            "bg-[#111111] border border-[#ffffff08] text-[#555555]"
+                                            "bg-card border border-border/8 text-muted-foreground"
                                         }
                                     )
                                     disabled=move || !has_changes.get()
@@ -528,13 +528,13 @@ fn RobotSettingsPanel(
                         <div class="flex-1 overflow-y-auto p-3 space-y-4">
                             // Connection Details
                             <div>
-                                <h4 class="text-[10px] font-semibold text-[#888888] mb-2 uppercase tracking-wide">"Connection Details"</h4>
+                                <h4 class="text-[10px] font-semibold text-muted-foreground mb-2 uppercase tracking-wide">"Connection Details"</h4>
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"Name"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"Name"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none"
                                             prop:value=move || edit_name.get()
                                             on:input=move |ev| {
                                                 set_edit_name.set(event_target_value(&ev));
@@ -543,10 +543,10 @@ fn RobotSettingsPanel(
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"Description"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"Description"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none"
                                             placeholder="Optional"
                                             prop:value=move || edit_desc.get()
                                             on:input=move |ev| {
@@ -556,10 +556,10 @@ fn RobotSettingsPanel(
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"IP Address"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"IP Address"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_ip.get()
                                             on:input=move |ev| {
                                                 set_edit_ip.set(event_target_value(&ev));
@@ -568,10 +568,10 @@ fn RobotSettingsPanel(
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"Port"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"Port"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_port.get()
                                             on:input=move |ev| {
                                                 set_edit_port.set(event_target_value(&ev));
@@ -584,13 +584,13 @@ fn RobotSettingsPanel(
 
                             // Motion Defaults
                             <div>
-                                <h4 class="text-[10px] font-semibold text-[#888888] mb-2 uppercase tracking-wide">"Motion Defaults"</h4>
+                                <h4 class="text-[10px] font-semibold text-muted-foreground mb-2 uppercase tracking-wide">"Motion Defaults"</h4>
                                 <div class="grid grid-cols-3 gap-3">
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"Default Speed"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"Default Speed"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_speed.get()
                                             on:input=move |ev| {
                                                 set_edit_speed.set(event_target_value(&ev));
@@ -600,9 +600,9 @@ fn RobotSettingsPanel(
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"Speed Type"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"Speed Type"</label>
                                         <select
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none"
                                             on:change=move |ev| {
                                                 set_edit_speed_type.set(event_target_value(&ev));
                                                 set_has_changes.set(true);
@@ -615,9 +615,9 @@ fn RobotSettingsPanel(
                                         </select>
                                     </div>
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"Termination"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"Termination"</label>
                                         <select
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none"
                                             on:change=move |ev| {
                                                 set_edit_term_type.set(event_target_value(&ev));
                                                 set_has_changes.set(true);
@@ -632,13 +632,13 @@ fn RobotSettingsPanel(
 
                             // Orientation Defaults
                             <div>
-                                <h4 class="text-[10px] font-semibold text-[#888888] mb-2 uppercase tracking-wide">"Orientation Defaults (W, P, R)"</h4>
+                                <h4 class="text-[10px] font-semibold text-muted-foreground mb-2 uppercase tracking-wide">"Orientation Defaults (W, P, R)"</h4>
                                 <div class="grid grid-cols-3 gap-3">
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"W (deg)"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"W (deg)"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_w.get()
                                             on:input=move |ev| {
                                                 set_edit_w.set(event_target_value(&ev));
@@ -648,10 +648,10 @@ fn RobotSettingsPanel(
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"P (deg)"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"P (deg)"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_p.get()
                                             on:input=move |ev| {
                                                 set_edit_p.set(event_target_value(&ev));
@@ -661,10 +661,10 @@ fn RobotSettingsPanel(
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"R (deg)"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"R (deg)"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_r.get()
                                             on:input=move |ev| {
                                                 set_edit_r.set(event_target_value(&ev));
@@ -678,13 +678,13 @@ fn RobotSettingsPanel(
 
                             // Jog Defaults
                             <div>
-                                <h4 class="text-[10px] font-semibold text-[#888888] mb-2 uppercase tracking-wide">"Jog Defaults"</h4>
+                                <h4 class="text-[10px] font-semibold text-muted-foreground mb-2 uppercase tracking-wide">"Jog Defaults"</h4>
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"Cartesian Jog Speed"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"Cartesian Jog Speed"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_cart_speed.get()
                                             on:input=move |ev| {
                                                 set_edit_cart_speed.set(event_target_value(&ev));
@@ -694,10 +694,10 @@ fn RobotSettingsPanel(
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"Cartesian Jog Step"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"Cartesian Jog Step"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_cart_step.get()
                                             on:input=move |ev| {
                                                 set_edit_cart_step.set(event_target_value(&ev));
@@ -707,10 +707,10 @@ fn RobotSettingsPanel(
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"Joint Jog Speed"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"Joint Jog Speed"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_joint_speed.get()
                                             on:input=move |ev| {
                                                 set_edit_joint_speed.set(event_target_value(&ev));
@@ -720,10 +720,10 @@ fn RobotSettingsPanel(
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#666666] text-[9px] mb-0.5">"Joint Jog Step"</label>
+                                        <label class="block text-muted-foreground text-[9px] mb-0.5">"Joint Jog Step"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_joint_step.get()
                                             on:input=move |ev| {
                                                 set_edit_joint_step.set(event_target_value(&ev));
@@ -738,9 +738,9 @@ fn RobotSettingsPanel(
                             // I/O Display Names Section
                             <div>
                                 <div class="flex items-center justify-between mb-2">
-                                    <h4 class="text-[10px] font-semibold text-[#888888] uppercase tracking-wide">"I/O Display Names"</h4>
+                                    <h4 class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">"I/O Display Names"</h4>
                                     <button
-                                        class="text-[8px] px-2 py-0.5 bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] rounded hover:bg-[#00d9ff30]"
+                                        class="text-[8px] px-2 py-0.5 bg-[#00d9ff20] border border-[#00d9ff40] text-primary rounded hover:bg-primary/20"
                                         on:click=move |_| {
                                             // Initialize local config from query data
                                             let mut local = std::collections::HashMap::new();
@@ -764,7 +764,7 @@ fn RobotSettingsPanel(
                                         "Configure"
                                     </button>
                                 </div>
-                                <p class="text-[9px] text-[#555555]">
+                                <p class="text-[9px] text-muted-foreground">
                                     "Set custom display names for I/O ports (e.g., 'Gripper', 'Conveyor', 'Safety Gate')"
                                 </p>
                             </div>
@@ -772,9 +772,9 @@ fn RobotSettingsPanel(
                             // Configurations Section
                             <div>
                                 <div class="flex items-center justify-between mb-2">
-                                    <h4 class="text-[10px] font-semibold text-[#888888] uppercase tracking-wide">"Robot Configurations"</h4>
+                                    <h4 class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">"Robot Configurations"</h4>
                                     <button
-                                        class="text-[8px] px-2 py-0.5 bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] rounded hover:bg-[#22c55e30]"
+                                        class="text-[8px] px-2 py-0.5 bg-[#22c55e20] border border-[#22c55e40] text-success rounded hover:bg-success/20"
                                         on:click=move |_| {
                                             set_editing_config_id.set(None);
                                             set_config_name.set(String::new());
@@ -817,7 +817,7 @@ fn RobotSettingsPanel(
                                                         if is_selected() {
                                                             "bg-[#00d9ff10] border border-[#00d9ff40] rounded p-2 cursor-pointer hover:bg-[#00d9ff15]"
                                                         } else {
-                                                            "bg-[#111111] border border-[#ffffff08] rounded p-2 cursor-pointer hover:bg-[#ffffff05]"
+                                                            "bg-card border border-border/8 rounded p-2 cursor-pointer hover:bg-[#ffffff05]"
                                                         }
                                                     }
                                                     on:click=move |_| {
@@ -831,14 +831,14 @@ fn RobotSettingsPanel(
                                                     <div class="flex items-center justify-between">
                                                         <div class="flex-1 min-w-0">
                                                             <div class="flex items-center gap-1.5">
-                                                                <span class="text-[9px] text-white font-medium">
+                                                                <span class="text-[9px] text-foreground font-medium">
                                                                     {move || get_config().map(|c| c.name.clone()).unwrap_or_default()}
                                                                 </span>
                                                                 {move || {
                                                                     if let Some(cfg) = get_config() {
                                                                         if cfg.is_default {
                                                                             view! {
-                                                                                <span class="text-[8px] px-1.5 py-0.5 bg-[#fbbf2420] border border-[#fbbf2440] text-[#fbbf24] rounded">"DEFAULT"</span>
+                                                                                <span class="text-[8px] px-1.5 py-0.5 bg-warning/15 border border-warning/25 text-warning rounded">"DEFAULT"</span>
                                                                             }.into_any()
                                                                         } else {
                                                                             view! { <span></span> }.into_any()
@@ -848,7 +848,7 @@ fn RobotSettingsPanel(
                                                                     }
                                                                 }}
                                                             </div>
-                                                            <div class="text-[8px] text-[#666666] mt-0.5 font-mono">
+                                                            <div class="text-[8px] text-muted-foreground mt-0.5 font-mono">
                                                                 {move || {
                                                                     get_config()
                                                                         .map(|c| format!("UFrame: {} | UTool: {}", c.u_frame_number, c.u_tool_number))
@@ -858,7 +858,7 @@ fn RobotSettingsPanel(
                                                         </div>
                                                         <div class="flex gap-1 ml-2">
                                                             <button
-                                                                class="text-[8px] px-1.5 py-0.5 text-[#00d9ff] hover:bg-[#00d9ff10] rounded"
+                                                                class="text-[8px] px-1.5 py-0.5 text-primary hover:bg-[#00d9ff10] rounded"
                                                                 title="Edit"
                                                                 on:click=move |ev| {
                                                                     ev.stop_propagation();
@@ -884,7 +884,7 @@ fn RobotSettingsPanel(
                                                             // Set as Default button (only for non-default configs)
                                                             <Show when=move || !get_config().map(|c| c.is_default).unwrap_or(false)>
                                                                 <button
-                                                                    class="text-[8px] px-1.5 py-0.5 text-[#fbbf24] hover:bg-[#fbbf2410] rounded"
+                                                                    class="text-[8px] px-1.5 py-0.5 text-warning hover:bg-warning/10 rounded"
                                                                     title="Set as Default"
                                                                     on:click=move |ev| {
                                                                         ev.stop_propagation();
@@ -895,7 +895,7 @@ fn RobotSettingsPanel(
                                                                 </button>
                                                             </Show>
                                                             <button
-                                                                class="text-[8px] px-1.5 py-0.5 text-[#ff4444] hover:bg-[#ff444410] rounded"
+                                                                class="text-[8px] px-1.5 py-0.5 text-destructive hover:bg-destructive/10 rounded"
                                                                 title="Delete"
                                                                 on:click=move |ev| {
                                                                     ev.stop_propagation();
@@ -910,38 +910,38 @@ fn RobotSettingsPanel(
 
                                                     // Configuration details (shown when selected)
                                                     <Show when=is_selected>
-                                                        <div class="mt-2 pt-2 border-t border-[#ffffff08] space-y-1.5">
+                                                        <div class="mt-2 pt-2 border-t border-border/8 space-y-1.5">
                                                             {move || {
                                                                 if let Some(cfg) = get_config() {
                                                                     view! {
                                                                         <div class="grid grid-cols-3 gap-2 text-[8px]">
                                                                             <div>
-                                                                                <span class="text-[#666666]">"Front: "</span>
-                                                                                <span class="text-white font-mono">{cfg.front}</span>
+                                                                                <span class="text-muted-foreground">"Front: "</span>
+                                                                                <span class="text-foreground font-mono">{cfg.front}</span>
                                                                             </div>
                                                                             <div>
-                                                                                <span class="text-[#666666]">"Up: "</span>
-                                                                                <span class="text-white font-mono">{cfg.up}</span>
+                                                                                <span class="text-muted-foreground">"Up: "</span>
+                                                                                <span class="text-foreground font-mono">{cfg.up}</span>
                                                                             </div>
                                                                             <div>
-                                                                                <span class="text-[#666666]">"Left: "</span>
-                                                                                <span class="text-white font-mono">{cfg.left}</span>
+                                                                                <span class="text-muted-foreground">"Left: "</span>
+                                                                                <span class="text-foreground font-mono">{cfg.left}</span>
                                                                             </div>
                                                                             <div>
-                                                                                <span class="text-[#666666]">"Flip: "</span>
-                                                                                <span class="text-white font-mono">{cfg.flip}</span>
+                                                                                <span class="text-muted-foreground">"Flip: "</span>
+                                                                                <span class="text-foreground font-mono">{cfg.flip}</span>
                                                                             </div>
                                                                             <div>
-                                                                                <span class="text-[#666666]">"Turn4: "</span>
-                                                                                <span class="text-white font-mono">{cfg.turn4}</span>
+                                                                                <span class="text-muted-foreground">"Turn4: "</span>
+                                                                                <span class="text-foreground font-mono">{cfg.turn4}</span>
                                                                             </div>
                                                                             <div>
-                                                                                <span class="text-[#666666]">"Turn5: "</span>
-                                                                                <span class="text-white font-mono">{cfg.turn5}</span>
+                                                                                <span class="text-muted-foreground">"Turn5: "</span>
+                                                                                <span class="text-foreground font-mono">{cfg.turn5}</span>
                                                                             </div>
                                                                             <div>
-                                                                                <span class="text-[#666666]">"Turn6: "</span>
-                                                                                <span class="text-white font-mono">{cfg.turn6}</span>
+                                                                                <span class="text-muted-foreground">"Turn6: "</span>
+                                                                                <span class="text-foreground font-mono">{cfg.turn6}</span>
                                                                             </div>
                                                                         </div>
                                                                     }.into_any()
@@ -957,7 +957,7 @@ fn RobotSettingsPanel(
                                     />
                                     {move || if configurations.get().is_empty() {
                                         view! {
-                                            <div class="text-[8px] text-[#555555] text-center py-4 bg-[#111111] border border-[#ffffff08] rounded">
+                                            <div class="text-[8px] text-muted-foreground text-center py-4 bg-card border border-border/8 rounded">
                                                 "No configurations"<br/>
                                                 "Click + Add to create one"
                                             </div>
@@ -969,9 +969,9 @@ fn RobotSettingsPanel(
                             </div>
 
                             // Quick Connect Button
-                            <div class="mt-4 pt-4 border-t border-[#ffffff08]">
+                            <div class="mt-4 pt-4 border-t border-border/8">
                                 <button
-                                    class="w-full text-[10px] px-4 py-2.5 bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] rounded-lg hover:bg-[#22c55e30] font-medium flex items-center justify-center gap-2"
+                                    class="w-full text-[10px] px-4 py-2.5 bg-[#22c55e20] border border-[#22c55e40] text-success rounded-lg hover:bg-success/20 font-medium flex items-center justify-center gap-2"
                                     on:click={
                                         let connect_robot = connect_robot.clone();
                                         move |_| {
@@ -1000,11 +1000,11 @@ fn RobotSettingsPanel(
                     view! {
                         <div class="flex-1 flex items-center justify-center">
                             <div class="text-center">
-                                <svg class="w-12 h-12 mx-auto mb-3 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg class="w-12 h-12 mx-auto mb-3 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
                                 </svg>
-                                <p class="text-[11px] text-[#555555]">"Select a robot connection"</p>
-                                <p class="text-[9px] text-[#444444] mt-1">"to view and edit its settings"</p>
+                                <p class="text-[11px] text-muted-foreground">"Select a robot connection"</p>
+                                <p class="text-[9px] text-muted-foreground mt-1">"to view and edit its settings"</p>
                             </div>
                         </div>
                     }.into_any()
@@ -1014,8 +1014,8 @@ fn RobotSettingsPanel(
             // Configuration Form Modal
             <Show when=move || show_config_form.get()>
                 <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div class="bg-[#0a0a0a] border border-[#ffffff20] rounded-lg p-6 w-[500px] max-h-[80vh] overflow-y-auto">
-                        <h3 class="text-[12px] font-semibold text-white mb-4">
+                    <div class="bg-background border border-border/20 rounded-lg p-6 w-[500px] max-h-[80vh] overflow-y-auto">
+                        <h3 class="text-[12px] font-semibold text-foreground mb-4">
                             {move || if editing_config_id.get().is_some() {
                                 "Edit Configuration"
                             } else {
@@ -1026,10 +1026,10 @@ fn RobotSettingsPanel(
                         <div class="space-y-3">
                             // Configuration Name
                             <div>
-                                <label class="block text-[#666666] text-[9px] mb-1">"Configuration Name"</label>
+                                <label class="block text-muted-foreground text-[9px] mb-1">"Configuration Name"</label>
                                 <input
                                     type="text"
-                                    class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none"
+                                    class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none"
                                     prop:value=move || config_name.get()
                                     on:input=move |ev| set_config_name.set(event_target_value(&ev))
                                     placeholder="e.g., Default Config, Welding Setup"
@@ -1039,20 +1039,20 @@ fn RobotSettingsPanel(
                             // UFrame and UTool
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-[#666666] text-[9px] mb-1">"User Frame (UFrame)"</label>
+                                    <label class="block text-muted-foreground text-[9px] mb-1">"User Frame (UFrame)"</label>
                                     <input
                                         type="text"
-                                        class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                        class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                         prop:value=move || config_uframe.get()
                                         on:input=move |ev| set_config_uframe.set(event_target_value(&ev))
                                         placeholder="0"
                                     />
                                 </div>
                                 <div>
-                                    <label class="block text-[#666666] text-[9px] mb-1">"User Tool (UTool)"</label>
+                                    <label class="block text-muted-foreground text-[9px] mb-1">"User Tool (UTool)"</label>
                                     <input
                                         type="text"
-                                        class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                        class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                         prop:value=move || config_utool.get()
                                         on:input=move |ev| set_config_utool.set(event_target_value(&ev))
                                         placeholder="0"
@@ -1062,73 +1062,73 @@ fn RobotSettingsPanel(
 
                             // Arm Configuration
                             <div>
-                                <label class="block text-[#666666] text-[9px] mb-1">"Arm Configuration"</label>
+                                <label class="block text-muted-foreground text-[9px] mb-1">"Arm Configuration"</label>
                                 <div class="grid grid-cols-3 gap-2">
                                     <div>
-                                        <label class="block text-[#555555] text-[8px] mb-0.5">"Front"</label>
+                                        <label class="block text-muted-foreground text-[8px] mb-0.5">"Front"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1 text-[9px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_front.get()
                                             on:input=move |ev| set_config_front.set(event_target_value(&ev))
                                             placeholder="0"
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#555555] text-[8px] mb-0.5">"Up"</label>
+                                        <label class="block text-muted-foreground text-[8px] mb-0.5">"Up"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1 text-[9px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_up.get()
                                             on:input=move |ev| set_config_up.set(event_target_value(&ev))
                                             placeholder="0"
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#555555] text-[8px] mb-0.5">"Left"</label>
+                                        <label class="block text-muted-foreground text-[8px] mb-0.5">"Left"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1 text-[9px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_left.get()
                                             on:input=move |ev| set_config_left.set(event_target_value(&ev))
                                             placeholder="0"
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#555555] text-[8px] mb-0.5">"Flip"</label>
+                                        <label class="block text-muted-foreground text-[8px] mb-0.5">"Flip"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1 text-[9px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_flip.get()
                                             on:input=move |ev| set_config_flip.set(event_target_value(&ev))
                                             placeholder="0"
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#555555] text-[8px] mb-0.5">"Turn4"</label>
+                                        <label class="block text-muted-foreground text-[8px] mb-0.5">"Turn4"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1 text-[9px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_turn4.get()
                                             on:input=move |ev| set_config_turn4.set(event_target_value(&ev))
                                             placeholder="0"
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#555555] text-[8px] mb-0.5">"Turn5"</label>
+                                        <label class="block text-muted-foreground text-[8px] mb-0.5">"Turn5"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1 text-[9px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_turn5.get()
                                             on:input=move |ev| set_config_turn5.set(event_target_value(&ev))
                                             placeholder="0"
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-[#555555] text-[8px] mb-0.5">"Turn6"</label>
+                                        <label class="block text-muted-foreground text-[8px] mb-0.5">"Turn6"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-2 py-1 text-[9px] text-white focus:border-[#00d9ff] focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_turn6.get()
                                             on:input=move |ev| set_config_turn6.set(event_target_value(&ev))
                                             placeholder="0"
@@ -1142,17 +1142,17 @@ fn RobotSettingsPanel(
                                 <input
                                     type="checkbox"
                                     id="config-is-default"
-                                    class="w-3.5 h-3.5 bg-[#111111] border border-[#ffffff08] rounded"
+                                    class="w-3.5 h-3.5 bg-card border border-border/8 rounded"
                                     prop:checked=move || config_is_default.get()
                                     on:change=move |ev| set_config_is_default.set(event_target_checked(&ev))
                                 />
-                                <label for="config-is-default" class="text-[9px] text-[#888888]">"Set as default configuration"</label>
+                                <label for="config-is-default" class="text-[9px] text-muted-foreground">"Set as default configuration"</label>
                             </div>
                         </div>
 
                         // Error message
                         {move || config_error_message.get().map(|msg| view! {
-                            <div class="p-2 bg-[#ff444420] border border-[#ff444440] rounded text-[9px] text-[#ff4444] mb-3">
+                            <div class="p-2 bg-destructive/15 border border-destructive/25 rounded text-[9px] text-destructive mb-3">
                                 {msg}
                             </div>
                         })}
@@ -1165,7 +1165,7 @@ fn RobotSettingsPanel(
                                     if is_saving_config.get() {
                                         "bg-[#00d9ff80] text-[#0a0a0a80] cursor-wait"
                                     } else {
-                                        "bg-[#00d9ff] text-[#0a0a0a] hover:bg-[#00e5ff]"
+                                        "bg-primary text-background hover:bg-primary"
                                     }
                                 )
                                 disabled=move || is_saving_config.get()
@@ -1224,7 +1224,7 @@ fn RobotSettingsPanel(
                                 }}
                             </button>
                             <button
-                                class="flex-1 text-[10px] px-4 py-2 bg-[#1a1a1a] border border-[#ffffff08] text-[#888888] rounded hover:text-white"
+                                class="flex-1 text-[10px] px-4 py-2 bg-popover border border-border/8 text-muted-foreground rounded hover:text-foreground"
                                 on:click=move |_| {
                                     set_show_config_form.set(false);
                                     set_editing_config_id.set(None);
@@ -1251,20 +1251,20 @@ fn RobotSettingsPanel(
             // Delete Configuration Confirmation Modal
             <Show when=move || show_delete_config_confirm.get()>
                 <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div class="bg-[#0a0a0a] border border-[#ff444440] rounded-lg p-6 w-[400px]">
-                        <h3 class="text-[12px] font-semibold text-[#ff4444] mb-3 flex items-center">
+                    <div class="bg-background border border-destructive/25 rounded-lg p-6 w-[400px]">
+                        <h3 class="text-[12px] font-semibold text-destructive mb-3 flex items-center">
                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                             </svg>
                             "Delete Configuration"
                         </h3>
-                        <p class="text-[10px] text-[#888888] mb-4">
+                        <p class="text-[10px] text-muted-foreground mb-4">
                             "Are you sure you want to delete this configuration? This action cannot be undone."
                         </p>
 
                         <div class="flex gap-2">
                             <button
-                                class="flex-1 text-[10px] px-4 py-2 bg-[#ff4444] text-white rounded hover:bg-[#ff5555] font-medium"
+                                class="flex-1 text-[10px] px-4 py-2 bg-destructive text-foreground rounded hover:bg-destructive font-medium"
                                 on:click=move |_| {
                                     if let Some(id) = config_to_delete.get() {
                                         delete_config.send(DeleteConfiguration { id });
@@ -1274,7 +1274,7 @@ fn RobotSettingsPanel(
                                 "Delete"
                             </button>
                             <button
-                                class="flex-1 text-[10px] px-4 py-2 bg-[#1a1a1a] border border-[#ffffff08] text-[#888888] rounded hover:text-white"
+                                class="flex-1 text-[10px] px-4 py-2 bg-popover border border-border/8 text-muted-foreground rounded hover:text-foreground"
                                 on:click=move |_| {
                                     set_show_delete_config_confirm.set(false);
                                     set_config_to_delete.set(None);
@@ -1332,9 +1332,9 @@ fn IoConfigModal(
         format!(
             "px-2 py-1 text-[9px] rounded transition-colors {}",
             if io_selected_type.get() == io_type {
-                "bg-[#00d9ff20] text-[#00d9ff]"
+                "bg-[#00d9ff20] text-primary"
             } else {
-                "bg-[#ffffff05] text-[#666666] hover:text-[#888888]"
+                "bg-[#ffffff05] text-muted-foreground hover:text-muted-foreground"
             }
         )
     };
@@ -1361,17 +1361,17 @@ fn IoConfigModal(
 
     view! {
         <div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-            <div class="bg-[#0d0d0d] border border-[#ffffff15] rounded-lg w-[600px] max-h-[80vh] flex flex-col">
+            <div class="bg-background border border-border/15 rounded-lg w-[600px] max-h-[80vh] flex flex-col">
                 // Header
-                <div class="flex items-center justify-between p-3 border-b border-[#ffffff08]">
-                    <h3 class="text-[11px] font-semibold text-white flex items-center">
-                        <svg class="w-4 h-4 mr-2 text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex items-center justify-between p-3 border-b border-border/8">
+                    <h3 class="text-[11px] font-semibold text-foreground flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
                         </svg>
                         "I/O Display Names"
                     </h3>
                     <button
-                        class="text-[#666666] hover:text-white"
+                        class="text-muted-foreground hover:text-foreground"
                         on:click=move |_| set_show_io_config.set(false)
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1381,7 +1381,7 @@ fn IoConfigModal(
                 </div>
 
                 // Tabs
-                <div class="flex gap-1 p-2 border-b border-[#ffffff08]">
+                <div class="flex gap-1 p-2 border-b border-border/8">
                     {IO_TYPES.iter().map(|(io_type, label)| {
                         let io_type_static: &'static str = io_type;
                         view! {
@@ -1398,7 +1398,7 @@ fn IoConfigModal(
                 // Content
                 <div class="flex-1 overflow-y-auto p-3">
                     // Header row
-                    <div class="grid grid-cols-[50px_1fr_80px] gap-2 mb-2 text-[8px] text-[#666666] uppercase tracking-wide px-2">
+                    <div class="grid grid-cols-[50px_1fr_80px] gap-2 mb-2 text-[8px] text-muted-foreground uppercase tracking-wide px-2">
                         <span>"Port"</span>
                         <span>"Display Name"</span>
                         <span class="text-center">"Visible"</span>
@@ -1419,9 +1419,9 @@ fn IoConfigModal(
                 </div>
 
                 // Footer
-                <div class="flex justify-end gap-2 p-3 border-t border-[#ffffff08]">
+                <div class="flex justify-end gap-2 p-3 border-t border-border/8">
                     <button
-                        class="text-[9px] px-4 py-1.5 bg-[#111111] border border-[#ffffff08] text-[#888888] rounded hover:bg-[#191919]"
+                        class="text-[9px] px-4 py-1.5 bg-card border border-border/8 text-muted-foreground rounded hover:bg-secondary"
                         on:click=move |_| set_show_io_config.set(false)
                     >
                         "Cancel"
@@ -1432,7 +1432,7 @@ fn IoConfigModal(
                             if is_saving_io_config.get() {
                                 "bg-[#00d9ff10] border border-[#00d9ff20] text-[#00d9ff50] cursor-wait"
                             } else {
-                                "bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] hover:bg-[#00d9ff30]"
+                                "bg-[#00d9ff20] border border-[#00d9ff40] text-primary hover:bg-primary/20"
                             }
                         )
                         disabled=move || is_saving_io_config.get()
@@ -1495,12 +1495,12 @@ fn IoConfigRow(
     view! {
         <div class="grid grid-cols-[50px_1fr_80px] gap-2 items-center bg-[#ffffff05] rounded p-2 mb-1">
             // Port number
-            <span class="text-[10px] text-[#00d9ff] font-mono">{port}</span>
+            <span class="text-[10px] text-primary font-mono">{port}</span>
 
             // Display name input
             <input
                 type="text"
-                class="bg-[#0a0a0a] border border-[#ffffff15] rounded px-2 py-1 text-[10px] text-white placeholder-[#555555] focus:border-[#00d9ff] focus:outline-none"
+                class="bg-background border border-border/15 rounded px-2 py-1 text-[10px] text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none"
                 placeholder=format!("{} (default)", port)
                 prop:value=get_name
                 on:input=on_name_change
@@ -1511,7 +1511,7 @@ fn IoConfigRow(
                 <button
                     class=move || format!(
                         "w-8 h-4 rounded-full transition-colors relative {}",
-                        if get_visible() { "bg-[#00d9ff]" } else { "bg-[#333333]" }
+                        if get_visible() { "bg-primary" } else { "bg-muted" }
                     )
                     on:click=on_visible_toggle
                 >
@@ -1555,17 +1555,17 @@ fn DeleteConfirmModal(
 
     view! {
         <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div class="bg-[#0d0d0d] border border-[#ff444440] rounded-lg p-4 w-80 shadow-xl">
-                <h3 class="text-[12px] font-semibold text-[#ff4444] mb-3 flex items-center">
+            <div class="bg-background border border-destructive/25 rounded-lg p-4 w-80 shadow-xl">
+                <h3 class="text-[12px] font-semibold text-destructive mb-3 flex items-center">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                     </svg>
                     "Delete Robot Connection"
                 </h3>
 
-                <p class="text-[10px] text-[#888888] mb-4">
+                <p class="text-[10px] text-muted-foreground mb-4">
                     "Are you sure you want to delete "
-                    <span class="text-white font-medium">
+                    <span class="text-foreground font-medium">
                         "\""
                         {move || robot_to_delete.get().map(|(_, name)| name).unwrap_or_default()}
                         "\""
@@ -1575,7 +1575,7 @@ fn DeleteConfirmModal(
 
                 <div class="flex gap-2">
                     <button
-                        class="flex-1 text-[10px] px-4 py-2 bg-[#ff4444] text-white rounded hover:bg-[#ff5555] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="flex-1 text-[10px] px-4 py-2 bg-destructive text-foreground rounded hover:bg-destructive font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled=move || is_deleting.get()
                         on:click=move |_| {
                             if let Some((id, _)) = robot_to_delete.get() {
@@ -1592,7 +1592,7 @@ fn DeleteConfirmModal(
                         {move || if is_deleting.get() { "Deleting..." } else { "Delete" }}
                     </button>
                     <button
-                        class="flex-1 text-[10px] px-4 py-2 bg-[#1a1a1a] border border-[#ffffff08] text-[#888888] rounded hover:text-white"
+                        class="flex-1 text-[10px] px-4 py-2 bg-popover border border-border/8 text-muted-foreground rounded hover:text-foreground"
                         on:click=move |_| {
                             set_show_delete_confirm.set(false);
                             set_robot_to_delete.set(None);

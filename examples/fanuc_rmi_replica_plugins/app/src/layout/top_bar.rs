@@ -36,16 +36,16 @@ pub fn TopBar() -> impl IntoView {
     let (show_connection_menu, set_show_connection_menu) = signal(false);
 
     view! {
-        <header class="h-9 bg-[#111111] border-b border-[#ffffff10] flex items-center px-3 shrink-0">
+        <header class="h-9 bg-card border-b border-border/10 flex items-center px-3 shrink-0">
             // Logo and title
             <div class="flex items-center space-x-2">
-                <div class="w-6 h-6 bg-[#00d9ff] rounded flex items-center justify-center">
-                    <svg class="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="w-6 h-6 bg-primary rounded flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
                     </svg>
                 </div>
-                <h1 class="text-xs font-semibold text-white">"FANUC RMI"</h1>
-                <span class="text-[#555555] text-[10px]">"v2.0"</span>
+                <h1 class="text-xs font-semibold text-foreground">"FANUC RMI"</h1>
+                <span class="text-muted-foreground text-[10px]">"v2.0"</span>
             </div>
 
             // Spacer
@@ -56,16 +56,16 @@ pub fn TopBar() -> impl IntoView {
                 // WebSocket status with reconnect
                 <div class="relative">
                     <button
-                        class="flex items-center space-x-1.5 px-2 py-1 rounded hover:bg-[#ffffff08] transition-colors"
+                        class="flex items-center space-x-1.5 px-2 py-1 rounded hover:bg-border/8 transition-colors"
                         on:click=move |_| set_show_connection_menu.update(|v| *v = !*v)
                     >
                         <div class={move || if ws_connected.get() {
-                            "w-1.5 h-1.5 bg-[#00d9ff] rounded-full animate-pulse"
+                            "w-1.5 h-1.5 bg-primary rounded-full animate-pulse"
                         } else {
-                            "w-1.5 h-1.5 bg-[#ff4444] rounded-full"
+                            "w-1.5 h-1.5 bg-destructive rounded-full"
                         }}></div>
-                        <span class="text-[10px] text-[#888888]">"WS"</span>
-                        <svg class="w-2.5 h-2.5 text-[#666666]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span class="text-[10px] text-muted-foreground">"WS"</span>
+                        <svg class="w-2.5 h-2.5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </button>
@@ -85,14 +85,14 @@ pub fn TopBar() -> impl IntoView {
                     <div class="flex items-center space-x-1.5">
                         <div class={move || {
                             if robot_connecting() {
-                                "w-1.5 h-1.5 bg-[#ffaa00] rounded-full animate-pulse"
+                                "w-1.5 h-1.5 bg-warning rounded-full animate-pulse"
                             } else if robot_connected() {
-                                "w-1.5 h-1.5 bg-[#22c55e] rounded-full animate-pulse"
+                                "w-1.5 h-1.5 bg-success rounded-full animate-pulse"
                             } else {
-                                "w-1.5 h-1.5 bg-[#444444] rounded-full"
+                                "w-1.5 h-1.5 bg-muted-foreground rounded-full"
                             }
                         }}></div>
-                        <span class="text-[10px] text-[#888888]">
+                        <span class="text-[10px] text-muted-foreground">
                             {move || {
                                 if robot_connecting() {
                                     "Connecting...".to_string()
@@ -146,17 +146,17 @@ fn ConnectionDropdown() -> impl IntoView {
     view! {
         <div class="relative">
             <button
-                class="flex items-center gap-1.5 px-2 py-0.5 bg-[#ffffff05] rounded border border-[#ffffff05] hover:bg-[#ffffff10] cursor-pointer"
+                class="flex items-center gap-1.5 px-2 py-0.5 bg-[#ffffff05] rounded border border-[#ffffff05] hover:bg-border/10 cursor-pointer"
                 on:click=toggle_dropdown
             >
                 <div class=move || {
-                    if is_robot_connected() { "w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" }
-                    else { "w-1.5 h-1.5 rounded-full bg-[#ef4444]" }
+                    if is_robot_connected() { "w-1.5 h-1.5 rounded-full bg-success animate-pulse" }
+                    else { "w-1.5 h-1.5 rounded-full bg-destructive" }
                 }></div>
-                <span class="text-[9px] text-[#cccccc] font-medium">
+                <span class="text-[9px] text-foreground font-medium">
                     {move || if is_robot_connected() { robot_addr() } else { "Select Robot".to_string() }}
                 </span>
-                <span class="text-[8px] text-[#666666]">"▼"</span>
+                <span class="text-[8px] text-muted-foreground">"▼"</span>
             </button>
 
             <Show when=move || dropdown_open.get()>
@@ -189,18 +189,18 @@ fn DropdownContent(
     };
 
     view! {
-        <div class="absolute top-full left-0 mt-1 w-56 bg-[#1a1a1a] border border-[#ffffff15] rounded shadow-lg z-50">
-            <div class="px-2 py-1.5 border-b border-[#ffffff10] text-[9px] text-[#666666] uppercase tracking-wide">"Saved Robots"</div>
+        <div class="absolute top-full left-0 mt-1 w-56 bg-popover border border-border/15 rounded shadow-lg z-50">
+            <div class="px-2 py-1.5 border-b border-border/10 text-[9px] text-muted-foreground uppercase tracking-wide">"Saved Robots"</div>
 
             <Show when=move || robots_query.is_loading()>
-                <div class="px-3 py-2 text-[10px] text-[#888888]">"Loading..."</div>
+                <div class="px-3 py-2 text-[10px] text-muted-foreground">"Loading..."</div>
             </Show>
 
             <RobotConnectionList robots_query=robots_query set_dropdown_open=set_dropdown_open />
 
-            <div class="border-t border-[#ffffff10] px-2 py-1.5">
+            <div class="border-t border-border/10 px-2 py-1.5">
                 <button
-                    class="w-full px-2 py-1 text-[9px] text-[#00d9ff] hover:bg-[#00d9ff10] rounded flex items-center gap-1.5"
+                    class="w-full px-2 py-1 text-[9px] text-primary hover:bg-[#00d9ff10] rounded flex items-center gap-1.5"
                     on:click=quick_connect
                 >
                     <span>"⚡"</span>
@@ -230,7 +230,7 @@ fn RobotConnectionList(
 
                     if robots.is_empty() {
                         view! {
-                            <div class="px-3 py-2 text-[10px] text-[#666666] italic">
+                            <div class="px-3 py-2 text-[10px] text-muted-foreground italic">
                                 "No saved robots. Use Settings to add."
                             </div>
                         }.into_any()
@@ -240,7 +240,7 @@ fn RobotConnectionList(
                             let ctx = ctx.clone();
                             view! {
                                 <button
-                                    class="w-full px-3 py-1.5 text-left hover:bg-[#ffffff08] flex items-center gap-2"
+                                    class="w-full px-3 py-1.5 text-left hover:bg-border/8 flex items-center gap-2"
                                     on:click=move |_| {
                                         ctx.send(ConnectToRobot {
                                             connection_id: Some(robot_clone.id),
@@ -251,10 +251,10 @@ fn RobotConnectionList(
                                         set_dropdown_open.set(false);
                                     }
                                 >
-                                    <div class="w-1.5 h-1.5 rounded-full bg-[#666666]"></div>
+                                    <div class="w-1.5 h-1.5 rounded-full bg-muted-foreground"></div>
                                     <div class="flex-1">
-                                        <div class="text-[10px] text-white">{robot.name.clone()}</div>
-                                        <div class="text-[8px] text-[#666666]">
+                                        <div class="text-[10px] text-foreground">{robot.name.clone()}</div>
+                                        <div class="text-[8px] text-muted-foreground">
                                             {format!("{}:{}", robot.ip_address, robot.port)}
                                         </div>
                                     </div>
@@ -278,11 +278,11 @@ fn WebSocketDropdown(
     let connection = use_connection();
 
     view! {
-        <div class="absolute right-0 top-full mt-1 w-56 bg-[#1a1a1a] border border-[#ffffff15] rounded shadow-lg z-50">
+        <div class="absolute right-0 top-full mt-1 w-56 bg-popover border border-border/15 rounded shadow-lg z-50">
             <div class="p-2">
-                <div class="text-[9px] text-[#666666] uppercase tracking-wide mb-1">"WebSocket Server"</div>
+                <div class="text-[9px] text-muted-foreground uppercase tracking-wide mb-1">"WebSocket Server"</div>
                 <div class="flex items-center justify-between mb-2">
-                    <span class="text-[10px] text-[#aaaaaa]">
+                    <span class="text-[10px] text-muted-foreground">
                         {move || {
                             if ws_connecting.get() {
                                 "Connecting..."
@@ -295,17 +295,17 @@ fn WebSocketDropdown(
                     </span>
                     <div class={move || {
                         if ws_connecting.get() {
-                            "w-1.5 h-1.5 bg-[#ffaa00] rounded-full animate-pulse"
+                            "w-1.5 h-1.5 bg-warning rounded-full animate-pulse"
                         } else if ws_connected.get() {
-                            "w-1.5 h-1.5 bg-[#00d9ff] rounded-full animate-pulse"
+                            "w-1.5 h-1.5 bg-primary rounded-full animate-pulse"
                         } else {
-                            "w-1.5 h-1.5 bg-[#ff4444] rounded-full"
+                            "w-1.5 h-1.5 bg-destructive rounded-full"
                         }
                     }}></div>
                 </div>
-                <div class="text-[9px] text-[#555555] mb-2">"ws://127.0.0.1:8083"</div>
+                <div class="text-[9px] text-muted-foreground mb-2">"ws://127.0.0.1:8083"</div>
                 <button
-                    class="w-full text-[9px] px-2 py-1 bg-[#00d9ff20] text-[#00d9ff] rounded hover:bg-[#00d9ff30] disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="w-full text-[9px] px-2 py-1 bg-[#00d9ff20] text-primary rounded hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled=move || ws_connected.get() || ws_connecting.get()
                     on:click={
                         let open = connection.open.clone();
@@ -373,11 +373,11 @@ fn QuickSettingsButton() -> impl IntoView {
     view! {
         <div class="relative">
             <button
-                class="p-1 hover:bg-[#ffffff08] rounded transition-colors"
+                class="p-1 hover:bg-border/8 rounded transition-colors"
                 on:click=move |_| set_show_popup.update(|v| *v = !*v)
                 title="Quick Connect"
             >
-                <svg class="w-3.5 h-3.5 text-[#888888] hover:text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-3.5 h-3.5 text-muted-foreground hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                 </svg>
@@ -416,12 +416,12 @@ fn QuickSettingsPopup(
     let navigate = use_navigate();
 
     view! {
-        <div class="absolute right-0 top-full mt-1 w-72 bg-[#1a1a1a] border border-[#ffffff15] rounded-lg shadow-lg z-50">
+        <div class="absolute right-0 top-full mt-1 w-72 bg-popover border border-border/15 rounded-lg shadow-lg z-50">
             // Header
-            <div class="flex items-center justify-between p-2 border-b border-[#ffffff10]">
-                <span class="text-[10px] font-semibold text-[#00d9ff]">"Quick Connect"</span>
+            <div class="flex items-center justify-between p-2 border-b border-border/10">
+                <span class="text-[10px] font-semibold text-primary">"Quick Connect"</span>
                 <button
-                    class="text-[#666666] hover:text-white"
+                    class="text-muted-foreground hover:text-foreground"
                     on:click=move |_| set_show_popup.set(false)
                 >
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -431,31 +431,31 @@ fn QuickSettingsPopup(
             </div>
 
             // Current Status Section
-            <div class="p-2 border-b border-[#ffffff10] space-y-1.5">
+            <div class="p-2 border-b border-border/10 space-y-1.5">
                 // Connection status
                 <div class="flex items-center justify-between">
-                    <span class="text-[9px] text-[#666666] uppercase">"Robot"</span>
+                    <span class="text-[9px] text-muted-foreground uppercase">"Robot"</span>
                     {move || {
                         if robot_connecting.get() {
                             view! {
                                 <div class="flex items-center gap-1.5">
-                                    <div class="w-1.5 h-1.5 bg-[#ffaa00] rounded-full animate-pulse"></div>
-                                    <span class="text-[10px] text-[#ffaa00] font-medium">"Connecting..."</span>
+                                    <div class="w-1.5 h-1.5 bg-warning rounded-full animate-pulse"></div>
+                                    <span class="text-[10px] text-warning font-medium">"Connecting..."</span>
                                 </div>
                             }.into_any()
                         } else if robot_connected.get() {
                             let name = connected_robot_name.get().unwrap_or_else(|| "Connected".to_string());
                             view! {
                                 <div class="flex items-center gap-1.5">
-                                    <div class="w-1.5 h-1.5 bg-[#22c55e] rounded-full animate-pulse"></div>
-                                    <span class="text-[10px] text-[#22c55e] font-medium">{name}</span>
+                                    <div class="w-1.5 h-1.5 bg-success rounded-full animate-pulse"></div>
+                                    <span class="text-[10px] text-success font-medium">{name}</span>
                                 </div>
                             }.into_any()
                         } else {
                             view! {
                                 <div class="flex items-center gap-1.5">
-                                    <div class="w-1.5 h-1.5 bg-[#666666] rounded-full"></div>
-                                    <span class="text-[10px] text-[#888888]">"Not Connected"</span>
+                                    <div class="w-1.5 h-1.5 bg-muted-foreground rounded-full"></div>
+                                    <span class="text-[10px] text-muted-foreground">"Not Connected"</span>
                                 </div>
                             }.into_any()
                         }
@@ -463,12 +463,12 @@ fn QuickSettingsPopup(
                 </div>
                 // Control status
                 <div class="flex items-center justify-between">
-                    <span class="text-[9px] text-[#666666] uppercase">"Control"</span>
+                    <span class="text-[9px] text-muted-foreground uppercase">"Control"</span>
                     {move || {
                         let my_id = ctx.my_connection_id.get();
                         if has_control.get() {
                             view! {
-                                <span class="text-[10px] text-[#00d9ff] font-medium">"You have control"</span>
+                                <span class="text-[10px] text-primary font-medium">"You have control"</span>
                             }.into_any()
                         } else if let Some(client_id) = controlling_client_id.get() {
                             // Another client has control
@@ -476,16 +476,16 @@ fn QuickSettingsPopup(
                             if is_me {
                                 // This shouldn't happen, but handle it gracefully
                                 view! {
-                                    <span class="text-[10px] text-[#00d9ff] font-medium">"You have control"</span>
+                                    <span class="text-[10px] text-primary font-medium">"You have control"</span>
                                 }.into_any()
                             } else {
                                 view! {
-                                    <span class="text-[10px] text-[#f59e0b]">{format!("Client {} has control", client_id)}</span>
+                                    <span class="text-[10px] text-warning">{format!("Client {} has control", client_id)}</span>
                                 }.into_any()
                             }
                         } else {
                             view! {
-                                <span class="text-[10px] text-[#888888]">"No control"</span>
+                                <span class="text-[10px] text-muted-foreground">"No control"</span>
                             }.into_any()
                         }
                     }}
@@ -493,8 +493,8 @@ fn QuickSettingsPopup(
             </div>
 
             // Saved Connections List
-            <div class="p-2 border-b border-[#ffffff10]">
-                <div class="text-[9px] text-[#666666] uppercase tracking-wide mb-1.5">"Saved Robots"</div>
+            <div class="p-2 border-b border-border/10">
+                <div class="text-[9px] text-muted-foreground uppercase tracking-wide mb-1.5">"Saved Robots"</div>
                 <div class="space-y-1 max-h-48 overflow-y-auto">
                     <SavedConnectionsList
                         robots_query=robots_query
@@ -512,7 +512,7 @@ fn QuickSettingsPopup(
             // Link to full settings
             <div class="p-2">
                 <button
-                    class="w-full text-[9px] text-[#888888] hover:text-[#00d9ff] flex items-center justify-center gap-1"
+                    class="w-full text-[9px] text-muted-foreground hover:text-primary flex items-center justify-center gap-1"
                     on:click={
                         let nav = navigate.clone();
                         move |_| {
@@ -583,7 +583,7 @@ fn SavedConnectionsList(
     view! {
         // Show error message if any
         {move || error_message.get().map(|err| view! {
-            <div class="text-[9px] text-[#ff4444] bg-[#ff444420] p-1.5 rounded mb-2">
+            <div class="text-[9px] text-destructive bg-destructive/15 p-1.5 rounded mb-2">
                 {err}
             </div>
         })}
@@ -591,7 +591,7 @@ fn SavedConnectionsList(
         {move || {
             if robots_query.is_loading() {
                 return view! {
-                    <div class="text-[10px] text-[#555555] italic py-2 text-center">
+                    <div class="text-[10px] text-muted-foreground italic py-2 text-center">
                         "Loading..."
                     </div>
                 }.into_any();
@@ -600,7 +600,7 @@ fn SavedConnectionsList(
             let connections = robots_query.data().map(|r| r.connections.clone()).unwrap_or_default();
             if connections.is_empty() {
                 view! {
-                    <div class="text-[10px] text-[#555555] italic py-2 text-center">
+                    <div class="text-[10px] text-muted-foreground italic py-2 text-center">
                         "No saved connections"
                     </div>
                 }.into_any()
@@ -626,12 +626,12 @@ fn SavedConnectionsList(
                             } else if is_connecting_to_this() {
                                 format!("{} bg-[#00d9ff10] border border-[#00d9ff40]", base)
                             } else {
-                                format!("{} bg-[#ffffff05] hover:bg-[#ffffff08]", base)
+                                format!("{} bg-[#ffffff05] hover:bg-border/8", base)
                             }
                         }}>
                             <div class="flex-1 min-w-0">
-                                <div class="text-[10px] text-white font-medium truncate">{conn_name}</div>
-                                <div class="text-[9px] text-[#666666]">{conn_addr}</div>
+                                <div class="text-[10px] text-foreground font-medium truncate">{conn_name}</div>
+                                <div class="text-[9px] text-muted-foreground">{conn_addr}</div>
                             </div>
                             {move || {
                                 let ctx = ctx.clone();
@@ -640,7 +640,7 @@ fn SavedConnectionsList(
                                     // Show disconnect button for active connection
                                     view! {
                                         <button
-                                            class="text-[8px] px-2 py-0.5 bg-[#ff444420] text-[#ff4444] rounded hover:bg-[#ff444430] disabled:opacity-50 disabled:cursor-not-allowed"
+                                            class="text-[8px] px-2 py-0.5 bg-destructive/15 text-destructive rounded hover:bg-destructive/20 disabled:opacity-50 disabled:cursor-not-allowed"
                                             disabled=move || !has_control.get() || robot_connecting.get()
                                             title=move || if has_control.get() { "Disconnect" } else { "Need control to disconnect" }
                                             on:click=move |_| {
@@ -653,7 +653,7 @@ fn SavedConnectionsList(
                                 } else if is_connecting_to_this() {
                                     // Show connecting state for this specific connection
                                     view! {
-                                        <span class="text-[8px] px-2 py-0.5 text-[#00d9ff] animate-pulse">
+                                        <span class="text-[8px] px-2 py-0.5 text-primary animate-pulse">
                                             "Connecting..."
                                         </span>
                                     }.into_any()
@@ -661,7 +661,7 @@ fn SavedConnectionsList(
                                     // Show connect button for other connections - requires control
                                     view! {
                                         <button
-                                            class="text-[8px] px-2 py-0.5 bg-[#00d9ff20] text-[#00d9ff] rounded hover:bg-[#00d9ff30] disabled:opacity-50 disabled:cursor-not-allowed"
+                                            class="text-[8px] px-2 py-0.5 bg-[#00d9ff20] text-primary rounded hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                                             disabled=move || !can_connect()
                                             title=move || {
                                                 if robot_connecting.get() || connecting_to_id.get().is_some() {
@@ -716,9 +716,9 @@ fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
             let ctx = ctx.clone();
             if !has_control.get() {
                 view! {
-                    <div class="p-2 border-b border-[#ffffff10]">
+                    <div class="p-2 border-b border-border/10">
                         <button
-                            class="w-full text-[9px] px-3 py-1.5 bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] rounded hover:bg-[#00d9ff30]"
+                            class="w-full text-[9px] px-3 py-1.5 bg-[#00d9ff20] border border-[#00d9ff40] text-primary rounded hover:bg-primary/20"
                             on:click=move |_| {
                                 if let Some(entity_bits) = system_entity_bits() {
                                     ctx.send(ControlRequest::Take(entity_bits));
@@ -731,9 +731,9 @@ fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
                 }.into_any()
             } else {
                 view! {
-                    <div class="p-2 border-b border-[#ffffff10]">
+                    <div class="p-2 border-b border-border/10">
                         <button
-                            class="w-full text-[9px] px-3 py-1.5 bg-[#ff444420] border border-[#ff444440] text-[#ff4444] rounded hover:bg-[#ff444430]"
+                            class="w-full text-[9px] px-3 py-1.5 bg-destructive/15 border border-[#ff444440] text-destructive rounded hover:bg-destructive/20"
                             on:click=move |_| {
                                 if let Some(entity_bits) = system_entity_bits() {
                                     ctx.send(ControlRequest::Release(entity_bits));
@@ -786,12 +786,12 @@ fn ControlButton() -> impl IntoView {
     view! {
         <button
             class=move || if has_control() {
-                "bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[8px] px-2 py-0.5 rounded hover:bg-[#22c55e30] flex items-center gap-1"
+                "bg-[#22c55e20] border border-[#22c55e40] text-success text-[8px] px-2 py-0.5 rounded hover:bg-success/20 flex items-center gap-1"
             } else if other_has_control() {
                 // Another client has control - show red/warning style
-                "bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[8px] px-2 py-0.5 rounded hover:bg-[#ff444430] flex items-center gap-1"
+                "bg-destructive/15 border border-[#ff444440] text-destructive text-[8px] px-2 py-0.5 rounded hover:bg-destructive/20 flex items-center gap-1"
             } else {
-                "bg-[#f59e0b20] border border-[#f59e0b40] text-[#f59e0b] text-[8px] px-2 py-0.5 rounded hover:bg-[#f59e0b30] flex items-center gap-1"
+                "bg-[#f59e0b20] border border-[#f59e0b40] text-warning text-[8px] px-2 py-0.5 rounded hover:bg-[#f59e0b30] flex items-center gap-1"
             }
             on:click={
                 let ctx = ctx.clone();

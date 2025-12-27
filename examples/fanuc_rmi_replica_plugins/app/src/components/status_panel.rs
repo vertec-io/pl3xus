@@ -23,8 +23,8 @@ pub fn StatusPanel() -> impl IntoView {
     let get_frame_tool = move || frame_tool.get();
 
     view! {
-        <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-2">
-            <h2 class="text-[10px] font-semibold text-[#00d9ff] mb-1.5 uppercase tracking-wide">"Status"</h2>
+        <div class="bg-background rounded border border-border/8 p-2">
+            <h2 class="text-[10px] font-semibold text-primary mb-1.5 uppercase tracking-wide">"Status"</h2>
             <div class="grid grid-cols-4 gap-1">
                 <StatusIndicator label="Servo" value=move || get_status().servo_ready />
                 <StatusIndicator label="TP" value=move || get_status().tp_enabled />
@@ -34,12 +34,12 @@ pub fn StatusPanel() -> impl IntoView {
 
             // Active Frame/Tool display - only show when robot is connected
             <Show when=move || is_connected()>
-                <div class="mt-2 pt-2 border-t border-[#ffffff08]">
+                <div class="mt-2 pt-2 border-t border-border/8">
                     <div class="flex items-center justify-between">
-                        <span class="text-[#666666] text-[8px]">"UFrame:"</span>
-                        <span class="text-[10px] font-medium text-[#00d9ff]">{move || get_frame_tool().active_frame}</span>
-                        <span class="text-[#666666] text-[8px] ml-2">"UTool:"</span>
-                        <span class="text-[10px] font-medium text-[#00d9ff]">{move || get_frame_tool().active_tool}</span>
+                        <span class="text-muted-foreground text-[8px]">"UFrame:"</span>
+                        <span class="text-[10px] font-medium text-primary">{move || get_frame_tool().active_frame}</span>
+                        <span class="text-muted-foreground text-[8px] ml-2">"UTool:"</span>
+                        <span class="text-[10px] font-medium text-primary">{move || get_frame_tool().active_tool}</span>
                     </div>
                 </div>
             </Show>
@@ -51,12 +51,12 @@ pub fn StatusPanel() -> impl IntoView {
 fn StatusIndicator<F>(label: &'static str, value: F) -> impl IntoView 
 where F: Fn() -> bool + Copy + Send + Sync + 'static {
     view! {
-        <div class="bg-[#111111] rounded px-1 py-1 text-center">
-            <div class="text-[#666666] text-[8px] mb-0.5">{label}</div>
+        <div class="bg-card rounded px-1 py-1 text-center">
+            <div class="text-muted-foreground text-[8px] mb-0.5">{label}</div>
             <div class=move || if value() {
-                 "text-[10px] font-semibold text-[#00d9ff]"
+                 "text-[10px] font-semibold text-primary"
             } else {
-                 "text-[10px] font-semibold text-[#555555]"
+                 "text-[10px] font-semibold text-muted-foreground"
             }>
                 {move || if value() { "ON" } else { "OFF" }}
             </div>
@@ -68,9 +68,9 @@ where F: Fn() -> bool + Copy + Send + Sync + 'static {
 fn StatusIndicatorText<F>(label: &'static str, value: F) -> impl IntoView 
 where F: Fn() -> String + Send + Sync + 'static {
      view! {
-        <div class="bg-[#111111] rounded px-1 py-1 text-center">
-            <div class="text-[#666666] text-[8px] mb-0.5">{label}</div>
-            <div class="text-[10px] font-semibold text-white truncate">{value}</div>
+        <div class="bg-card rounded px-1 py-1 text-center">
+            <div class="text-muted-foreground text-[8px] mb-0.5">{label}</div>
+            <div class="text-[10px] font-semibold text-foreground truncate">{value}</div>
         </div>
     }
 }

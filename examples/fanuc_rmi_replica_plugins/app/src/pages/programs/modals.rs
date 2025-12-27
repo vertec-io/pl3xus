@@ -33,17 +33,17 @@ pub fn NewProgramModal(
 
     view! {
         <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-            <div class="bg-[#111111] border border-[#ffffff10] rounded-lg w-[400px] flex flex-col">
+            <div class="bg-card border border-border/10 rounded-lg w-[400px] flex flex-col">
                 // Header
-                <div class="flex items-center justify-between p-3 border-b border-[#ffffff08]">
-                    <h2 class="text-sm font-semibold text-white flex items-center">
-                        <svg class="w-4 h-4 mr-2 text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex items-center justify-between p-3 border-b border-border/8">
+                    <h2 class="text-sm font-semibold text-foreground flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                         </svg>
                         "New Program"
                     </h2>
                     <button
-                        class="text-[#666666] hover:text-white"
+                        class="text-muted-foreground hover:text-foreground"
                         on:click={
                             let on_close = on_close.clone();
                             move |_| on_close()
@@ -58,19 +58,19 @@ pub fn NewProgramModal(
                 // Content
                 <div class="p-3 space-y-3">
                     <Show when=move || error_message.get().is_some()>
-                        <div class="bg-[#ff444420] border border-[#ff444440] rounded p-2 flex items-start gap-2">
-                            <svg class="w-4 h-4 text-[#ff4444] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="bg-destructive/15 border border-destructive/25 rounded p-2 flex items-start gap-2">
+                            <svg class="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
-                            <span class="text-[10px] text-[#ff4444]">{move || error_message.get().unwrap_or_default()}</span>
+                            <span class="text-[10px] text-destructive">{move || error_message.get().unwrap_or_default()}</span>
                         </div>
                     </Show>
                     <div>
-                        <label class="block text-[9px] text-[#888888] mb-1">"Program Name *"</label>
+                        <label class="block text-[9px] text-muted-foreground mb-1">"Program Name *"</label>
                         <input
                             type="text"
                             placeholder="e.g., Spiral Cylinder"
-                            class="w-full bg-[#0a0a0a] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none"
+                            class="w-full bg-background border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none"
                             prop:value=move || program_name.get()
                             on:input=move |ev| {
                                 set_program_name.set(event_target_value(&ev));
@@ -79,24 +79,24 @@ pub fn NewProgramModal(
                         />
                     </div>
                     <div>
-                        <label class="block text-[9px] text-[#888888] mb-1">"Description"</label>
+                        <label class="block text-[9px] text-muted-foreground mb-1">"Description"</label>
                         <textarea
                             placeholder="Optional description..."
                             rows="2"
-                            class="w-full bg-[#0a0a0a] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none resize-none"
+                            class="w-full bg-background border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none resize-none"
                             prop:value=move || description.get()
                             on:input=move |ev| set_description.set(event_target_value(&ev))
                         ></textarea>
                     </div>
-                    <p class="text-[8px] text-[#555555]">
+                    <p class="text-[8px] text-muted-foreground">
                         "After creating the program, you can upload a CSV file with motion data."
                     </p>
                 </div>
 
                 // Footer
-                <div class="flex justify-end gap-2 p-3 border-t border-[#ffffff08]">
+                <div class="flex justify-end gap-2 p-3 border-t border-border/8">
                     <button
-                        class="bg-[#1a1a1a] border border-[#ffffff08] text-[#888888] hover:text-white text-[10px] px-3 py-1.5 rounded"
+                        class="bg-popover border border-border/8 text-muted-foreground hover:text-foreground text-[10px] px-3 py-1.5 rounded"
                         on:click={
                             let on_close = on_close_clone.clone();
                             move |_| on_close()
@@ -108,9 +108,9 @@ pub fn NewProgramModal(
                         class={move || format!(
                             "text-[10px] px-3 py-1.5 rounded {}",
                             if !program_name.get().is_empty() && !create_program.is_loading() {
-                                "bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] hover:bg-[#22c55e30]"
+                                "bg-[#22c55e20] border border-[#22c55e40] text-success hover:bg-success/20"
                             } else {
-                                "bg-[#111111] border border-[#ffffff08] text-[#555555] cursor-not-allowed"
+                                "bg-card border border-border/8 text-muted-foreground cursor-not-allowed"
                             }
                         )}
                         disabled=move || program_name.get().is_empty() || create_program.is_loading()
@@ -172,17 +172,17 @@ pub fn OpenProgramModal(
 
     view! {
         <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-            <div class="bg-[#111111] border border-[#ffffff10] rounded-lg w-[400px] max-h-[500px] flex flex-col">
+            <div class="bg-card border border-border/10 rounded-lg w-[400px] max-h-[500px] flex flex-col">
                 // Header
-                <div class="flex items-center justify-between p-3 border-b border-[#ffffff08]">
-                    <h2 class="text-sm font-semibold text-white flex items-center">
-                        <svg class="w-4 h-4 mr-2 text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex items-center justify-between p-3 border-b border-border/8">
+                    <h2 class="text-sm font-semibold text-foreground flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
                         </svg>
                         "Open Program"
                     </h2>
                     <button
-                        class="text-[#666666] hover:text-white"
+                        class="text-muted-foreground hover:text-foreground"
                         on:click={
                             let on_close = on_close.clone();
                             move |_| on_close()
@@ -200,7 +200,7 @@ pub fn OpenProgramModal(
                         let progs = programs.get();
                         if progs.is_empty() {
                             Either::Left(view! {
-                                <div class="text-center py-8 text-[#555555] text-[10px]">
+                                <div class="text-center py-8 text-muted-foreground text-[10px]">
                                     "No programs available"
                                 </div>
                             })
@@ -215,15 +215,15 @@ pub fn OpenProgramModal(
                                         class={move || format!(
                                             "w-full text-left p-2 rounded border text-[9px] transition-colors {}",
                                             if is_selected() {
-                                                "bg-[#00d9ff10] border-[#00d9ff40] text-white"
+                                                "bg-[#00d9ff10] border-[#00d9ff40] text-foreground"
                                             } else {
-                                                "bg-[#0a0a0a] border-[#ffffff08] text-[#888888] hover:border-[#ffffff20]"
+                                                "bg-background border-border/8 text-muted-foreground hover:border-border/20"
                                             }
                                         )}
                                         on:click=move |_| set_selected_id.set(Some(prog_id))
                                     >
                                         <div class="font-medium text-[10px] mb-0.5">{prog_name}</div>
-                                        <div class="text-[#555555]">{lines_str}</div>
+                                        <div class="text-muted-foreground">{lines_str}</div>
                                     </button>
                                 }
                             }).collect_view())
@@ -232,9 +232,9 @@ pub fn OpenProgramModal(
                 </div>
 
                 // Footer
-                <div class="flex justify-end gap-2 p-3 border-t border-[#ffffff08]">
+                <div class="flex justify-end gap-2 p-3 border-t border-border/8">
                     <button
-                        class="bg-[#1a1a1a] border border-[#ffffff08] text-[#888888] hover:text-white text-[10px] px-3 py-1.5 rounded"
+                        class="bg-popover border border-border/8 text-muted-foreground hover:text-foreground text-[10px] px-3 py-1.5 rounded"
                         on:click={
                             let on_close = on_close_clone.clone();
                             move |_| on_close()
@@ -246,11 +246,11 @@ pub fn OpenProgramModal(
                         class={move || format!(
                             "text-[10px] px-3 py-1.5 rounded {}",
                             if program_query.is_loading() {
-                                "bg-[#111111] border border-[#ffffff08] text-[#555555] cursor-wait"
+                                "bg-card border border-border/8 text-muted-foreground cursor-wait"
                             } else if selected_id.get().is_some() {
-                                "bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] hover:bg-[#00d9ff30]"
+                                "bg-[#00d9ff20] border border-[#00d9ff40] text-primary hover:bg-primary/20"
                             } else {
-                                "bg-[#111111] border border-[#ffffff08] text-[#555555] cursor-not-allowed"
+                                "bg-card border border-border/8 text-muted-foreground cursor-not-allowed"
                             }
                         )}
                         disabled=move || selected_id.get().is_none() || program_query.is_loading()
@@ -280,12 +280,12 @@ pub fn SaveAsProgramModal(
 
     view! {
         <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-            <div class="bg-[#111111] border border-[#ffffff10] rounded-lg w-[400px] flex flex-col">
+            <div class="bg-card border border-border/10 rounded-lg w-[400px] flex flex-col">
                 // Header
-                <div class="flex items-center justify-between p-3 border-b border-[#ffffff08]">
-                    <h2 class="text-sm font-semibold text-white">"Save As"</h2>
+                <div class="flex items-center justify-between p-3 border-b border-border/8">
+                    <h2 class="text-sm font-semibold text-foreground">"Save As"</h2>
                     <button
-                        class="text-[#666666] hover:text-white"
+                        class="text-muted-foreground hover:text-foreground"
                         on:click={
                             let on_close = on_close.clone();
                             move |_| on_close()
@@ -299,20 +299,20 @@ pub fn SaveAsProgramModal(
 
                 // Content
                 <div class="p-3">
-                    <label class="block text-[9px] text-[#888888] mb-1">"New Program Name"</label>
+                    <label class="block text-[9px] text-muted-foreground mb-1">"New Program Name"</label>
                     <input
                         type="text"
                         placeholder="Enter new name..."
-                        class="w-full bg-[#0a0a0a] border border-[#ffffff08] rounded px-2 py-1.5 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none"
+                        class="w-full bg-background border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none"
                         prop:value=move || program_name.get()
                         on:input=move |ev| set_program_name.set(event_target_value(&ev))
                     />
                 </div>
 
                 // Footer
-                <div class="flex justify-end gap-2 p-3 border-t border-[#ffffff08]">
+                <div class="flex justify-end gap-2 p-3 border-t border-border/8">
                     <button
-                        class="bg-[#1a1a1a] border border-[#ffffff08] text-[#888888] hover:text-white text-[10px] px-3 py-1.5 rounded"
+                        class="bg-popover border border-border/8 text-muted-foreground hover:text-foreground text-[10px] px-3 py-1.5 rounded"
                         on:click={
                             let on_close = on_close_clone.clone();
                             move |_| on_close()
@@ -324,9 +324,9 @@ pub fn SaveAsProgramModal(
                         class={move || format!(
                             "text-[10px] px-3 py-1.5 rounded {}",
                             if !program_name.get().is_empty() {
-                                "bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] hover:bg-[#22c55e30]"
+                                "bg-[#22c55e20] border border-[#22c55e40] text-success hover:bg-success/20"
                             } else {
-                                "bg-[#111111] border border-[#ffffff08] text-[#555555] cursor-not-allowed"
+                                "bg-card border border-border/8 text-muted-foreground cursor-not-allowed"
                             }
                         )}
                         disabled=move || program_name.get().is_empty()
@@ -366,17 +366,17 @@ pub fn CSVUploadModal(
 
     view! {
         <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-            <div class="bg-[#111111] border border-[#ffffff10] rounded-lg w-[400px] flex flex-col">
+            <div class="bg-card border border-border/10 rounded-lg w-[400px] flex flex-col">
                 // Header
-                <div class="flex items-center justify-between p-3 border-b border-[#ffffff08]">
-                    <h2 class="text-sm font-semibold text-white flex items-center">
-                        <svg class="w-4 h-4 mr-2 text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex items-center justify-between p-3 border-b border-border/8">
+                    <h2 class="text-sm font-semibold text-foreground flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                         </svg>
                         "Upload CSV"
                     </h2>
                     <button
-                        class="text-[#666666] hover:text-white"
+                        class="text-muted-foreground hover:text-foreground"
                         on:click={
                             let on_close = on_close.clone();
                             move |_| on_close()
@@ -391,21 +391,21 @@ pub fn CSVUploadModal(
                 // Content
                 <div class="p-3 space-y-3">
                     <Show when=move || error_message.get().is_some()>
-                        <div class="bg-[#ff444420] border border-[#ff444440] rounded p-2 flex items-start gap-2">
-                            <svg class="w-4 h-4 text-[#ff4444] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="bg-destructive/15 border border-destructive/25 rounded p-2 flex items-start gap-2">
+                            <svg class="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
-                            <span class="text-[10px] text-[#ff4444]">{move || error_message.get().unwrap_or_default()}</span>
+                            <span class="text-[10px] text-destructive">{move || error_message.get().unwrap_or_default()}</span>
                         </div>
                     </Show>
-                    <div class="border-2 border-dashed border-[#ffffff10] rounded-lg p-6 text-center relative">
-                        <svg class="w-8 h-8 mx-auto mb-2 text-[#555555]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="border-2 border-dashed border-border/10 rounded-lg p-6 text-center relative">
+                        <svg class="w-8 h-8 mx-auto mb-2 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                         </svg>
                         {move || if let Some(name) = file_name.get() {
-                            view! { <p class="text-[10px] text-[#00d9ff]">{name}</p> }.into_any()
+                            view! { <p class="text-[10px] text-primary">{name}</p> }.into_any()
                         } else {
-                            view! { <p class="text-[10px] text-[#555555]">"Drop CSV file here or click to browse"</p> }.into_any()
+                            view! { <p class="text-[10px] text-muted-foreground">"Drop CSV file here or click to browse"</p> }.into_any()
                         }}
                         <input
                             type="file"
@@ -437,15 +437,15 @@ pub fn CSVUploadModal(
                             }
                         />
                     </div>
-                    <p class="text-[8px] text-[#555555]">
+                    <p class="text-[8px] text-muted-foreground">
                         "CSV should have columns: X, Y, Z, W (optional), P (optional), R (optional), Speed (optional)"
                     </p>
                 </div>
 
                 // Footer
-                <div class="flex justify-end gap-2 p-3 border-t border-[#ffffff08]">
+                <div class="flex justify-end gap-2 p-3 border-t border-border/8">
                     <button
-                        class="bg-[#1a1a1a] border border-[#ffffff08] text-[#888888] hover:text-white text-[10px] px-3 py-1.5 rounded"
+                        class="bg-popover border border-border/8 text-muted-foreground hover:text-foreground text-[10px] px-3 py-1.5 rounded"
                         on:click={
                             let on_close = on_close_clone.clone();
                             move |_| on_close()
@@ -457,9 +457,9 @@ pub fn CSVUploadModal(
                         class={move || format!(
                             "text-[10px] px-3 py-1.5 rounded {}",
                             if csv_content.get().is_some() && !upload_csv.is_loading() {
-                                "bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] hover:bg-[#22c55e30]"
+                                "bg-[#22c55e20] border border-[#22c55e40] text-success hover:bg-success/20"
                             } else {
-                                "bg-[#111111] border border-[#ffffff08] text-[#555555] cursor-not-allowed"
+                                "bg-card border border-border/8 text-muted-foreground cursor-not-allowed"
                             }
                         )}
                         disabled=move || csv_content.get().is_none() || upload_csv.is_loading()

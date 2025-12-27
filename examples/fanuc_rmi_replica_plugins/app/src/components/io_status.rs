@@ -87,38 +87,38 @@ pub fn IoStatusPanel(
         format!(
             "flex-1 text-[8px] py-1 rounded transition-colors {}",
             if selected_tab.get() == tab {
-                "bg-[#00d9ff20] text-[#00d9ff]"
+                "bg-[#00d9ff20] text-primary"
             } else {
-                "bg-[#ffffff05] text-[#666666] hover:text-[#888888]"
+                "bg-border/5 text-muted-foreground hover:text-muted-foreground"
             }
         )
     };
 
     view! {
-        <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] relative">
+        <div class="bg-background rounded border border-border/8 relative">
             // Header buttons (refresh + pop-out)
             <div class="absolute top-1.5 right-1.5 flex gap-1 z-10">
                 // Refresh button
                 <button
-                    class="p-0.5 hover:bg-[#ffffff10] rounded"
+                    class="p-0.5 hover:bg-border/10 rounded"
                     title="Refresh I/O"
                     on:click={
                         let refresh_io = refresh_io.clone();
                         move |_| refresh_io()
                     }
                 >
-                    <svg class="w-3 h-3 text-[#555555] hover:text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-3 h-3 text-muted-foreground hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
                 </button>
                 // Pop-out button (only show when not already popped out)
                 <Show when=move || show_popout>
                     <button
-                        class="p-0.5 hover:bg-[#ffffff10] rounded"
+                        class="p-0.5 hover:bg-border/10 rounded"
                         title="Pop out I/O panel"
                         on:click=move |_| layout_ctx.io_popped.set(true)
                     >
-                        <svg class="w-3 h-3 text-[#555555] hover:text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-3 h-3 text-muted-foreground hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                         </svg>
                     </button>
@@ -127,17 +127,17 @@ pub fn IoStatusPanel(
 
             // Collapsible header
             <button
-                class="w-full flex items-center justify-between p-2 pr-12 hover:bg-[#ffffff05] transition-colors"
+                class="w-full flex items-center justify-between p-2 pr-12 hover:bg-border/5 transition-colors"
                 on:click=move |_| set_collapsed.update(|v| *v = !*v)
             >
-                <h3 class="text-[10px] font-semibold text-[#00d9ff] uppercase tracking-wide flex items-center">
+                <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center">
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
                     "I/O"
                 </h3>
                 <svg
-                    class=move || format!("w-3 h-3 text-[#666666] transition-transform {}", if collapsed.get() { "-rotate-90" } else { "" })
+                    class=move || format!("w-3 h-3 text-muted-foreground transition-transform {}", if collapsed.get() { "-rotate-90" } else { "" })
                     fill="none" stroke="currentColor" viewBox="0 0 24 24"
                 >
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -271,14 +271,14 @@ fn IOIndicator(
         <div
             class=move || format!(
                 "flex flex-col items-center justify-center p-1 rounded text-[8px] {}",
-                if value.get() { "bg-[#00ff0020] text-[#00ff00]" } else { "bg-[#ffffff05] text-[#555555]" }
+                if value.get() { "bg-success/15 text-success" } else { "bg-border/5 text-muted-foreground" }
             )
             title=format!("DIN[{}]", port)
         >
             <span class="font-mono truncate max-w-full" title=title_name>{display_name}</span>
             <div class=move || format!(
                 "w-2 h-2 rounded-full mt-0.5 {}",
-                if value.get() { "bg-[#00ff00]" } else { "bg-[#333333]" }
+                if value.get() { "bg-success" } else { "bg-muted" }
             )/>
         </div>
     }
@@ -318,7 +318,7 @@ fn IOButton(
         <button
             class=move || format!(
                 "flex flex-col items-center justify-center p-1 rounded text-[8px] cursor-pointer transition-colors {}",
-                if value.get() { "bg-[#ff880020] text-[#ff8800] hover:bg-[#ff880030]" } else { "bg-[#ffffff05] text-[#555555] hover:bg-[#ffffff10]" }
+                if value.get() { "bg-[#ff880020] text-warning hover:bg-[#ff880030]" } else { "bg-border/5 text-muted-foreground hover:bg-border/10" }
             )
             title=format!("DOUT[{}] - Click to toggle", port)
             on:click=toggle
@@ -326,7 +326,7 @@ fn IOButton(
             <span class="font-mono truncate max-w-full" title=title_name>{display_name}</span>
             <div class=move || format!(
                 "w-2 h-2 rounded-full mt-0.5 {}",
-                if value.get() { "bg-[#ff8800]" } else { "bg-[#333333]" }
+                if value.get() { "bg-warning" } else { "bg-muted" }
             )/>
         </button>
     }
@@ -343,11 +343,11 @@ fn AnalogIndicator(
     let title_name = name;
     view! {
         <div
-            class="flex flex-col items-center justify-center p-1 rounded text-[8px] bg-[#ffffff05]"
+            class="flex flex-col items-center justify-center p-1 rounded text-[8px] bg-border/5"
             title=format!("AIN[{}]", port)
         >
-            <span class="font-mono text-[#00d9ff] truncate max-w-full" title=title_name>{display_name}</span>
-            <span class="font-mono text-[#888888] text-[7px]">
+            <span class="font-mono text-primary truncate max-w-full" title=title_name>{display_name}</span>
+            <span class="font-mono text-muted-foreground text-[7px]">
                 {move || format!("{:.1}", value.get())}
             </span>
         </div>
@@ -416,13 +416,13 @@ fn AnalogOutput(
                 }
             }
         >
-            <span class="font-mono text-[#ff8800] truncate max-w-full" title=title_name>{display_name}</span>
+            <span class="font-mono text-warning truncate max-w-full" title=title_name>{display_name}</span>
             {move || {
                 if editing.get() {
                     view! {
                         <input
                             type="text"
-                            class="w-10 text-[7px] bg-[#1a1a1a] border border-[#ff8800] rounded px-0.5 text-center text-white"
+                            class="w-10 text-[7px] bg-popover border border-warning rounded px-0.5 text-center text-foreground"
                             prop:value=input_value
                             on:input=move |ev| set_input_value.set(event_target_value(&ev))
                             on:blur=do_blur_submit.clone()
@@ -432,7 +432,7 @@ fn AnalogOutput(
                     }.into_any()
                 } else {
                     view! {
-                        <span class="font-mono text-[#888888] text-[7px]">
+                        <span class="font-mono text-muted-foreground text-[7px]">
                             {move || format!("{:.1}", value.get())}
                         </span>
                     }.into_any()
@@ -453,11 +453,11 @@ fn GroupIndicator(
     let title_name = name;
     view! {
         <div
-            class="flex flex-col items-center justify-center p-1 rounded text-[8px] bg-[#ffffff05]"
+            class="flex flex-col items-center justify-center p-1 rounded text-[8px] bg-border/5"
             title=format!("GIN[{}]", port)
         >
-            <span class="font-mono text-[#00d9ff] truncate max-w-full" title=title_name>{display_name}</span>
-            <span class="font-mono text-[#888888] text-[7px]">
+            <span class="font-mono text-primary truncate max-w-full" title=title_name>{display_name}</span>
+            <span class="font-mono text-muted-foreground text-[7px]">
                 {move || value.get()}
             </span>
         </div>
@@ -526,13 +526,13 @@ fn GroupOutput(
                 }
             }
         >
-            <span class="font-mono text-[#ff8800] truncate max-w-full" title=title_name>{display_name}</span>
+            <span class="font-mono text-warning truncate max-w-full" title=title_name>{display_name}</span>
             {move || {
                 if editing.get() {
                     view! {
                         <input
                             type="text"
-                            class="w-10 text-[7px] bg-[#1a1a1a] border border-[#ff8800] rounded px-0.5 text-center text-white"
+                            class="w-10 text-[7px] bg-popover border border-warning rounded px-0.5 text-center text-foreground"
                             prop:value=input_value
                             on:input=move |ev| set_input_value.set(event_target_value(&ev))
                             on:blur=do_blur_submit.clone()
@@ -542,7 +542,7 @@ fn GroupOutput(
                     }.into_any()
                 } else {
                     view! {
-                        <span class="font-mono text-[#888888] text-[7px]">
+                        <span class="font-mono text-muted-foreground text-[7px]">
                             {move || value.get()}
                         </span>
                     }.into_any()

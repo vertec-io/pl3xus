@@ -22,7 +22,7 @@ pub fn FileMenu(
             <button
                 class={move || format!(
                     "px-2 py-1 text-[10px] rounded transition-colors {}",
-                    if show_file_menu.get() { "bg-[#ffffff10] text-white" } else { "text-[#888888] hover:text-white hover:bg-[#ffffff08]" }
+                    if show_file_menu.get() { "bg-border/10 text-foreground" } else { "text-muted-foreground hover:text-foreground hover:bg-border/8" }
                 )}
                 on:click=move |_| {
                     set_show_file_menu.update(|v| *v = !*v);
@@ -33,9 +33,9 @@ pub fn FileMenu(
             </button>
             {move || if show_file_menu.get() {
                 view! {
-                    <div class="absolute left-0 top-full mt-0.5 w-40 bg-[#1a1a1a] border border-[#ffffff15] rounded shadow-lg z-50">
+                    <div class="absolute left-0 top-full mt-0.5 w-40 bg-popover border border-border/15 rounded shadow-lg z-50">
                         <button
-                            class="w-full text-left px-3 py-1.5 text-[10px] text-[#aaaaaa] hover:bg-[#ffffff10] hover:text-white flex items-center gap-2"
+                            class="w-full text-left px-3 py-1.5 text-[10px] text-muted-foreground hover:bg-border/10 hover:text-foreground flex items-center gap-2"
                             on:click=move |_| {
                                 set_show_new_program.set(true);
                                 set_show_file_menu.set(false);
@@ -47,7 +47,7 @@ pub fn FileMenu(
                             "New Program"
                         </button>
                         <button
-                            class="w-full text-left px-3 py-1.5 text-[10px] text-[#aaaaaa] hover:bg-[#ffffff10] hover:text-white flex items-center gap-2"
+                            class="w-full text-left px-3 py-1.5 text-[10px] text-muted-foreground hover:bg-border/10 hover:text-foreground flex items-center gap-2"
                             on:click=move |_| {
                                 set_show_open_modal.set(true);
                                 set_show_file_menu.set(false);
@@ -58,14 +58,14 @@ pub fn FileMenu(
                             </svg>
                             "Open..."
                         </button>
-                        <div class="border-t border-[#ffffff10] my-1"></div>
+                        <div class="border-t border-border/10 my-1"></div>
                         <button
                             class={move || format!(
                                 "w-full text-left px-3 py-1.5 text-[10px] flex items-center gap-2 {}",
                                 if current_program.get().is_some() {
-                                    "text-[#aaaaaa] hover:bg-[#ffffff10] hover:text-white"
+                                    "text-muted-foreground hover:bg-border/10 hover:text-foreground"
                                 } else {
-                                    "text-[#444444] cursor-not-allowed"
+                                    "text-muted-foreground cursor-not-allowed"
                                 }
                             )}
                             on:click=move |_| {
@@ -80,14 +80,14 @@ pub fn FileMenu(
                             </svg>
                             "Save As..."
                         </button>
-                        <div class="border-t border-[#ffffff10] my-1"></div>
+                        <div class="border-t border-border/10 my-1"></div>
                         <button
                             class={move || format!(
                                 "w-full text-left px-3 py-1.5 text-[10px] flex items-center gap-2 {}",
                                 if selected_program_id.get().is_some() {
-                                    "text-[#aaaaaa] hover:bg-[#ffffff10] hover:text-white"
+                                    "text-muted-foreground hover:bg-border/10 hover:text-foreground"
                                 } else {
-                                    "text-[#444444] cursor-not-allowed"
+                                    "text-muted-foreground cursor-not-allowed"
                                 }
                             )}
                             on:click=move |_| {
@@ -102,14 +102,14 @@ pub fn FileMenu(
                             </svg>
                             "Upload CSV..."
                         </button>
-                        <div class="border-t border-[#ffffff10] my-1"></div>
+                        <div class="border-t border-border/10 my-1"></div>
                         <button
                             class={move || format!(
                                 "w-full text-left px-3 py-1.5 text-[10px] flex items-center gap-2 {}",
                                 if selected_program_id.get().is_some() || current_program.get().is_some() {
-                                    "text-[#aaaaaa] hover:bg-[#ffffff10] hover:text-white"
+                                    "text-muted-foreground hover:bg-border/10 hover:text-foreground"
                                 } else {
-                                    "text-[#444444] cursor-not-allowed"
+                                    "text-muted-foreground cursor-not-allowed"
                                 }
                             )}
                             disabled=move || selected_program_id.get().is_none() && current_program.get().is_none()
@@ -146,7 +146,7 @@ pub fn ViewMenu(
             <button
                 class={move || format!(
                     "px-2 py-1 text-[10px] rounded transition-colors {}",
-                    if show_view_menu.get() { "bg-[#ffffff10] text-white" } else { "text-[#888888] hover:text-white hover:bg-[#ffffff08]" }
+                    if show_view_menu.get() { "bg-border/10 text-foreground" } else { "text-muted-foreground hover:text-foreground hover:bg-border/8" }
                 )}
                 on:click=move |_| {
                     set_show_view_menu.update(|v| *v = !*v);
@@ -157,9 +157,9 @@ pub fn ViewMenu(
             </button>
             {move || if show_view_menu.get() {
                 view! {
-                    <div class="absolute left-0 top-full mt-0.5 w-48 bg-[#1a1a1a] border border-[#ffffff15] rounded shadow-lg z-50">
+                    <div class="absolute left-0 top-full mt-0.5 w-48 bg-popover border border-border/15 rounded shadow-lg z-50">
                         <button
-                            class="w-full text-left px-3 py-1.5 text-[10px] text-[#aaaaaa] hover:bg-[#ffffff10] hover:text-white flex items-center justify-between"
+                            class="w-full text-left px-3 py-1.5 text-[10px] text-muted-foreground hover:bg-border/10 hover:text-foreground flex items-center justify-between"
                             on:click=move |_| {
                                 layout_ctx.show_program_browser.update(|v| *v = !*v);
                                 set_show_view_menu.set(false);
@@ -172,7 +172,7 @@ pub fn ViewMenu(
                                 "Program Browser"
                             </span>
                             {move || if layout_ctx.show_program_browser.get() {
-                                view! { <span class="text-[#00d9ff]">"✓"</span> }.into_any()
+                                view! { <span class="text-primary">"✓"</span> }.into_any()
                             } else {
                                 view! { <span></span> }.into_any()
                             }}

@@ -237,7 +237,7 @@ where
 
     view! {
         <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div class="bg-[#0d0d0d] border border-[#ffffff15] rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div class="bg-background border border-border/15 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                 // Header
                 <WizardHeader current_step=current_step />
 
@@ -288,8 +288,8 @@ where
 
                     <Show when=move || current_step.get() == WizardStep::AdditionalConfigurations>
                         <div class="text-center py-8">
-                            <p class="text-[#888888] text-sm">"Additional configurations feature coming soon"</p>
-                            <p class="text-[#666666] text-xs mt-2">"You can add more configurations after creating the robot"</p>
+                            <p class="text-muted-foreground text-sm">"Additional configurations feature coming soon"</p>
+                            <p class="text-muted-foreground text-xs mt-2">"You can add more configurations after creating the robot"</p>
                         </div>
                     </Show>
                 </div>
@@ -339,8 +339,8 @@ fn WizardHeader(current_step: ReadSignal<WizardStep>) -> impl IntoView {
     ];
 
     view! {
-        <div class="border-b border-[#ffffff08] p-6">
-            <h2 class="text-lg font-semibold text-white mb-4">"Create New Robot"</h2>
+        <div class="border-b border-border/8 p-6">
+            <h2 class="text-lg font-semibold text-foreground mb-4">"Create New Robot"</h2>
 
             // Progress indicator
             <div class="flex items-center gap-2">
@@ -355,11 +355,11 @@ fn WizardHeader(current_step: ReadSignal<WizardStep>) -> impl IntoView {
                             <div class=move || format!(
                                 "flex items-center justify-center w-8 h-8 rounded-full text-xs font-semibold transition-colors {}",
                                 if is_current() {
-                                    "bg-[#00d9ff] text-black"
+                                    "bg-primary text-primary-foreground"
                                 } else if is_completed() {
-                                    "bg-[#22c55e] text-black"
+                                    "bg-success text-primary-foreground"
                                 } else {
-                                    "bg-[#1a1a1a] text-[#666666] border border-[#ffffff08]"
+                                    "bg-popover text-muted-foreground border border-border/8"
                                 }
                             )>
                                 {move || if is_completed() { "✓".to_string() } else { (idx + 1).to_string() }}
@@ -368,7 +368,7 @@ fn WizardHeader(current_step: ReadSignal<WizardStep>) -> impl IntoView {
                             <Show when=move || idx < 4>
                                 <div class=move || format!(
                                     "h-0.5 w-12 transition-colors {}",
-                                    if is_completed() { "bg-[#22c55e]" } else { "bg-[#ffffff08]" }
+                                    if is_completed() { "bg-success" } else { "bg-border/8" }
                                 )></div>
                             </Show>
                         }
@@ -378,8 +378,8 @@ fn WizardHeader(current_step: ReadSignal<WizardStep>) -> impl IntoView {
 
             // Current step title and description
             <div class="mt-4">
-                <h3 class="text-sm font-semibold text-white">{move || current_step.get().title()}</h3>
-                <p class="text-xs text-[#888888] mt-1">{move || current_step.get().description()}</p>
+                <h3 class="text-sm font-semibold text-foreground">{move || current_step.get().title()}</h3>
+                <p class="text-xs text-muted-foreground mt-1">{move || current_step.get().description()}</p>
             </div>
         </div>
     }
@@ -440,9 +440,9 @@ where
     let submit_clone = submit_robot.clone();
 
     view! {
-        <div class="border-t border-[#ffffff08] p-6">
+        <div class="border-t border-border/8 p-6">
             {move || validation_error.get().map(|err| view! {
-                <div class="mb-4 p-3 bg-[#ef444410] border border-[#ef4444] rounded text-sm text-[#ef4444]">
+                <div class="mb-4 p-3 bg-[#ef444410] border border-destructive rounded text-sm text-destructive">
                     {err}
                 </div>
             })}
@@ -450,7 +450,7 @@ where
             <div class="flex items-center justify-between">
                 <button
                     type="button"
-                    class="px-4 py-2 text-sm text-[#888888] hover:text-white transition-colors"
+                    class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                     on:click=move |_| set_show_exit_warning.set(true)
                 >
                     "Cancel"
@@ -460,7 +460,7 @@ where
                     <Show when=can_go_back>
                         <button
                             type="button"
-                            class="px-4 py-2 bg-[#1a1a1a] border border-[#ffffff08] rounded text-sm text-white hover:bg-[#222222] transition-colors"
+                            class="px-4 py-2 bg-popover border border-border/8 rounded text-sm text-foreground hover:bg-secondary transition-colors"
                             on:click=go_back
                         >
                             "← Back"
@@ -473,7 +473,7 @@ where
                             move || view! {
                                 <button
                                     type="button"
-                                    class="px-4 py-2 bg-[#00d9ff] rounded text-sm text-black font-semibold hover:bg-[#00c4e6] transition-colors"
+                                    class="px-4 py-2 bg-primary rounded text-sm text-primary-foreground font-semibold hover:bg-primary transition-colors"
                                     on:click=go_next.clone()
                                 >
                                     "Next →"
@@ -489,8 +489,8 @@ where
                                 <button
                                     type="button"
                                     class=move || format!(
-                                        "px-4 py-2 bg-[#22c55e] rounded text-sm text-black font-semibold transition-colors {}",
-                                        if is_submitting.get() { "opacity-50 cursor-not-allowed" } else { "hover:bg-[#16a34a]" }
+                                        "px-4 py-2 bg-success rounded text-sm text-primary-foreground font-semibold transition-colors {}",
+                                        if is_submitting.get() { "opacity-50 cursor-not-allowed" } else { "hover:bg-success" }
                                     )
                                     disabled=move || is_submitting.get()
                                     on:click={
@@ -524,16 +524,16 @@ where
 
     view! {
         <div class="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]">
-            <div class="bg-[#0d0d0d] border border-[#ffffff15] rounded-lg shadow-2xl w-full max-w-md p-6">
+            <div class="bg-background border border-border/15 rounded-lg shadow-2xl w-full max-w-md p-6">
                 <div class="flex items-start gap-3 mb-4">
-                    <div class="w-10 h-10 rounded-full bg-[#ef444410] border border-[#ef4444] flex items-center justify-center flex-shrink-0">
-                        <svg class="w-5 h-5 text-[#ef4444]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-10 h-10 rounded-full bg-[#ef444410] border border-destructive flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                     </div>
                     <div class="flex-1">
-                        <h3 class="text-base font-semibold text-white mb-1">"Discard Robot Creation?"</h3>
-                        <p class="text-sm text-[#888888]">
+                        <h3 class="text-base font-semibold text-foreground mb-1">"Discard Robot Creation?"</h3>
+                        <p class="text-sm text-muted-foreground">
                             "Your robot configuration will not be saved if you exit now. Are you sure you want to cancel?"
                         </p>
                     </div>
@@ -542,14 +542,14 @@ where
                 <div class="flex gap-3 justify-end">
                     <button
                         type="button"
-                        class="px-4 py-2 bg-[#1a1a1a] border border-[#ffffff08] rounded text-sm text-white hover:bg-[#222222] transition-colors"
+                        class="px-4 py-2 bg-popover border border-border/8 rounded text-sm text-foreground hover:bg-secondary transition-colors"
                         on:click=move |_| cancel()
                     >
                         "Continue Editing"
                     </button>
                     <button
                         type="button"
-                        class="px-4 py-2 bg-[#ef4444] rounded text-sm text-white font-semibold hover:bg-[#dc2626] transition-colors"
+                        class="px-4 py-2 bg-destructive rounded text-sm text-foreground font-semibold hover:bg-destructive transition-colors"
                         on:click=move |_| confirm()
                     >
                         "Discard Changes"
@@ -578,24 +578,24 @@ fn ConnectionDetailsStep(
     view! {
         <div class="space-y-4">
             <div>
-                <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                    "Robot Name" <span class="text-[#ef4444]">"*"</span>
+                <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                    "Robot Name" <span class="text-destructive">"*"</span>
                 </label>
                 <input
                     type="text"
-                    class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors"
+                    class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                     placeholder="e.g., Production Cell 1"
                     prop:value=move || robot_name.get()
                     on:input=move |ev| set_robot_name.set(event_target_value(&ev))
                 />
-                <p class="text-xs text-[#666666] mt-1">"A descriptive name for this robot"</p>
+                <p class="text-xs text-muted-foreground mt-1">"A descriptive name for this robot"</p>
             </div>
 
             <div>
-                <label class="block text-[#888888] text-xs mb-1.5 font-medium">"Description (optional)"</label>
+                <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Description (optional)"</label>
                 <input
                     type="text"
-                    class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors"
+                    class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                     placeholder="e.g., Main welding robot"
                     prop:value=move || robot_description.get()
                     on:input=move |ev| set_robot_description.set(event_target_value(&ev))
@@ -604,12 +604,12 @@ fn ConnectionDetailsStep(
 
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                        "IP Address" <span class="text-[#ef4444]">"*"</span>
+                    <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                        "IP Address" <span class="text-destructive">"*"</span>
                     </label>
                     <input
                         type="text"
-                        class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                         placeholder="192.168.1.100"
                         prop:value=move || robot_ip.get()
                         on:input=move |ev| set_robot_ip.set(event_target_value(&ev))
@@ -617,12 +617,12 @@ fn ConnectionDetailsStep(
                 </div>
 
                 <div>
-                    <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                        "Port" <span class="text-[#ef4444]">"*"</span>
+                    <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                        "Port" <span class="text-destructive">"*"</span>
                     </label>
                     <input
                         type="text"
-                        class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                         placeholder="16001"
                         prop:value=move || robot_port.get()
                         on:input=move |ev| set_robot_port.set(event_target_value(&ev))
@@ -652,25 +652,25 @@ fn MotionDefaultsStep(
         <div class="space-y-4">
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                        "Default Speed" <span class="text-[#ef4444]">"*"</span>
+                    <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                        "Default Speed" <span class="text-destructive">"*"</span>
                     </label>
                     <input
                         type="text"
-                        class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                         prop:value=move || default_speed.get()
                         on:input=move |ev| set_default_speed.set(event_target_value(&ev))
                         placeholder="100.0"
                     />
-                    <p class="text-xs text-[#666666] mt-1">"Speed value (units depend on type)"</p>
+                    <p class="text-xs text-muted-foreground mt-1">"Speed value (units depend on type)"</p>
                 </div>
 
                 <div>
-                    <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                        "Speed Type" <span class="text-[#ef4444]">"*"</span>
+                    <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                        "Speed Type" <span class="text-destructive">"*"</span>
                     </label>
                     <select
-                        class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                         prop:value=move || default_speed_type.get()
                         on:change=move |ev| set_default_speed_type.set(event_target_value(&ev))
                     >
@@ -679,35 +679,35 @@ fn MotionDefaultsStep(
                         <option value="Time">"0.1 seconds (Time-based)"</option>
                         <option value="mSec">"milliseconds"</option>
                     </select>
-                    <p class="text-xs text-[#666666] mt-1">"How speed values are interpreted"</p>
+                    <p class="text-xs text-muted-foreground mt-1">"How speed values are interpreted"</p>
                 </div>
             </div>
 
             <div class="grid grid-cols-1 gap-4">
                 <div>
-                    <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                        "Termination Type" <span class="text-[#ef4444]">"*"</span>
+                    <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                        "Termination Type" <span class="text-destructive">"*"</span>
                     </label>
                     <select
-                        class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                         prop:value=move || default_term_type.get()
                         on:change=move |ev| set_default_term_type.set(event_target_value(&ev))
                     >
                         <option value="CNT">"CNT (Continuous)"</option>
                         <option value="FINE">"FINE (Precise)"</option>
                     </select>
-                    <p class="text-xs text-[#666666] mt-1">"Motion termination type"</p>
+                    <p class="text-xs text-muted-foreground mt-1">"Motion termination type"</p>
                 </div>
             </div>
 
-            <div class="border-t border-[#ffffff08] pt-4">
-                <h4 class="text-sm font-semibold text-white mb-3">"Wrist Singularity Avoidance"</h4>
+            <div class="border-t border-border/8 pt-4">
+                <h4 class="text-sm font-semibold text-foreground mb-3">"Wrist Singularity Avoidance"</h4>
                 <div class="grid grid-cols-3 gap-4">
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">"W (Wrist)"</label>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"W (Wrist)"</label>
                         <input
                             type="text"
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || default_w.get()
                             on:input=move |ev| set_default_w.set(event_target_value(&ev))
                             placeholder="0.0"
@@ -715,10 +715,10 @@ fn MotionDefaultsStep(
                     </div>
 
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">"P (Pitch)"</label>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"P (Pitch)"</label>
                         <input
                             type="text"
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || default_p.get()
                             on:input=move |ev| set_default_p.set(event_target_value(&ev))
                             placeholder="0.0"
@@ -726,17 +726,17 @@ fn MotionDefaultsStep(
                     </div>
 
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">"R (Roll)"</label>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"R (Roll)"</label>
                         <input
                             type="text"
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || default_r.get()
                             on:input=move |ev| set_default_r.set(event_target_value(&ev))
                             placeholder="0.0"
                         />
                     </div>
                 </div>
-                <p class="text-xs text-[#666666] mt-2">"Typically 0.0 for all axes (no avoidance)"</p>
+                <p class="text-xs text-muted-foreground mt-2">"Typically 0.0 for all axes (no avoidance)"</p>
             </div>
         </div>
     }
@@ -759,101 +759,101 @@ fn JogDefaultsStep(
 ) -> impl IntoView {
     view! {
         <div class="space-y-6">
-            <div class="border border-[#ffffff08] rounded-lg p-4 bg-[#0a0a0a]">
-                <h4 class="text-sm font-semibold text-white mb-3">"Cartesian Jogging"</h4>
+            <div class="border border-border/8 rounded-lg p-4 bg-background">
+                <h4 class="text-sm font-semibold text-foreground mb-3">"Cartesian Jogging"</h4>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                            "Speed (mm/s)" <span class="text-[#ef4444]">"*"</span>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                            "Speed (mm/s)" <span class="text-destructive">"*"</span>
                         </label>
                         <input
                             type="text"
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || cartesian_jog_speed.get()
                             on:input=move |ev| set_cartesian_jog_speed.set(event_target_value(&ev))
                             placeholder="10.0"
                         />
-                        <p class="text-xs text-[#666666] mt-1">"Continuous jog speed"</p>
+                        <p class="text-xs text-muted-foreground mt-1">"Continuous jog speed"</p>
                     </div>
 
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                            "Step Size (mm)" <span class="text-[#ef4444]">"*"</span>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                            "Step Size (mm)" <span class="text-destructive">"*"</span>
                         </label>
                         <input
                             type="text"
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || cartesian_jog_step.get()
                             on:input=move |ev| set_cartesian_jog_step.set(event_target_value(&ev))
                             placeholder="1.0"
                         />
-                        <p class="text-xs text-[#666666] mt-1">"Incremental jog distance"</p>
+                        <p class="text-xs text-muted-foreground mt-1">"Incremental jog distance"</p>
                     </div>
                 </div>
             </div>
 
-            <div class="border border-[#ffffff08] rounded-lg p-4 bg-[#0a0a0a]">
-                <h4 class="text-sm font-semibold text-white mb-3">"Joint Jogging"</h4>
+            <div class="border border-border/8 rounded-lg p-4 bg-background">
+                <h4 class="text-sm font-semibold text-foreground mb-3">"Joint Jogging"</h4>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                            "Speed (°/s)" <span class="text-[#ef4444]">"*"</span>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                            "Speed (°/s)" <span class="text-destructive">"*"</span>
                         </label>
                         <input
                             type="text"
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || joint_jog_speed.get()
                             on:input=move |ev| set_joint_jog_speed.set(event_target_value(&ev))
                             placeholder="10.0"
                         />
-                        <p class="text-xs text-[#666666] mt-1">"Degrees per second"</p>
+                        <p class="text-xs text-muted-foreground mt-1">"Degrees per second"</p>
                     </div>
 
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                            "Step Size (°)" <span class="text-[#ef4444]">"*"</span>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                            "Step Size (°)" <span class="text-destructive">"*"</span>
                         </label>
                         <input
                             type="text"
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || joint_jog_step.get()
                             on:input=move |ev| set_joint_jog_step.set(event_target_value(&ev))
                             placeholder="1.0"
                         />
-                        <p class="text-xs text-[#666666] mt-1">"Degrees per step"</p>
+                        <p class="text-xs text-muted-foreground mt-1">"Degrees per step"</p>
                     </div>
                 </div>
             </div>
 
-            <div class="border border-[#ffffff08] rounded-lg p-4 bg-[#0a0a0a]">
-                <h4 class="text-sm font-semibold text-white mb-3">"Rotation Jogging (W/P/R)"</h4>
+            <div class="border border-border/8 rounded-lg p-4 bg-background">
+                <h4 class="text-sm font-semibold text-foreground mb-3">"Rotation Jogging (W/P/R)"</h4>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                            "Speed (°/s)" <span class="text-[#ef4444]">"*"</span>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                            "Speed (°/s)" <span class="text-destructive">"*"</span>
                         </label>
                         <input
                             type="text"
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || rotation_jog_speed.get()
                             on:input=move |ev| set_rotation_jog_speed.set(event_target_value(&ev))
                             placeholder="5.0"
                         />
-                        <p class="text-xs text-[#666666] mt-1">"Rotation jog speed"</p>
+                        <p class="text-xs text-muted-foreground mt-1">"Rotation jog speed"</p>
                     </div>
 
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                            "Step Size (°)" <span class="text-[#ef4444]">"*"</span>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                            "Step Size (°)" <span class="text-destructive">"*"</span>
                         </label>
                         <input
                             type="text"
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || rotation_jog_step.get()
                             on:input=move |ev| set_rotation_jog_step.set(event_target_value(&ev))
                             placeholder="1.0"
                         />
-                        <p class="text-xs text-[#666666] mt-1">"Incremental rotation angle"</p>
+                        <p class="text-xs text-muted-foreground mt-1">"Incremental rotation angle"</p>
                     </div>
                 </div>
             </div>
@@ -887,56 +887,56 @@ fn DefaultConfigurationStep(
     view! {
         <div class="space-y-4">
             <div>
-                <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                    "Configuration Name" <span class="text-[#ef4444]">"*"</span>
+                <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                    "Configuration Name" <span class="text-destructive">"*"</span>
                 </label>
                 <input
                     type="text"
-                    class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors"
+                    class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                     prop:value=move || config_name.get()
                     on:input=move |ev| set_config_name.set(event_target_value(&ev))
                     placeholder="Default"
                 />
-                <p class="text-xs text-[#666666] mt-1">"Name for this configuration preset"</p>
+                <p class="text-xs text-muted-foreground mt-1">"Name for this configuration preset"</p>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                        "User Frame" <span class="text-[#ef4444]">"*"</span>
+                    <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                        "User Frame" <span class="text-destructive">"*"</span>
                     </label>
                     <input
                         type="text"
-                        class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                         prop:value=move || u_frame_number.get()
                         on:input=move |ev| set_u_frame_number.set(event_target_value(&ev))
                         placeholder="0"
                     />
-                    <p class="text-xs text-[#666666] mt-1">"0-9 (0 = World Frame)"</p>
+                    <p class="text-xs text-muted-foreground mt-1">"0-9 (0 = World Frame)"</p>
                 </div>
 
                 <div>
-                    <label class="block text-[#888888] text-xs mb-1.5 font-medium">
-                        "User Tool" <span class="text-[#ef4444]">"*"</span>
+                    <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
+                        "User Tool" <span class="text-destructive">"*"</span>
                     </label>
                     <input
                         type="text"
-                        class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                         prop:value=move || u_tool_number.get()
                         on:input=move |ev| set_u_tool_number.set(event_target_value(&ev))
                         placeholder="1"
                     />
-                    <p class="text-xs text-[#666666] mt-1">"1-10 (Tool 0 is invalid)"</p>
+                    <p class="text-xs text-muted-foreground mt-1">"1-10 (Tool 0 is invalid)"</p>
                 </div>
             </div>
 
-            <div class="border-t border-[#ffffff08] pt-4">
-                <h4 class="text-sm font-semibold text-white mb-3">"Arm Configuration"</h4>
+            <div class="border-t border-border/8 pt-4">
+                <h4 class="text-sm font-semibold text-foreground mb-3">"Arm Configuration"</h4>
                 <div class="grid grid-cols-4 gap-4">
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">"Front"</label>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Front"</label>
                         <select
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                             prop:value=move || front.get()
                             on:change=move |ev| set_front.set(event_target_value(&ev))
                         >
@@ -946,9 +946,9 @@ fn DefaultConfigurationStep(
                     </div>
 
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">"Up"</label>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Up"</label>
                         <select
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                             prop:value=move || up.get()
                             on:change=move |ev| set_up.set(event_target_value(&ev))
                         >
@@ -958,9 +958,9 @@ fn DefaultConfigurationStep(
                     </div>
 
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">"Left"</label>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Left"</label>
                         <select
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                             prop:value=move || left.get()
                             on:change=move |ev| set_left.set(event_target_value(&ev))
                         >
@@ -970,9 +970,9 @@ fn DefaultConfigurationStep(
                     </div>
 
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">"Flip"</label>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Flip"</label>
                         <select
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                             prop:value=move || flip.get()
                             on:change=move |ev| set_flip.set(event_target_value(&ev))
                         >
@@ -983,14 +983,14 @@ fn DefaultConfigurationStep(
                 </div>
             </div>
 
-            <div class="border-t border-[#ffffff08] pt-4">
-                <h4 class="text-sm font-semibold text-white mb-3">"Turn Numbers"</h4>
+            <div class="border-t border-border/8 pt-4">
+                <h4 class="text-sm font-semibold text-foreground mb-3">"Turn Numbers"</h4>
                 <div class="grid grid-cols-3 gap-4">
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">"Turn 4"</label>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Turn 4"</label>
                         <input
                             type="text"
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || turn4.get()
                             on:input=move |ev| set_turn4.set(event_target_value(&ev))
                             placeholder="0"
@@ -998,10 +998,10 @@ fn DefaultConfigurationStep(
                     </div>
 
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">"Turn 5"</label>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Turn 5"</label>
                         <input
                             type="text"
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || turn5.get()
                             on:input=move |ev| set_turn5.set(event_target_value(&ev))
                             placeholder="0"
@@ -1009,17 +1009,17 @@ fn DefaultConfigurationStep(
                     </div>
 
                     <div>
-                        <label class="block text-[#888888] text-xs mb-1.5 font-medium">"Turn 6"</label>
+                        <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Turn 6"</label>
                         <input
                             type="text"
-                            class="w-full bg-[#111111] border border-[#ffffff08] rounded px-3 py-2 text-sm text-white focus:border-[#00d9ff] focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || turn6.get()
                             on:input=move |ev| set_turn6.set(event_target_value(&ev))
                             placeholder="0"
                         />
                     </div>
                 </div>
-                <p class="text-xs text-[#666666] mt-2">"Wrist turn numbers for joint configuration"</p>
+                <p class="text-xs text-muted-foreground mt-2">"Wrist turn numbers for joint configuration"</p>
             </div>
         </div>
     }

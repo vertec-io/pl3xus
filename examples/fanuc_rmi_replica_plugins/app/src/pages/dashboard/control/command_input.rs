@@ -107,16 +107,16 @@ pub fn CommandInputSection() -> impl IntoView {
     let controls_disabled = move || !robot_connected.get();
 
     view! {
-        <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-2 shrink-0">
+        <div class="bg-background rounded border border-border/8 p-2 shrink-0">
             <div class="flex items-center justify-between mb-1.5">
-                <h3 class="text-[10px] font-semibold text-[#00d9ff] uppercase tracking-wide flex items-center">
+                <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center">
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                     "Recent Commands"
                 </h3>
                 <button
-                    class="text-[8px] text-[#666666] hover:text-[#ff4444]"
+                    class="text-[8px] text-muted-foreground hover:text-destructive"
                     on:click=move |_| {
                         recent_commands.set(Vec::new());
                         selected_cmd_id.set(None);
@@ -128,7 +128,7 @@ pub fn CommandInputSection() -> impl IntoView {
             </div>
             <div class="flex gap-1">
                 <select
-                    class="flex-1 bg-[#111111] border border-[#ffffff08] rounded px-2 py-1 text-[10px] text-white focus:border-[#00d9ff] focus:outline-none"
+                    class="flex-1 bg-card border border-border/8 rounded px-2 py-1 text-[10px] text-foreground focus:border-primary focus:outline-none"
                     prop:value=move || selected_cmd_id.get().map(|id| id.to_string()).unwrap_or_default()
                     on:change=move |ev| {
                         let val = event_target_value(&ev);
@@ -153,9 +153,9 @@ pub fn CommandInputSection() -> impl IntoView {
                 </select>
                 <button
                     class=move || if controls_disabled() {
-                        "bg-[#111111] border border-[#ffffff08] text-[#555555] text-[9px] px-3 py-1 rounded cursor-not-allowed"
+                        "bg-card border border-border/8 text-muted-foreground text-[9px] px-3 py-1 rounded cursor-not-allowed"
                     } else {
-                        "bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] text-[9px] px-3 py-1 rounded hover:bg-[#00d9ff30]"
+                        "bg-[#00d9ff20] border border-[#00d9ff40] text-primary text-[9px] px-3 py-1 rounded hover:bg-primary/20"
                     }
                     disabled=controls_disabled
                     on:click=move |_| {
@@ -171,9 +171,9 @@ pub fn CommandInputSection() -> impl IntoView {
                     class={move || format!(
                         "text-[9px] px-3 py-1 rounded transition-colors {}",
                         if controls_disabled() || selected_cmd_id.get().is_none() {
-                            "bg-[#111111] border border-[#ffffff08] text-[#555555] cursor-not-allowed"
+                            "bg-card border border-border/8 text-muted-foreground cursor-not-allowed"
                         } else {
-                            "bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] hover:bg-[#22c55e30]"
+                            "bg-[#22c55e20] border border-[#22c55e40] text-success hover:bg-success/20"
                         }
                     )}
                     disabled=move || controls_disabled() || selected_cmd_id.get().is_none()

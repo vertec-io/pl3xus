@@ -20,7 +20,7 @@ pub fn RightPanel() -> impl IntoView {
     let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
 
     view! {
-        <aside class="w-56 bg-[#0d0d0d] border-l border-[#ffffff08] flex flex-col overflow-hidden shrink-0">
+        <aside class="w-56 bg-background border-l border-border/8 flex flex-col overflow-hidden shrink-0">
             <div class="flex-1 overflow-y-auto p-1.5 space-y-1.5">
                 // Robot status (compact)
                 <StatusPanel/>
@@ -54,11 +54,11 @@ fn IOStatusPanelWrapper() -> impl IntoView {
         <div class="relative">
             // Pop-out button
             <button
-                class="absolute top-1.5 right-1.5 p-0.5 hover:bg-[#ffffff10] rounded z-10"
+                class="absolute top-1.5 right-1.5 p-0.5 hover:bg-border/10 rounded z-10"
                 title="Pop out I/O panel"
                 on:click=move |_| layout_ctx.io_popped.set(true)
             >
-                <svg class="w-3 h-3 text-[#555555] hover:text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-3 h-3 text-muted-foreground hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                 </svg>
             </button>
@@ -76,11 +76,11 @@ fn JogControlsPanelWrapper() -> impl IntoView {
         <div class="relative">
             // Pop-out button
             <button
-                class="absolute top-1.5 right-1.5 p-0.5 hover:bg-[#ffffff10] rounded z-10"
+                class="absolute top-1.5 right-1.5 p-0.5 hover:bg-border/10 rounded z-10"
                 title="Pop out jog controls"
                 on:click=move |_| layout_ctx.jog_popped.set(true)
             >
-                <svg class="w-3 h-3 text-[#555555] hover:text-[#00d9ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-3 h-3 text-muted-foreground hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                 </svg>
             </button>

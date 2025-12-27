@@ -89,7 +89,7 @@ pub fn DesktopLayout() -> impl IntoView {
     };
 
     view! {
-        <div class="h-screen w-screen flex flex-col bg-[#0a0a0a] overflow-hidden">
+        <div class="h-screen w-screen flex flex-col bg-background overflow-hidden">
             // Header
             <TopBar/>
 

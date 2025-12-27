@@ -76,9 +76,9 @@ pub fn JointJogPanel() -> impl IntoView {
     let send_joint_jog = StoredValue::new(send_joint_jog);
 
     view! {
-        <div class="bg-[#0a0a0a] rounded border border-[#ffffff08] p-2">
+        <div class="bg-background rounded border border-border/8 p-2">
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-[10px] font-semibold text-[#00d9ff] uppercase tracking-wide flex items-center">
+                <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center">
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
@@ -87,25 +87,25 @@ pub fn JointJogPanel() -> impl IntoView {
                 // Step and Speed display (read-only from server's JogSettingsState)
                 <div class="flex items-center gap-2">
                     <div class="flex items-center gap-1">
-                        <span class="text-[8px] text-[#666666]">"Step:"</span>
-                        <span class="w-12 bg-[#0a0a0a] border border-[#ffffff08] rounded px-1 py-0.5 text-white text-[9px] text-center font-mono">
+                        <span class="text-[8px] text-muted-foreground">"Step:"</span>
+                        <span class="w-12 bg-background border border-border/8 rounded px-1 py-0.5 text-foreground text-[9px] text-center font-mono">
                             {move || format!("{:.1}", jog_settings.get().joint_jog_step)}
                         </span>
-                        <span class="text-[8px] text-[#666666]">"°"</span>
+                        <span class="text-[8px] text-muted-foreground">"°"</span>
                     </div>
                     <div class="flex items-center gap-1">
-                        <span class="text-[8px] text-[#666666]">"Speed:"</span>
-                        <span class="w-12 bg-[#0a0a0a] border border-[#ffffff08] rounded px-1 py-0.5 text-white text-[9px] text-center font-mono">
+                        <span class="text-[8px] text-muted-foreground">"Speed:"</span>
+                        <span class="w-12 bg-background border border-border/8 rounded px-1 py-0.5 text-foreground text-[9px] text-center font-mono">
                             {move || format!("{:.1}", jog_settings.get().joint_jog_speed)}
                         </span>
-                        <span class="text-[8px] text-[#666666]">"°/s"</span>
+                        <span class="text-[8px] text-muted-foreground">"°/s"</span>
                     </div>
                 </div>
             </div>
 
             // Show warning when controls are disabled
             <Show when=controls_disabled>
-                <div class="text-[9px] text-[#ff8800] mb-1 text-center">
+                <div class="text-[9px] text-warning mb-1 text-center">
                     "⚠ Disabled: Not connected"
                 </div>
             </Show>
@@ -138,7 +138,7 @@ pub fn JointJogPanel() -> impl IntoView {
 
             // Link to Configuration panel
             <div class="mt-2 text-center">
-                <a href="/dashboard/info" class="text-[8px] text-[#00d9ff] hover:underline">"Edit settings in Configuration →"</a>
+                <a href="/dashboard/info" class="text-[8px] text-primary hover:underline">"Edit settings in Configuration →"</a>
             </div>
         </div>
     }
@@ -157,9 +157,9 @@ fn JointButton(
 
     let button_class = move || {
         if disabled.get() {
-            "w-full bg-[#0a0a0a] border border-[#ffffff08] text-[#444444] py-1 rounded cursor-not-allowed text-[10px]"
+            "w-full bg-background border border-border/8 text-muted-foreground py-1 rounded cursor-not-allowed text-[10px]"
         } else {
-            "w-full bg-[#111111] hover:bg-[#00d9ff] border border-[#ffffff08] hover:border-[#00d9ff] text-white hover:text-black py-1 rounded transition-colors text-[10px]"
+            "w-full bg-card hover:bg-primary border border-border/8 hover:border-primary text-foreground hover:text-primary-foreground py-1 rounded transition-colors text-[10px]"
         }
     };
 
@@ -173,9 +173,9 @@ fn JointButton(
             >
                 "▲"
             </button>
-            <div class="py-1 text-center w-full bg-[#111111] border-x border-[#ffffff08]">
-                <div class="text-[9px] text-[#00d9ff] font-semibold">{joint_name.clone()}</div>
-                <div class="text-[10px] text-white font-mono">
+            <div class="py-1 text-center w-full bg-card border-x border-border/8">
+                <div class="text-[9px] text-primary font-semibold">{joint_name.clone()}</div>
+                <div class="text-[10px] text-foreground font-mono">
                     {move || format!("{:.2}°", angle.get())}
                 </div>
             </div>

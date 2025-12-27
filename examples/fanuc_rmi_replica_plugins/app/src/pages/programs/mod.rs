@@ -71,7 +71,7 @@ pub fn ProgramsView() -> impl IntoView {
     view! {
         <div class="h-full flex flex-col">
             // Menu bar
-            <div class="h-7 border-b border-[#ffffff08] flex items-center px-2 shrink-0 bg-[#0d0d0d]">
+            <div class="h-7 border-b border-border/8 flex items-center px-2 shrink-0 bg-background">
                 // File menu
                 <menus::FileMenu
                     show_file_menu=show_file_menu
@@ -97,9 +97,9 @@ pub fn ProgramsView() -> impl IntoView {
 
                 // Current program indicator
                 {move || current_program.get().map(|prog| view! {
-                    <span class="text-[9px] text-[#666666]">
+                    <span class="text-[9px] text-muted-foreground">
                         "Current: "
-                        <span class="text-[#00d9ff]">{prog.name}</span>
+                        <span class="text-primary">{prog.name}</span>
                     </span>
                 })}
             </div>

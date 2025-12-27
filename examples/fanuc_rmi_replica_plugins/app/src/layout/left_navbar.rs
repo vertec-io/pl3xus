@@ -8,7 +8,7 @@ use leptos_router::hooks::use_location;
 #[component]
 pub fn LeftNavbar() -> impl IntoView {
     view! {
-        <nav class="w-12 bg-[#111111] border-r border-[#ffffff10] flex flex-col items-center py-2 shrink-0">
+        <nav class="w-12 bg-card border-r border-border/10 flex flex-col items-center py-2 shrink-0">
             <NavLink
                 icon="📊"
                 label="DASH"
@@ -59,14 +59,14 @@ fn NavLink(
             attr:class=move || if is_active() {
                 "w-10 h-10 rounded bg-[#00d9ff15] border border-[#00d9ff40] flex flex-col items-center justify-center mb-1 transition-all no-underline"
             } else {
-                "w-10 h-10 rounded hover:bg-[#ffffff08] border border-transparent flex flex-col items-center justify-center mb-1 transition-all no-underline"
+                "w-10 h-10 rounded hover:bg-border/8 border border-transparent flex flex-col items-center justify-center mb-1 transition-all no-underline"
             }
         >
             <span class="text-sm leading-none">{icon}</span>
             <span class=move || if is_active() {
-                "text-[8px] text-[#00d9ff] mt-0.5 font-medium leading-none"
+                "text-[8px] text-primary mt-0.5 font-medium leading-none"
             } else {
-                "text-[8px] text-[#666666] mt-0.5 leading-none"
+                "text-[8px] text-muted-foreground mt-0.5 leading-none"
             }>{label}</span>
         </A>
     }

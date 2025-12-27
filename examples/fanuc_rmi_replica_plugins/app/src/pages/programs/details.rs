@@ -93,7 +93,7 @@ pub fn ProgramDetails(
     });
 
     view! {
-        <div class="flex-1 bg-[#0a0a0a] rounded border border-[#ffffff08] flex flex-col overflow-hidden">
+        <div class="flex-1 bg-background rounded border border-border/8 flex flex-col overflow-hidden">
             {move || {
                 if let Some(prog) = current_program.get() {
                     let prog_id = prog.id;
@@ -105,21 +105,21 @@ pub fn ProgramDetails(
                     Either::Left(view! {
                         <div class="h-full flex flex-col">
                             // Header
-                            <div class="p-3 border-b border-[#ffffff08]">
+                            <div class="p-3 border-b border-border/8">
                                 <div class="flex items-start justify-between">
                                     <div>
-                                        <h2 class="text-sm font-semibold text-white">{prog_name}</h2>
-                                        <p class="text-[#666666] text-[9px] mt-0.5">{prog_desc}</p>
+                                        <h2 class="text-sm font-semibold text-foreground">{prog_name}</h2>
+                                        <p class="text-muted-foreground text-[9px] mt-0.5">{prog_desc}</p>
                                     </div>
                                     <div class="flex gap-1">
                                         <button
-                                            class="bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] text-[9px] px-2 py-1 rounded hover:bg-[#00d9ff30]"
+                                            class="bg-[#00d9ff20] border border-[#00d9ff40] text-primary text-[9px] px-2 py-1 rounded hover:bg-primary/20"
                                             on:click=move |_| set_show_csv_upload.set(true)
                                         >
                                             "⬆ Upload CSV"
                                         </button>
                                         <button
-                                            class="bg-[#ff444420] border border-[#ff444440] text-[#ff4444] text-[9px] px-2 py-1 rounded hover:bg-[#ff444430]"
+                                            class="bg-destructive/15 border border-destructive/25 text-destructive text-[9px] px-2 py-1 rounded hover:bg-destructive/20"
                                             on:click={
                                                 let on_select = on_select.clone();
                                                 move |_| {
@@ -137,8 +137,8 @@ pub fn ProgramDetails(
                             // Metadata
                             <div class="px-3 pt-3 pb-2">
                                 <div>
-                                    <div class="text-[8px] text-[#555555] uppercase">"Instructions"</div>
-                                    <div class="text-[11px] text-white font-mono">{line_count}" lines"</div>
+                                    <div class="text-[8px] text-muted-foreground uppercase">"Instructions"</div>
+                                    <div class="text-[11px] text-foreground font-mono">{line_count}" lines"</div>
                                 </div>
                             </div>
 
@@ -169,15 +169,15 @@ pub fn ProgramDetails(
                             />
 
                             // Motion Settings Row
-                            <div class="px-3 pb-3 border-b border-[#ffffff08] flex items-end gap-3 flex-wrap">
+                            <div class="px-3 pb-3 border-b border-border/8 flex items-end gap-3 flex-wrap">
                                 <div>
                                     <div class="flex items-center gap-2 mb-1">
-                                        <div class="text-[8px] text-[#555555] uppercase">"Move Speed"</div>
-                                        <div class="text-[7px] text-[#444444]">"(mm/s)"</div>
+                                        <div class="text-[8px] text-muted-foreground uppercase">"Move Speed"</div>
+                                        <div class="text-[7px] text-muted-foreground">"(mm/s)"</div>
                                     </div>
                                     <input
                                         type="text"
-                                        class="w-20 bg-[#111111] border border-[#ffffff10] rounded px-2 py-1 text-[10px] text-white font-mono"
+                                        class="w-20 bg-card border border-border/10 rounded px-2 py-1 text-[10px] text-foreground font-mono"
                                         placeholder="100"
                                         prop:value=move || move_speed.get()
                                         on:input=move |ev| {
@@ -187,9 +187,9 @@ pub fn ProgramDetails(
                                     />
                                 </div>
                                 <div>
-                                    <div class="text-[8px] text-[#555555] uppercase mb-1">"Term Type"</div>
+                                    <div class="text-[8px] text-muted-foreground uppercase mb-1">"Term Type"</div>
                                     <select
-                                        class="w-20 bg-[#111111] border border-[#ffffff10] rounded px-2 py-1 text-[10px] text-white"
+                                        class="w-20 bg-card border border-border/10 rounded px-2 py-1 text-[10px] text-foreground"
                                         prop:value=move || term_type.get()
                                         on:change=move |ev| {
                                             set_term_type.set(event_target_value(&ev));
@@ -202,12 +202,12 @@ pub fn ProgramDetails(
                                 </div>
                                 <div>
                                     <div class="flex items-center gap-2 mb-1">
-                                        <div class="text-[8px] text-[#555555] uppercase">"Term Value"</div>
-                                        <div class="text-[7px] text-[#444444]">"(0-100)"</div>
+                                        <div class="text-[8px] text-muted-foreground uppercase">"Term Value"</div>
+                                        <div class="text-[7px] text-muted-foreground">"(0-100)"</div>
                                     </div>
                                     <input
                                         type="text"
-                                        class="w-16 bg-[#111111] border border-[#ffffff10] rounded px-2 py-1 text-[10px] text-white font-mono"
+                                        class="w-16 bg-card border border-border/10 rounded px-2 py-1 text-[10px] text-foreground font-mono"
                                         placeholder="100"
                                         prop:value=move || term_value.get()
                                         on:input=move |ev| {
@@ -218,7 +218,7 @@ pub fn ProgramDetails(
                                 </div>
                                 <Show when=move || settings_modified.get()>
                                     <button
-                                        class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[9px] px-3 py-1 rounded hover:bg-[#22c55e30]"
+                                        class="bg-[#22c55e20] border border-[#22c55e40] text-success text-[9px] px-3 py-1 rounded hover:bg-success/20"
                                         on:click=move |_| {
                                             // Validate required fields before saving
                                             let move_speed_val = move_speed.get();
@@ -273,7 +273,7 @@ pub fn ProgramDetails(
 
                             // Instructions table
                             <div class="flex-1 p-3 overflow-auto">
-                                <h4 class="text-[9px] text-[#666666] uppercase mb-2">"Program Instructions"</h4>
+                                <h4 class="text-[9px] text-muted-foreground uppercase mb-2">"Program Instructions"</h4>
                                 <InstructionsTable instructions=instructions_for_table />
                             </div>
                         </div>
@@ -313,8 +313,8 @@ fn PositionInputRow(
     view! {
         <div class="px-3 pb-2">
             <div class="flex items-center gap-2 mb-1">
-                <div class="text-[8px] text-[#555555] uppercase">{label}</div>
-                <div class="text-[7px] text-[#444444]">{hint}</div>
+                <div class="text-[8px] text-muted-foreground uppercase">{label}</div>
+                <div class="text-[7px] text-muted-foreground">{hint}</div>
             </div>
             <div class="grid grid-cols-6 gap-2">
                 <PositionInput label="X" value=x set_value=set_x set_modified=set_modified />
@@ -338,10 +338,10 @@ fn PositionInput(
 ) -> impl IntoView {
     view! {
         <div>
-            <label class="text-[7px] text-[#444444]">{label}</label>
+            <label class="text-[7px] text-muted-foreground">{label}</label>
             <input
                 type="text"
-                class="w-full bg-[#111111] border border-[#ffffff10] rounded px-2 py-1 text-[10px] text-white font-mono"
+                class="w-full bg-card border border-border/10 rounded px-2 py-1 text-[10px] text-foreground font-mono"
                 placeholder=label
                 prop:value=move || value.get()
                 on:input=move |ev| {
@@ -358,16 +358,16 @@ fn PositionInput(
 fn InstructionsTable(instructions: Vec<fanuc_replica_plugins::Instruction>) -> impl IntoView {
     if instructions.is_empty() {
         Either::Left(view! {
-            <div class="bg-[#111111] rounded border border-[#ffffff08] p-4 text-center text-[#555555] text-[10px]">
+            <div class="bg-card rounded border border-border/8 p-4 text-center text-muted-foreground text-[10px]">
                 "No instructions - upload a CSV to add instructions"
             </div>
         })
     } else {
         Either::Right(view! {
-            <div class="bg-[#111111] rounded border border-[#ffffff08] overflow-auto max-h-[400px]">
+            <div class="bg-card rounded border border-border/8 overflow-auto max-h-[400px]">
                 <table class="w-full text-[9px] font-mono">
-                    <thead class="bg-[#1a1a1a] sticky top-0">
-                        <tr class="text-[#666666] text-left">
+                    <thead class="bg-popover sticky top-0">
+                        <tr class="text-muted-foreground text-left">
                             <th class="px-2 py-1.5 font-medium">"#"</th>
                             <th class="px-2 py-1.5 font-medium">"X"</th>
                             <th class="px-2 py-1.5 font-medium">"Y"</th>
@@ -391,18 +391,18 @@ fn InstructionsTable(instructions: Vec<fanuc_replica_plugins::Instruction>) -> i
                             let uframe_str = instr.uframe.map(|v| v.to_string()).unwrap_or_else(|| "-".to_string());
                             let utool_str = instr.utool.map(|v| v.to_string()).unwrap_or_else(|| "-".to_string());
                             view! {
-                                <tr class="border-t border-[#ffffff08] hover:bg-[#ffffff05]">
-                                    <td class="px-2 py-1 text-[#00d9ff]">{instr.line_number}</td>
-                                    <td class="px-2 py-1 text-white">{format!("{:.2}", instr.x)}</td>
-                                    <td class="px-2 py-1 text-white">{format!("{:.2}", instr.y)}</td>
-                                    <td class="px-2 py-1 text-white">{format!("{:.2}", instr.z)}</td>
-                                    <td class="px-2 py-1 text-[#888888]">{w_str}</td>
-                                    <td class="px-2 py-1 text-[#888888]">{p_str}</td>
-                                    <td class="px-2 py-1 text-[#888888]">{r_str}</td>
-                                    <td class="px-2 py-1 text-[#22c55e]">{speed_str}</td>
-                                    <td class="px-2 py-1 text-[#888888]">{term_str}</td>
-                                    <td class="px-2 py-1 text-[#888888]">{uframe_str}</td>
-                                    <td class="px-2 py-1 text-[#888888]">{utool_str}</td>
+                                <tr class="border-t border-border/8 hover:bg-[#ffffff05]">
+                                    <td class="px-2 py-1 text-primary">{instr.line_number}</td>
+                                    <td class="px-2 py-1 text-foreground">{format!("{:.2}", instr.x)}</td>
+                                    <td class="px-2 py-1 text-foreground">{format!("{:.2}", instr.y)}</td>
+                                    <td class="px-2 py-1 text-foreground">{format!("{:.2}", instr.z)}</td>
+                                    <td class="px-2 py-1 text-muted-foreground">{w_str}</td>
+                                    <td class="px-2 py-1 text-muted-foreground">{p_str}</td>
+                                    <td class="px-2 py-1 text-muted-foreground">{r_str}</td>
+                                    <td class="px-2 py-1 text-success">{speed_str}</td>
+                                    <td class="px-2 py-1 text-muted-foreground">{term_str}</td>
+                                    <td class="px-2 py-1 text-muted-foreground">{uframe_str}</td>
+                                    <td class="px-2 py-1 text-muted-foreground">{utool_str}</td>
                                 </tr>
                             }
                         }).collect_view()}
@@ -422,19 +422,19 @@ fn EmptyProgramState(
     view! {
         <div class="h-full flex items-center justify-center">
             <div class="text-center">
-                <svg class="w-12 h-12 mx-auto mb-2 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-12 h-12 mx-auto mb-2 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                 </svg>
-                <p class="text-[#555555] text-[10px] mb-3">"No program open"</p>
+                <p class="text-muted-foreground text-[10px] mb-3">"No program open"</p>
                 <div class="flex gap-2 justify-center">
                     <button
-                        class="bg-[#00d9ff20] border border-[#00d9ff40] text-[#00d9ff] text-[9px] px-3 py-1.5 rounded hover:bg-[#00d9ff30]"
+                        class="bg-[#00d9ff20] border border-[#00d9ff40] text-primary text-[9px] px-3 py-1.5 rounded hover:bg-primary/20"
                         on:click=move |_| set_show_open_modal.set(true)
                     >
                         "Open Program"
                     </button>
                     <button
-                        class="bg-[#22c55e20] border border-[#22c55e40] text-[#22c55e] text-[9px] px-3 py-1.5 rounded hover:bg-[#22c55e30]"
+                        class="bg-[#22c55e20] border border-[#22c55e40] text-success text-[9px] px-3 py-1.5 rounded hover:bg-success/20"
                         on:click=move |_| set_show_new_program.set(true)
                     >
                         "New Program"

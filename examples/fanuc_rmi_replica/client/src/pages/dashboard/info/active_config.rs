@@ -55,7 +55,7 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
 
     view! {
         <Show when=move || robot_connected.get()>
-            <div class="bg-background rounded border border-border/8 p-3 shrink-0">
+            <div class="bg-surface-1 rounded-theme border border-border shadow-theme p-3 shrink-0 transition-all duration-300">
                 <h3 class="text-[10px] font-semibold text-primary mb-2 uppercase tracking-wide flex items-center group">
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
@@ -71,7 +71,7 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
                         <div class="flex items-center gap-2">
                             <label class="text-[9px] text-muted-foreground w-16">"Loaded From:"</label>
                             <select
-                                class="flex-1 bg-card border border-border/8 rounded px-2 py-1 text-[10px] text-white"
+                                class="flex-1 bg-card border border-border/8 rounded px-2 py-1 text-[10px] text-foreground"
                                 on:change=move |ev| {
                                     let value = event_target_value(&ev);
                                     if let Ok(id) = value.parse::<i64>() {
@@ -141,23 +141,23 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
                         <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px]">
                             <div class="flex justify-between">
                                 <span class="text-muted-foreground">"Front/Back:"</span>
-                                <span class="text-white">{move || if config.get().front == 1 { "Front" } else { "Back" }}</span>
+                                <span class="text-foreground">{move || if config.get().front == 1 { "Front" } else { "Back" }}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-muted-foreground">"Up/Down:"</span>
-                                <span class="text-white">{move || if config.get().up == 1 { "Up" } else { "Down" }}</span>
+                                <span class="text-foreground">{move || if config.get().up == 1 { "Up" } else { "Down" }}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-muted-foreground">"Left/Right:"</span>
-                                <span class="text-white">{move || if config.get().left == 1 { "Left" } else { "Right" }}</span>
+                                <span class="text-foreground">{move || if config.get().left == 1 { "Left" } else { "Right" }}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-muted-foreground">"Flip:"</span>
-                                <span class="text-white">{move || if config.get().flip == 1 { "Flip" } else { "NoFlip" }}</span>
+                                <span class="text-foreground">{move || if config.get().flip == 1 { "Flip" } else { "NoFlip" }}</span>
                             </div>
                             <div class="flex justify-between col-span-2">
                                 <span class="text-muted-foreground">"Turn (J4/J5/J6):"</span>
-                                <span class="text-white font-mono">{move || {
+                                <span class="text-foreground font-mono">{move || {
                                     let c = config.get();
                                     format!("{}/{}/{}", c.turn4, c.turn5, c.turn6)
                                 }}</span>
@@ -174,7 +174,7 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
                         <div class="bg-background border border-border/8 rounded-lg p-6 max-w-md"
                             on:click=move |e| e.stop_propagation()
                         >
-                            <h3 class="text-sm font-semibold text-white mb-3">"Save Configuration"</h3>
+                            <h3 class="text-sm font-semibold text-foreground mb-3">"Save Configuration"</h3>
                             <p class="text-xs text-muted-foreground mb-4">"Save modal - to be implemented"</p>
                             <button
                                 class="px-3 py-1.5 text-[10px] bg-popover border border-border/8 text-muted-foreground rounded"

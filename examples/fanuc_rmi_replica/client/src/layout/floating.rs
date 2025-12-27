@@ -51,7 +51,7 @@ pub fn FloatingJogControls() -> impl IntoView {
                         title="Dock jog controls"
                         on:click=move |_| layout_ctx.jog_popped.set(false)
                     >
-                        <svg class="w-3 h-3 text-muted-foreground hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-3 h-3 text-muted-foreground hover:text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
                     </button>
@@ -110,7 +110,7 @@ pub fn FloatingIOStatus() -> impl IntoView {
                         title="Dock I/O panel"
                         on:click=move |_| layout_ctx.io_popped.set(false)
                     >
-                        <svg class="w-3 h-3 text-muted-foreground hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-3 h-3 text-muted-foreground hover:text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
                     </button>

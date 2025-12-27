@@ -71,14 +71,14 @@ where
             <div class="bg-background border border-border/8 rounded-lg w-[500px] max-h-[80vh] flex flex-col">
                 // Header
                 <div class="flex items-center justify-between p-3 border-b border-border/8">
-                    <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <h2 class="text-sm font-semibold text-foreground flex items-center gap-2">
                         <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"/>
                         </svg>
                         "Load Program"
                     </h2>
                     <button
-                        class="text-muted-foreground hover:text-white"
+                        class="text-muted-foreground hover:text-foreground"
                         on:click=move |_| on_close_header()
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,7 +114,7 @@ where
                                         class=move || format!(
                                             "w-full text-left p-2 rounded border transition-colors {}",
                                             if is_selected() {
-                                                "bg-primary/20 border-primary text-white"
+                                                "bg-primary/20 border-primary text-foreground"
                                             } else {
                                                 "bg-card border-border/8 text-foreground hover:bg-popover hover:border-border/8"
                                             }
@@ -151,7 +151,7 @@ where
                         class=move || format!(
                             "text-[10px] px-4 py-1.5 rounded transition-colors {}",
                             if selected_id.get().is_some() && !load.is_loading() {
-                                "bg-primary text-white hover:brightness-110"
+                                "bg-primary text-primary-foreground hover:brightness-110"
                             } else {
                                 "bg-muted text-muted-foreground cursor-not-allowed"
                             }

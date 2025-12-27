@@ -1,185 +1,182 @@
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// Available themes for the application.
+///
+/// Curated selection of professional dark themes with distinctive accents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Theme {
+    // Original themes
     #[default]
-    Industrial,
-    Indigo,
-    Emerald,
-    Rose,
-    Teal,
-    Cyber,
-    Amber,
-    Slate,
-    Crimson,
-    Gold,
-    DeepOcean,
-    Arctic,
-    Obsidian,
-    Neon,
-    Retro,
-    Mist,
-    Solar,
-    Space,
-    Light,
-    Blood,
-    Coffee,
-    GlassDark,
-    // New Sophisticated Themes - Dark (Neutral base with accent)
+    Industrial,    // Default cyan industrial theme
+    Indigo,        // Deep navy with electric indigo glow
+    Coffee,        // Warm carbon with brown undertones
+    Amber,         // Warm industrial with orange accent
     ZincBlue,      // Zinc neutral + blue accent (Vercel-inspired)
     SlateTeal,     // Slate neutral + teal accent
     StoneOrange,   // Stone warm neutral + orange accent
     NeutralGreen,  // Pure neutral + green accent
-    // New Sophisticated Themes - Light (Clean, readable)
-    PaperBlue,     // Warm white + blue accent
-    SnowMint,      // Cool white + mint/green accent
-    IvoryTeal,     // Ivory background + teal accent
-    CloudSlate,    // Light gray + slate blue accent
+    // Tweakcn themes
+    AmberMinimal,
+    AmethystHaze,
+    Caffeine,
+    Catppuccin,
+    Claude,
+    Claymorphism,
+    CleanSlate,
+    CosmicNight,
+    Darkmatter,
+    Doom64,
+    Graphite,
+    Mono,
+    OceanBreeze,
+    SageGarden,
+    SoftPop,
+    SolarDusk,
+    Supabase,
+    Twitter,
+    Vercel,
+    VioletBloom,
 }
 
 impl Theme {
     pub fn class_name(&self) -> &'static str {
         match self {
+            // Original themes
             Theme::Industrial => "", // Default uses :root variables
             Theme::Indigo => "theme-indigo",
-            Theme::Emerald => "theme-emerald",
-            Theme::Rose => "theme-rose",
-            Theme::Teal => "theme-teal",
-            Theme::Cyber => "theme-cyber",
-            Theme::Amber => "theme-amber",
-            Theme::Slate => "theme-slate",
-            Theme::Crimson => "theme-crimson",
-            Theme::Gold => "theme-gold",
-            Theme::DeepOcean => "theme-ocean",
-            Theme::Arctic => "theme-arctic",
-            Theme::Obsidian => "theme-obsidian",
-            Theme::Neon => "theme-neon",
-            Theme::Retro => "theme-retro",
-            Theme::Mist => "theme-mist",
-            Theme::Solar => "theme-solar",
-            Theme::Space => "theme-space",
-            Theme::Light => "theme-light",
-            Theme::Blood => "theme-blood",
             Theme::Coffee => "theme-coffee",
-            Theme::GlassDark => "theme-glass-dark",
-            // New sophisticated themes
+            Theme::Amber => "theme-amber",
             Theme::ZincBlue => "theme-zinc-blue",
             Theme::SlateTeal => "theme-slate-teal",
             Theme::StoneOrange => "theme-stone-orange",
             Theme::NeutralGreen => "theme-neutral-green",
-            Theme::PaperBlue => "theme-paper-blue",
-            Theme::SnowMint => "theme-snow-mint",
-            Theme::IvoryTeal => "theme-ivory-teal",
-            Theme::CloudSlate => "theme-cloud-slate",
+            // Tweakcn themes
+            Theme::AmberMinimal => "theme-amber-minimal",
+            Theme::AmethystHaze => "theme-amethyst-haze",
+            Theme::Caffeine => "theme-caffeine",
+            Theme::Catppuccin => "theme-catppuccin",
+            Theme::Claude => "theme-claude",
+            Theme::Claymorphism => "theme-claymorphism",
+            Theme::CleanSlate => "theme-clean-slate",
+            Theme::CosmicNight => "theme-cosmic-night",
+            Theme::Darkmatter => "theme-darkmatter",
+            Theme::Doom64 => "theme-doom-64",
+            Theme::Graphite => "theme-graphite",
+            Theme::Mono => "theme-mono",
+            Theme::OceanBreeze => "theme-ocean-breeze",
+            Theme::SageGarden => "theme-sage-garden",
+            Theme::SoftPop => "theme-soft-pop",
+            Theme::SolarDusk => "theme-solar-dusk",
+            Theme::Supabase => "theme-supabase",
+            Theme::Twitter => "theme-twitter",
+            Theme::Vercel => "theme-vercel",
+            Theme::VioletBloom => "theme-violet-bloom",
         }
     }
 
     pub fn name(&self) -> &'static str {
         match self {
+            // Original themes
             Theme::Industrial => "Industrial Dark",
-            Theme::Indigo => "Indigo Knight",
-            Theme::Emerald => "Emerald Grove",
-            Theme::Rose => "Rose Carbon",
-            Theme::Teal => "Midnight Teal",
-            Theme::Cyber => "Cyberpunk",
-            Theme::Amber => "Amber Glow",
-            Theme::Slate => "Slate Blue",
-            Theme::Crimson => "Crimson Peak",
-            Theme::Gold => "Golden Hour",
-            Theme::DeepOcean => "Deep Ocean",
-            Theme::Arctic => "Arctic Frost",
-            Theme::Obsidian => "Obsidian Sharp",
-            Theme::Neon => "Neon Pulse",
-            Theme::Retro => "Retro Slate",
-            Theme::Mist => "Forest Mist",
-            Theme::Solar => "Solar Flare",
-            Theme::Space => "Deep Space",
-            Theme::Light => "Industrial Light",
-            Theme::Blood => "Blood Moon",
+            Theme::Indigo => "Indigo Night",
             Theme::Coffee => "Coffee Bean",
-            Theme::GlassDark => "Glass Dark",
-            // New sophisticated themes
+            Theme::Amber => "Amber Glow",
             Theme::ZincBlue => "Zinc Blue",
             Theme::SlateTeal => "Slate Teal",
             Theme::StoneOrange => "Stone Orange",
             Theme::NeutralGreen => "Neutral Green",
-            Theme::PaperBlue => "Paper Blue",
-            Theme::SnowMint => "Snow Mint",
-            Theme::IvoryTeal => "Ivory Teal",
-            Theme::CloudSlate => "Cloud Slate",
+            // Tweakcn themes
+            Theme::AmberMinimal => "Amber Minimal",
+            Theme::AmethystHaze => "Amethyst Haze",
+            Theme::Caffeine => "Caffeine",
+            Theme::Catppuccin => "Catppuccin",
+            Theme::Claude => "Claude",
+            Theme::Claymorphism => "Claymorphism",
+            Theme::CleanSlate => "Clean Slate",
+            Theme::CosmicNight => "Cosmic Night",
+            Theme::Darkmatter => "Dark Matter",
+            Theme::Doom64 => "Doom 64",
+            Theme::Graphite => "Graphite",
+            Theme::Mono => "Mono",
+            Theme::OceanBreeze => "Ocean Breeze",
+            Theme::SageGarden => "Sage Garden",
+            Theme::SoftPop => "Soft Pop",
+            Theme::SolarDusk => "Solar Dusk",
+            Theme::Supabase => "Supabase",
+            Theme::Twitter => "Twitter",
+            Theme::Vercel => "Vercel",
+            Theme::VioletBloom => "Violet Bloom",
         }
     }
 
     pub fn preview_color(&self) -> &'static str {
         match self {
+            // Original themes
             Theme::Industrial => "#00d9ff",  // Cyan
             Theme::Indigo => "#818cf8",      // Electric indigo
-            Theme::Emerald => "#34d399",     // Green terminal
-            Theme::Rose => "#fb7185",        // Elegant pink
-            Theme::Teal => "#2dd4bf",        // Ocean teal
-            Theme::Cyber => "#e879f9",       // Magenta neon
-            Theme::Amber => "#fbbf24",       // Warm orange
-            Theme::Slate => "#60a5fa",       // Professional blue
-            Theme::Crimson => "#f87171",     // Deep red
-            Theme::Gold => "#facc15",        // Luxurious gold
-            Theme::DeepOcean => "#38bdf8",   // Teal highlight
-            Theme::Arctic => "#3b82f6",      // Frost blue
-            Theme::Obsidian => "#ffffff",    // Pure white
-            Theme::Neon => "#c084fc",        // Violet
-            Theme::Retro => "#f97316",       // Warm orange
-            Theme::Mist => "#4ade80",        // Soft green
-            Theme::Solar => "#fb923c",       // Orange glow
-            Theme::Space => "#a78bfa",       // Purple
-            Theme::Light => "#06b6d4",       // Cyan
-            Theme::Blood => "#ef4444",       // Crimson
             Theme::Coffee => "#d97706",      // Warm brown
-            Theme::GlassDark => "#60a5fa",   // Blue glass
-            // New sophisticated themes
+            Theme::Amber => "#fbbf24",       // Warm orange
             Theme::ZincBlue => "#3b82f6",    // Blue-500
             Theme::SlateTeal => "#14b8a6",   // Teal-500
             Theme::StoneOrange => "#f97316", // Orange-500
             Theme::NeutralGreen => "#22c55e",// Green-500
-            Theme::PaperBlue => "#2563eb",   // Blue-600
-            Theme::SnowMint => "#10b981",    // Emerald-500
-            Theme::IvoryTeal => "#0d9488",   // Teal-600
-            Theme::CloudSlate => "#64748b",  // Slate-500
+            // Tweakcn themes
+            Theme::AmberMinimal => "#f59d0a",
+            Theme::AmethystHaze => "#a994c9",
+            Theme::Caffeine => "#ffdfc1",
+            Theme::Catppuccin => "#caa5f6",
+            Theme::Claude => "#d87757",
+            Theme::Claymorphism => "#808bf7",
+            Theme::CleanSlate => "#808bf7",
+            Theme::CosmicNight => "#a48ffe",
+            Theme::Darkmatter => "#e78952",
+            Theme::Doom64 => "#e53834",
+            Theme::Graphite => "#b3b3b3",
+            Theme::Mono => "#8d8d8d",
+            Theme::OceanBreeze => "#33d298",
+            Theme::SageGarden => "#7c9082",
+            Theme::SoftPop => "#808bf7",
+            Theme::SolarDusk => "#f97316",
+            Theme::Supabase => "#006138",
+            Theme::Twitter => "#1c9cef",
+            Theme::Vercel => "#ffffff",
+            Theme::VioletBloom => "#8c5cfe",
         }
     }
 
     pub fn all() -> &'static [Theme] {
         &[
+            // Original themes
             Theme::Industrial,
             Theme::Indigo,
-            Theme::Emerald,
-            Theme::Rose,
-            Theme::Teal,
-            Theme::Cyber,
-            Theme::Amber,
-            Theme::Slate,
-            Theme::Crimson,
-            Theme::Gold,
-            Theme::DeepOcean,
-            Theme::Arctic,
-            Theme::Obsidian,
-            Theme::Neon,
-            Theme::Retro,
-            Theme::Mist,
-            Theme::Solar,
-            Theme::Space,
-            Theme::Light,
-            Theme::Blood,
             Theme::Coffee,
-            Theme::GlassDark,
-            // New sophisticated themes
+            Theme::Amber,
             Theme::ZincBlue,
             Theme::SlateTeal,
             Theme::StoneOrange,
             Theme::NeutralGreen,
-            Theme::PaperBlue,
-            Theme::SnowMint,
-            Theme::IvoryTeal,
-            Theme::CloudSlate,
+            // Tweakcn themes
+            Theme::AmberMinimal,
+            Theme::AmethystHaze,
+            Theme::Caffeine,
+            Theme::Catppuccin,
+            Theme::Claude,
+            Theme::Claymorphism,
+            Theme::CleanSlate,
+            Theme::CosmicNight,
+            Theme::Darkmatter,
+            Theme::Doom64,
+            Theme::Graphite,
+            Theme::Mono,
+            Theme::OceanBreeze,
+            Theme::SageGarden,
+            Theme::SoftPop,
+            Theme::SolarDusk,
+            Theme::Supabase,
+            Theme::Twitter,
+            Theme::Vercel,
+            Theme::VioletBloom,
         ]
     }
 }

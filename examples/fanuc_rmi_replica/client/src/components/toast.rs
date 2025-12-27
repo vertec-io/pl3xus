@@ -152,7 +152,7 @@ fn ToastItem(toast: Toast, on_dismiss: impl Fn() + 'static) -> impl IntoView {
             <span class="text-sm">{icon}</span>
             <span class="text-[11px] flex-1">{toast.message}</span>
             <button
-                class="text-muted-foreground hover:text-white text-xs"
+                class="text-muted-foreground hover:text-foreground text-xs"
                 on:click=move |_| on_dismiss()
             >
                 "×"

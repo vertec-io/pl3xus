@@ -37,7 +37,7 @@ pub fn SettingsView() -> impl IntoView {
         <div class="h-full flex flex-col">
             // Header
             <div class="h-8 border-b border-border/8 flex items-center px-3 shrink-0 bg-background">
-                <h2 class="text-[11px] font-semibold text-white flex items-center">
+                <h2 class="text-[11px] font-semibold text-foreground flex items-center">
                     <svg class="w-3.5 h-3.5 mr-1.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -151,7 +151,7 @@ fn RobotBrowser(
                                                 <div class="flex items-center gap-1.5 min-w-0">
                                                     <div class="w-1.5 h-1.5 rounded-full bg-muted-foreground shrink-0"></div>
                                                     <div class="min-w-0">
-                                                        <div class="text-[9px] text-white font-medium truncate">{robot_name.clone()}</div>
+                                                        <div class="text-[9px] text-foreground font-medium truncate">{robot_name.clone()}</div>
                                                         <div class="text-[8px] text-muted-foreground truncate">{format!("{}:{}", robot_ip, robot_port)}</div>
                                                     </div>
                                                 </div>
@@ -240,7 +240,7 @@ fn SystemSettingsPanel() -> impl IntoView {
                             <p class="text-[8px] text-destructive">"Delete all data?"</p>
                             <div class="flex gap-1">
                                 <button
-                                    class="flex-1 text-[8px] px-2 py-1 bg-destructive text-white rounded hover:bg-destructive"
+                                    class="flex-1 text-[8px] px-2 py-1 bg-destructive text-foreground rounded hover:bg-destructive"
                                     on:click=move |_| {
                                         reset_database.send(ResetDatabase);
                                     }
@@ -248,7 +248,7 @@ fn SystemSettingsPanel() -> impl IntoView {
                                     "Yes"
                                 </button>
                                 <button
-                                    class="flex-1 text-[8px] px-2 py-1 bg-popover border border-border/8 text-muted-foreground rounded hover:text-white"
+                                    class="flex-1 text-[8px] px-2 py-1 bg-popover border border-border/8 text-muted-foreground rounded hover:text-foreground"
                                     on:click=move |_| set_confirm_reset.set(false)
                                 >
                                     "No"
@@ -486,7 +486,7 @@ fn RobotSettingsPanel(
                     view! {
                         // Header with robot name
                         <div class="flex items-center justify-between p-3 border-b border-border/8">
-                            <h3 class="text-[11px] font-semibold text-white flex items-center">
+                            <h3 class="text-[11px] font-semibold text-foreground flex items-center">
                                 <svg class="w-4 h-4 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
                                 </svg>
@@ -534,7 +534,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"Name"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none"
                                             prop:value=move || edit_name.get()
                                             on:input=move |ev| {
                                                 set_edit_name.set(event_target_value(&ev));
@@ -546,7 +546,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"Description"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none"
                                             placeholder="Optional"
                                             prop:value=move || edit_desc.get()
                                             on:input=move |ev| {
@@ -559,7 +559,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"IP Address"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_ip.get()
                                             on:input=move |ev| {
                                                 set_edit_ip.set(event_target_value(&ev));
@@ -571,7 +571,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"Port"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_port.get()
                                             on:input=move |ev| {
                                                 set_edit_port.set(event_target_value(&ev));
@@ -590,7 +590,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"Default Speed"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_speed.get()
                                             on:input=move |ev| {
                                                 set_edit_speed.set(event_target_value(&ev));
@@ -602,7 +602,7 @@ fn RobotSettingsPanel(
                                     <div>
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"Speed Type"</label>
                                         <select
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none"
                                             on:change=move |ev| {
                                                 set_edit_speed_type.set(event_target_value(&ev));
                                                 set_has_changes.set(true);
@@ -617,7 +617,7 @@ fn RobotSettingsPanel(
                                     <div>
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"Termination"</label>
                                         <select
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none"
                                             on:change=move |ev| {
                                                 set_edit_term_type.set(event_target_value(&ev));
                                                 set_has_changes.set(true);
@@ -638,7 +638,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"W (deg)"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_w.get()
                                             on:input=move |ev| {
                                                 set_edit_w.set(event_target_value(&ev));
@@ -651,7 +651,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"P (deg)"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_p.get()
                                             on:input=move |ev| {
                                                 set_edit_p.set(event_target_value(&ev));
@@ -664,7 +664,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"R (deg)"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_r.get()
                                             on:input=move |ev| {
                                                 set_edit_r.set(event_target_value(&ev));
@@ -684,7 +684,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"Cartesian Jog Speed"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_cart_speed.get()
                                             on:input=move |ev| {
                                                 set_edit_cart_speed.set(event_target_value(&ev));
@@ -697,7 +697,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"Cartesian Jog Step"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_cart_step.get()
                                             on:input=move |ev| {
                                                 set_edit_cart_step.set(event_target_value(&ev));
@@ -710,7 +710,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"Joint Jog Speed"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_joint_speed.get()
                                             on:input=move |ev| {
                                                 set_edit_joint_speed.set(event_target_value(&ev));
@@ -723,7 +723,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[9px] mb-0.5">"Joint Jog Step"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || edit_joint_step.get()
                                             on:input=move |ev| {
                                                 set_edit_joint_step.set(event_target_value(&ev));
@@ -831,7 +831,7 @@ fn RobotSettingsPanel(
                                                     <div class="flex items-center justify-between">
                                                         <div class="flex-1 min-w-0">
                                                             <div class="flex items-center gap-1.5">
-                                                                <span class="text-[9px] text-white font-medium">
+                                                                <span class="text-[9px] text-foreground font-medium">
                                                                     {move || get_config().map(|c| c.name.clone()).unwrap_or_default()}
                                                                 </span>
                                                                 {move || {
@@ -917,31 +917,31 @@ fn RobotSettingsPanel(
                                                                         <div class="grid grid-cols-3 gap-2 text-[8px]">
                                                                             <div>
                                                                                 <span class="text-muted-foreground">"Front: "</span>
-                                                                                <span class="text-white font-mono">{cfg.front}</span>
+                                                                                <span class="text-foreground font-mono">{cfg.front}</span>
                                                                             </div>
                                                                             <div>
                                                                                 <span class="text-muted-foreground">"Up: "</span>
-                                                                                <span class="text-white font-mono">{cfg.up}</span>
+                                                                                <span class="text-foreground font-mono">{cfg.up}</span>
                                                                             </div>
                                                                             <div>
                                                                                 <span class="text-muted-foreground">"Left: "</span>
-                                                                                <span class="text-white font-mono">{cfg.left}</span>
+                                                                                <span class="text-foreground font-mono">{cfg.left}</span>
                                                                             </div>
                                                                             <div>
                                                                                 <span class="text-muted-foreground">"Flip: "</span>
-                                                                                <span class="text-white font-mono">{cfg.flip}</span>
+                                                                                <span class="text-foreground font-mono">{cfg.flip}</span>
                                                                             </div>
                                                                             <div>
                                                                                 <span class="text-muted-foreground">"Turn4: "</span>
-                                                                                <span class="text-white font-mono">{cfg.turn4}</span>
+                                                                                <span class="text-foreground font-mono">{cfg.turn4}</span>
                                                                             </div>
                                                                             <div>
                                                                                 <span class="text-muted-foreground">"Turn5: "</span>
-                                                                                <span class="text-white font-mono">{cfg.turn5}</span>
+                                                                                <span class="text-foreground font-mono">{cfg.turn5}</span>
                                                                             </div>
                                                                             <div>
                                                                                 <span class="text-muted-foreground">"Turn6: "</span>
-                                                                                <span class="text-white font-mono">{cfg.turn6}</span>
+                                                                                <span class="text-foreground font-mono">{cfg.turn6}</span>
                                                                             </div>
                                                                         </div>
                                                                     }.into_any()
@@ -1015,7 +1015,7 @@ fn RobotSettingsPanel(
             <Show when=move || show_config_form.get()>
                 <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div class="bg-background border border-border/8 rounded-lg p-6 w-[500px] max-h-[80vh] overflow-y-auto">
-                        <h3 class="text-[12px] font-semibold text-white mb-4">
+                        <h3 class="text-[12px] font-semibold text-foreground mb-4">
                             {move || if editing_config_id.get().is_some() {
                                 "Edit Configuration"
                             } else {
@@ -1029,7 +1029,7 @@ fn RobotSettingsPanel(
                                 <label class="block text-muted-foreground text-[9px] mb-1">"Configuration Name"</label>
                                 <input
                                     type="text"
-                                    class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none"
+                                    class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none"
                                     prop:value=move || config_name.get()
                                     on:input=move |ev| set_config_name.set(event_target_value(&ev))
                                     placeholder="e.g., Default Config, Welding Setup"
@@ -1042,7 +1042,7 @@ fn RobotSettingsPanel(
                                     <label class="block text-muted-foreground text-[9px] mb-1">"User Frame (UFrame)"</label>
                                     <input
                                         type="text"
-                                        class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none font-mono"
+                                        class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                         prop:value=move || config_uframe.get()
                                         on:input=move |ev| set_config_uframe.set(event_target_value(&ev))
                                         placeholder="0"
@@ -1052,7 +1052,7 @@ fn RobotSettingsPanel(
                                     <label class="block text-muted-foreground text-[9px] mb-1">"User Tool (UTool)"</label>
                                     <input
                                         type="text"
-                                        class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-white focus:border-primary focus:outline-none font-mono"
+                                        class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[10px] text-foreground focus:border-primary focus:outline-none font-mono"
                                         prop:value=move || config_utool.get()
                                         on:input=move |ev| set_config_utool.set(event_target_value(&ev))
                                         placeholder="0"
@@ -1068,7 +1068,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[8px] mb-0.5">"Front"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_front.get()
                                             on:input=move |ev| set_config_front.set(event_target_value(&ev))
                                             placeholder="0"
@@ -1078,7 +1078,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[8px] mb-0.5">"Up"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_up.get()
                                             on:input=move |ev| set_config_up.set(event_target_value(&ev))
                                             placeholder="0"
@@ -1088,7 +1088,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[8px] mb-0.5">"Left"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_left.get()
                                             on:input=move |ev| set_config_left.set(event_target_value(&ev))
                                             placeholder="0"
@@ -1098,7 +1098,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[8px] mb-0.5">"Flip"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_flip.get()
                                             on:input=move |ev| set_config_flip.set(event_target_value(&ev))
                                             placeholder="0"
@@ -1108,7 +1108,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[8px] mb-0.5">"Turn4"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_turn4.get()
                                             on:input=move |ev| set_config_turn4.set(event_target_value(&ev))
                                             placeholder="0"
@@ -1118,7 +1118,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[8px] mb-0.5">"Turn5"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_turn5.get()
                                             on:input=move |ev| set_config_turn5.set(event_target_value(&ev))
                                             placeholder="0"
@@ -1128,7 +1128,7 @@ fn RobotSettingsPanel(
                                         <label class="block text-muted-foreground text-[8px] mb-0.5">"Turn6"</label>
                                         <input
                                             type="text"
-                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-white focus:border-primary focus:outline-none font-mono"
+                                            class="w-full bg-card border border-border/8 rounded px-2 py-1 text-[9px] text-foreground focus:border-primary focus:outline-none font-mono"
                                             prop:value=move || config_turn6.get()
                                             on:input=move |ev| set_config_turn6.set(event_target_value(&ev))
                                             placeholder="0"
@@ -1224,7 +1224,7 @@ fn RobotSettingsPanel(
                                 }}
                             </button>
                             <button
-                                class="flex-1 text-[10px] px-4 py-2 bg-popover border border-border/8 text-muted-foreground rounded hover:text-white"
+                                class="flex-1 text-[10px] px-4 py-2 bg-popover border border-border/8 text-muted-foreground rounded hover:text-foreground"
                                 on:click=move |_| {
                                     set_show_config_form.set(false);
                                     set_editing_config_id.set(None);
@@ -1264,7 +1264,7 @@ fn RobotSettingsPanel(
 
                         <div class="flex gap-2">
                             <button
-                                class="flex-1 text-[10px] px-4 py-2 bg-destructive text-white rounded hover:bg-destructive font-medium"
+                                class="flex-1 text-[10px] px-4 py-2 bg-destructive text-foreground rounded hover:bg-destructive font-medium"
                                 on:click=move |_| {
                                     if let Some(id) = config_to_delete.get() {
                                         delete_config.send(DeleteConfiguration { id });
@@ -1274,7 +1274,7 @@ fn RobotSettingsPanel(
                                 "Delete"
                             </button>
                             <button
-                                class="flex-1 text-[10px] px-4 py-2 bg-popover border border-border/8 text-muted-foreground rounded hover:text-white"
+                                class="flex-1 text-[10px] px-4 py-2 bg-popover border border-border/8 text-muted-foreground rounded hover:text-foreground"
                                 on:click=move |_| {
                                     set_show_delete_config_confirm.set(false);
                                     set_config_to_delete.set(None);
@@ -1364,14 +1364,14 @@ fn IoConfigModal(
             <div class="bg-background border border-border/8 rounded-lg w-[600px] max-h-[80vh] flex flex-col">
                 // Header
                 <div class="flex items-center justify-between p-3 border-b border-border/8">
-                    <h3 class="text-[11px] font-semibold text-white flex items-center">
+                    <h3 class="text-[11px] font-semibold text-foreground flex items-center">
                         <svg class="w-4 h-4 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
                         </svg>
                         "I/O Display Names"
                     </h3>
                     <button
-                        class="text-muted-foreground hover:text-white"
+                        class="text-muted-foreground hover:text-foreground"
                         on:click=move |_| set_show_io_config.set(false)
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1500,7 +1500,7 @@ fn IoConfigRow(
             // Display name input
             <input
                 type="text"
-                class="bg-background border border-border/8 rounded px-2 py-1 text-[10px] text-white placeholder-muted-foreground focus:border-primary focus:outline-none"
+                class="bg-background border border-border/8 rounded px-2 py-1 text-[10px] text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none"
                 placeholder=format!("{} (default)", port)
                 prop:value=get_name
                 on:input=on_name_change
@@ -1565,7 +1565,7 @@ fn DeleteConfirmModal(
 
                 <p class="text-[10px] text-muted-foreground mb-4">
                     "Are you sure you want to delete "
-                    <span class="text-white font-medium">
+                    <span class="text-foreground font-medium">
                         "\""
                         {move || robot_to_delete.get().map(|(_, name)| name).unwrap_or_default()}
                         "\""
@@ -1575,7 +1575,7 @@ fn DeleteConfirmModal(
 
                 <div class="flex gap-2">
                     <button
-                        class="flex-1 text-[10px] px-4 py-2 bg-destructive text-white rounded hover:bg-destructive font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="flex-1 text-[10px] px-4 py-2 bg-destructive text-foreground rounded hover:bg-destructive font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled=move || is_deleting.get()
                         on:click=move |_| {
                             if let Some((id, _)) = robot_to_delete.get() {
@@ -1592,7 +1592,7 @@ fn DeleteConfirmModal(
                         {move || if is_deleting.get() { "Deleting..." } else { "Delete" }}
                     </button>
                     <button
-                        class="flex-1 text-[10px] px-4 py-2 bg-popover border border-border/8 text-muted-foreground rounded hover:text-white"
+                        class="flex-1 text-[10px] px-4 py-2 bg-popover border border-border/8 text-muted-foreground rounded hover:text-foreground"
                         on:click=move |_| {
                             set_show_delete_confirm.set(false);
                             set_robot_to_delete.set(None);

@@ -24,7 +24,7 @@ pub fn ProgramBrowser(
                     "Programs"
                 </h3>
                 <button
-                    class="text-muted-foreground hover:text-white"
+                    class="text-muted-foreground hover:text-foreground"
                     on:click=move |_| layout_ctx.show_program_browser.set(false)
                     title="Close browser"
                 >
@@ -53,7 +53,7 @@ pub fn ProgramBrowser(
                                     class={move || format!(
                                         "w-full text-left p-2 rounded border text-[9px] transition-colors {}",
                                         if is_selected() {
-                                            "bg-primary/10 border-primary/40 text-white"
+                                            "bg-primary/10 border-primary/40 text-foreground"
                                         } else {
                                             "bg-card border-border/8 text-muted-foreground hover:border-border/8"
                                         }

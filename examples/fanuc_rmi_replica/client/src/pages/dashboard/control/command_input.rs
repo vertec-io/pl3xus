@@ -107,7 +107,7 @@ pub fn CommandInputSection() -> impl IntoView {
     let controls_disabled = move || !robot_connected.get();
 
     view! {
-        <div class="bg-card backdrop-blur-theme rounded-theme border border-border shadow-theme p-2 shrink-0 transition-all duration-300">
+        <div class="bg-surface-1 backdrop-blur-theme rounded-theme border border-border shadow-theme p-2 shrink-0 transition-all duration-300">
             <div class="flex items-center justify-between mb-1.5">
                 <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center">
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,7 +128,7 @@ pub fn CommandInputSection() -> impl IntoView {
             </div>
             <div class="flex gap-1">
                 <select
-                    class="flex-1 bg-card border border-border/8 rounded px-2 py-1 text-[10px] text-white focus:border-primary focus:outline-none"
+                    class="flex-1 bg-card border border-border/8 rounded px-2 py-1 text-[10px] text-foreground focus:border-primary focus:outline-none"
                     prop:value=move || selected_cmd_id.get().map(|id| id.to_string()).unwrap_or_default()
                     on:change=move |ev| {
                         let val = event_target_value(&ev);

@@ -245,7 +245,7 @@ where
         if disabled.get() {
             "w-full bg-background rounded px-1.5 py-1 text-muted-foreground text-[11px] text-right font-mono border border-border/8 cursor-not-allowed"
         } else {
-            "w-full bg-background rounded px-1.5 py-1 text-white text-[11px] text-right font-mono border border-border/8 focus:border-primary focus:outline-none"
+            "w-full bg-background rounded px-1.5 py-1 text-foreground text-[11px] text-right font-mono border border-border/8 focus:border-primary focus:outline-none"
         }
     };
 
@@ -276,7 +276,7 @@ where F: Fn(JogAxis, JogDirection) + Clone + 'static {
             class=move || if disabled.get() {
                 "bg-card border border-border/8 text-muted font-semibold py-1.5 rounded text-center text-[10px] cursor-not-allowed opacity-50"
             } else {
-                "bg-card hover:bg-primary border border-border/8 hover:border-primary text-white hover:text-black font-semibold py-1.5 rounded transition-colors text-center text-[10px]"
+                "bg-card hover:bg-primary border border-border/8 hover:border-primary text-foreground hover:text-primary-foreground font-semibold py-1.5 rounded transition-colors text-center text-[10px]"
             }
             disabled=move || disabled.get()
             on:click=do_jog

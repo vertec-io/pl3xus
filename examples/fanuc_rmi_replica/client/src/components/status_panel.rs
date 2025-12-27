@@ -70,7 +70,7 @@ where F: Fn() -> String + Send + Sync + 'static {
      view! {
         <div class="bg-card rounded px-1 py-1 text-center">
             <div class="text-muted-foreground text-[8px] mb-0.5">{label}</div>
-            <div class="text-[10px] font-semibold text-white truncate">{value}</div>
+            <div class="text-[10px] font-semibold text-foreground truncate">{value}</div>
         </div>
     }
 }

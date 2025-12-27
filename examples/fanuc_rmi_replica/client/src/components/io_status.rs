@@ -422,7 +422,7 @@ fn AnalogOutput(
                     view! {
                         <input
                             type="text"
-                            class="w-10 text-[7px] bg-popover border border-warning rounded px-0.5 text-center text-white"
+                            class="w-10 text-[7px] bg-popover border border-warning rounded px-0.5 text-center text-foreground"
                             prop:value=input_value
                             on:input=move |ev| set_input_value.set(event_target_value(&ev))
                             on:blur=do_blur_submit.clone()
@@ -532,7 +532,7 @@ fn GroupOutput(
                     view! {
                         <input
                             type="text"
-                            class="w-10 text-[7px] bg-popover border border-warning rounded px-0.5 text-center text-white"
+                            class="w-10 text-[7px] bg-popover border border-warning rounded px-0.5 text-center text-foreground"
                             prop:value=input_value
                             on:input=move |ev| set_input_value.set(event_target_value(&ev))
                             on:blur=do_blur_submit.clone()

@@ -92,7 +92,7 @@ pub fn ToolManagementPanel() -> impl IntoView {
 
     view! {
         <Show when=move || robot_connected.get()>
-            <div class="bg-background rounded border border-border/8 p-2">
+            <div class="bg-surface-1 rounded-theme border border-border shadow-theme p-2 transition-all duration-300">
                 <div class="flex items-center justify-between mb-1.5">
                     <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center group">
                         <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -131,7 +131,7 @@ pub fn ToolManagementPanel() -> impl IntoView {
                                 class=move || if is_disabled() {
                                     "flex-1 bg-card border border-border/8 rounded px-2 py-1 text-[10px] text-muted-foreground opacity-50 cursor-not-allowed"
                                 } else {
-                                    "flex-1 bg-card border border-border/8 rounded px-2 py-1 text-[10px] text-white"
+                                    "flex-1 bg-card border border-border/8 rounded px-2 py-1 text-[10px] text-foreground"
                                 }
                                 disabled=is_disabled
                                 on:change=move |ev| {

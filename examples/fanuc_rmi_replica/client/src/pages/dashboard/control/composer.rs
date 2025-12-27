@@ -315,13 +315,13 @@ pub fn CommandComposerModal() -> impl IntoView {
             <div class="bg-background border border-border/8 rounded-lg w-[600px] max-h-[90vh] flex flex-col">
                 // Header
                 <div class="flex items-center justify-between p-3 border-b border-border/8">
-                    <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <h2 class="text-sm font-semibold text-foreground flex items-center gap-2">
                         <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                         </svg>
                         "Command Composer"
                     </h2>
-                    <button class="text-muted-foreground hover:text-white" on:click=close_modal>
+                    <button class="text-muted-foreground hover:text-foreground" on:click=close_modal>
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
@@ -334,7 +334,7 @@ pub fn CommandComposerModal() -> impl IntoView {
                     <div class="space-y-2">
                         <label class="text-[10px] text-muted-foreground uppercase tracking-wide">"Motion Type"</label>
                         <select
-                            class="w-full bg-card border border-primary/40 rounded px-3 py-2 text-[12px] text-white focus:border-primary focus:outline-none"
+                            class="w-full bg-card border border-primary/40 rounded px-3 py-2 text-[12px] text-foreground focus:border-primary focus:outline-none"
                             on:change=move |ev| {
                                 let val = event_target_value(&ev);
                                 let itype = match val.as_str() {
@@ -423,7 +423,7 @@ pub fn CommandComposerModal() -> impl IntoView {
                                 <input
                                     type="text"
                                     inputmode="decimal"
-                                    class="flex-1 bg-card border border-border/8 rounded-l px-2 py-1.5 text-[11px] text-white focus:border-primary focus:outline-none text-center"
+                                    class="flex-1 bg-card border border-border/8 rounded-l px-2 py-1.5 text-[11px] text-foreground focus:border-primary focus:outline-none text-center"
                                     prop:value=move || format!("{:.1}", speed.get())
                                     on:input=move |ev| {
                                         if let Ok(v) = event_target_value(&ev).parse::<f64>() {
@@ -437,7 +437,7 @@ pub fn CommandComposerModal() -> impl IntoView {
                         <div class="space-y-1">
                             <label class="text-[10px] text-muted-foreground uppercase tracking-wide">"Termination"</label>
                             <select
-                                class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[11px] text-white focus:border-primary focus:outline-none"
+                                class="w-full bg-card border border-border/8 rounded px-2 py-1.5 text-[11px] text-foreground focus:border-primary focus:outline-none"
                                 prop:value=move || term_type.get()
                                 on:change=move |ev| set_term_type.set(event_target_value(&ev))
                             >
@@ -458,13 +458,13 @@ pub fn CommandComposerModal() -> impl IntoView {
                     </button>
                     <div class="flex gap-2">
                         <button
-                            class="bg-primary text-white text-[10px] px-4 py-1.5 rounded hover:brightness-110"
+                            class="bg-primary text-primary-foreground text-[10px] px-4 py-1.5 rounded hover:brightness-110"
                             on:click=move |_| apply_command.get_value()()
                         >
                             "Apply"
                         </button>
                         <button
-                            class="bg-success text-white text-[10px] px-4 py-1.5 rounded hover:brightness-110 font-medium"
+                            class="bg-success text-success-foreground text-[10px] px-4 py-1.5 rounded hover:brightness-110 font-medium"
                             on:click=move |_| execute_command()
                         >
                             "▶ Execute Now"
@@ -513,7 +513,7 @@ where
                 <input
                     type="text"
                     inputmode="decimal"
-                    class="flex-1 min-w-0 bg-card border border-border/8 rounded-l px-1 py-1 text-[10px] text-white focus:outline-none focus:border-primary text-center"
+                    class="flex-1 min-w-0 bg-card border border-border/8 rounded-l px-1 py-1 text-[10px] text-foreground focus:outline-none focus:border-primary text-center"
                     prop:value=move || text.get()
                     on:focus=move |_| set_is_editing.set(true)
                     on:blur=move |_| {

@@ -340,7 +340,7 @@ fn WizardHeader(current_step: ReadSignal<WizardStep>) -> impl IntoView {
 
     view! {
         <div class="border-b border-border/8 p-6">
-            <h2 class="text-lg font-semibold text-white mb-4">"Create New Robot"</h2>
+            <h2 class="text-lg font-semibold text-foreground mb-4">"Create New Robot"</h2>
 
             // Progress indicator
             <div class="flex items-center gap-2">
@@ -355,9 +355,9 @@ fn WizardHeader(current_step: ReadSignal<WizardStep>) -> impl IntoView {
                             <div class=move || format!(
                                 "flex items-center justify-center w-8 h-8 rounded-full text-xs font-semibold transition-colors {}",
                                 if is_current() {
-                                    "bg-primary text-black"
+                                    "bg-primary text-primary-foreground"
                                 } else if is_completed() {
-                                    "bg-success text-black"
+                                    "bg-success text-success-foreground"
                                 } else {
                                     "bg-popover text-muted-foreground border border-border/8"
                                 }
@@ -378,7 +378,7 @@ fn WizardHeader(current_step: ReadSignal<WizardStep>) -> impl IntoView {
 
             // Current step title and description
             <div class="mt-4">
-                <h3 class="text-sm font-semibold text-white">{move || current_step.get().title()}</h3>
+                <h3 class="text-sm font-semibold text-foreground">{move || current_step.get().title()}</h3>
                 <p class="text-xs text-muted-foreground mt-1">{move || current_step.get().description()}</p>
             </div>
         </div>
@@ -450,7 +450,7 @@ where
             <div class="flex items-center justify-between">
                 <button
                     type="button"
-                    class="px-4 py-2 text-sm text-muted-foreground hover:text-white transition-colors"
+                    class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                     on:click=move |_| set_show_exit_warning.set(true)
                 >
                     "Cancel"
@@ -460,7 +460,7 @@ where
                     <Show when=can_go_back>
                         <button
                             type="button"
-                            class="px-4 py-2 bg-popover border border-border/8 rounded text-sm text-white hover:bg-secondary transition-colors"
+                            class="px-4 py-2 bg-popover border border-border/8 rounded text-sm text-foreground hover:bg-secondary transition-colors"
                             on:click=go_back
                         >
                             "← Back"
@@ -473,7 +473,7 @@ where
                             move || view! {
                                 <button
                                     type="button"
-                                    class="px-4 py-2 bg-primary rounded text-sm text-black font-semibold hover:bg-primary transition-colors"
+                                    class="px-4 py-2 bg-primary rounded text-sm text-primary-foreground font-semibold hover:bg-primary transition-colors"
                                     on:click=go_next.clone()
                                 >
                                     "Next →"
@@ -489,7 +489,7 @@ where
                                 <button
                                     type="button"
                                     class=move || format!(
-                                        "px-4 py-2 bg-success rounded text-sm text-black font-semibold transition-colors {}",
+                                        "px-4 py-2 bg-success rounded text-sm text-success-foreground font-semibold transition-colors {}",
                                         if is_submitting.get() { "opacity-50 cursor-not-allowed" } else { "hover:bg-success" }
                                     )
                                     disabled=move || is_submitting.get()
@@ -532,7 +532,7 @@ where
                         </svg>
                     </div>
                     <div class="flex-1">
-                        <h3 class="text-base font-semibold text-white mb-1">"Discard Robot Creation?"</h3>
+                        <h3 class="text-base font-semibold text-foreground mb-1">"Discard Robot Creation?"</h3>
                         <p class="text-sm text-muted-foreground">
                             "Your robot configuration will not be saved if you exit now. Are you sure you want to cancel?"
                         </p>
@@ -542,14 +542,14 @@ where
                 <div class="flex gap-3 justify-end">
                     <button
                         type="button"
-                        class="px-4 py-2 bg-popover border border-border/8 rounded text-sm text-white hover:bg-secondary transition-colors"
+                        class="px-4 py-2 bg-popover border border-border/8 rounded text-sm text-foreground hover:bg-secondary transition-colors"
                         on:click=move |_| cancel()
                     >
                         "Continue Editing"
                     </button>
                     <button
                         type="button"
-                        class="px-4 py-2 bg-destructive rounded text-sm text-white font-semibold hover:bg-destructive transition-colors"
+                        class="px-4 py-2 bg-destructive rounded text-sm text-destructive-foreground font-semibold hover:bg-destructive transition-colors"
                         on:click=move |_| confirm()
                     >
                         "Discard Changes"
@@ -583,7 +583,7 @@ fn ConnectionDetailsStep(
                 </label>
                 <input
                     type="text"
-                    class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                    class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                     placeholder="e.g., Production Cell 1"
                     prop:value=move || robot_name.get()
                     on:input=move |ev| set_robot_name.set(event_target_value(&ev))
@@ -595,7 +595,7 @@ fn ConnectionDetailsStep(
                 <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Description (optional)"</label>
                 <input
                     type="text"
-                    class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                    class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                     placeholder="e.g., Main welding robot"
                     prop:value=move || robot_description.get()
                     on:input=move |ev| set_robot_description.set(event_target_value(&ev))
@@ -609,7 +609,7 @@ fn ConnectionDetailsStep(
                     </label>
                     <input
                         type="text"
-                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                         placeholder="192.168.1.100"
                         prop:value=move || robot_ip.get()
                         on:input=move |ev| set_robot_ip.set(event_target_value(&ev))
@@ -622,7 +622,7 @@ fn ConnectionDetailsStep(
                     </label>
                     <input
                         type="text"
-                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                         placeholder="16001"
                         prop:value=move || robot_port.get()
                         on:input=move |ev| set_robot_port.set(event_target_value(&ev))
@@ -657,7 +657,7 @@ fn MotionDefaultsStep(
                     </label>
                     <input
                         type="text"
-                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                         prop:value=move || default_speed.get()
                         on:input=move |ev| set_default_speed.set(event_target_value(&ev))
                         placeholder="100.0"
@@ -670,7 +670,7 @@ fn MotionDefaultsStep(
                         "Speed Type" <span class="text-destructive">"*"</span>
                     </label>
                     <select
-                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                         prop:value=move || default_speed_type.get()
                         on:change=move |ev| set_default_speed_type.set(event_target_value(&ev))
                     >
@@ -689,7 +689,7 @@ fn MotionDefaultsStep(
                         "Termination Type" <span class="text-destructive">"*"</span>
                     </label>
                     <select
-                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                         prop:value=move || default_term_type.get()
                         on:change=move |ev| set_default_term_type.set(event_target_value(&ev))
                     >
@@ -701,13 +701,13 @@ fn MotionDefaultsStep(
             </div>
 
             <div class="border-t border-border/8 pt-4">
-                <h4 class="text-sm font-semibold text-white mb-3">"Wrist Singularity Avoidance"</h4>
+                <h4 class="text-sm font-semibold text-foreground mb-3">"Wrist Singularity Avoidance"</h4>
                 <div class="grid grid-cols-3 gap-4">
                     <div>
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"W (Wrist)"</label>
                         <input
                             type="text"
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || default_w.get()
                             on:input=move |ev| set_default_w.set(event_target_value(&ev))
                             placeholder="0.0"
@@ -718,7 +718,7 @@ fn MotionDefaultsStep(
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"P (Pitch)"</label>
                         <input
                             type="text"
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || default_p.get()
                             on:input=move |ev| set_default_p.set(event_target_value(&ev))
                             placeholder="0.0"
@@ -729,7 +729,7 @@ fn MotionDefaultsStep(
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"R (Roll)"</label>
                         <input
                             type="text"
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || default_r.get()
                             on:input=move |ev| set_default_r.set(event_target_value(&ev))
                             placeholder="0.0"
@@ -760,7 +760,7 @@ fn JogDefaultsStep(
     view! {
         <div class="space-y-6">
             <div class="border border-border/8 rounded-lg p-4 bg-background">
-                <h4 class="text-sm font-semibold text-white mb-3">"Cartesian Jogging"</h4>
+                <h4 class="text-sm font-semibold text-foreground mb-3">"Cartesian Jogging"</h4>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
@@ -768,7 +768,7 @@ fn JogDefaultsStep(
                         </label>
                         <input
                             type="text"
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || cartesian_jog_speed.get()
                             on:input=move |ev| set_cartesian_jog_speed.set(event_target_value(&ev))
                             placeholder="10.0"
@@ -782,7 +782,7 @@ fn JogDefaultsStep(
                         </label>
                         <input
                             type="text"
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || cartesian_jog_step.get()
                             on:input=move |ev| set_cartesian_jog_step.set(event_target_value(&ev))
                             placeholder="1.0"
@@ -793,7 +793,7 @@ fn JogDefaultsStep(
             </div>
 
             <div class="border border-border/8 rounded-lg p-4 bg-background">
-                <h4 class="text-sm font-semibold text-white mb-3">"Joint Jogging"</h4>
+                <h4 class="text-sm font-semibold text-foreground mb-3">"Joint Jogging"</h4>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
@@ -801,7 +801,7 @@ fn JogDefaultsStep(
                         </label>
                         <input
                             type="text"
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || joint_jog_speed.get()
                             on:input=move |ev| set_joint_jog_speed.set(event_target_value(&ev))
                             placeholder="10.0"
@@ -815,7 +815,7 @@ fn JogDefaultsStep(
                         </label>
                         <input
                             type="text"
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || joint_jog_step.get()
                             on:input=move |ev| set_joint_jog_step.set(event_target_value(&ev))
                             placeholder="1.0"
@@ -826,7 +826,7 @@ fn JogDefaultsStep(
             </div>
 
             <div class="border border-border/8 rounded-lg p-4 bg-background">
-                <h4 class="text-sm font-semibold text-white mb-3">"Rotation Jogging (W/P/R)"</h4>
+                <h4 class="text-sm font-semibold text-foreground mb-3">"Rotation Jogging (W/P/R)"</h4>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">
@@ -834,7 +834,7 @@ fn JogDefaultsStep(
                         </label>
                         <input
                             type="text"
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || rotation_jog_speed.get()
                             on:input=move |ev| set_rotation_jog_speed.set(event_target_value(&ev))
                             placeholder="5.0"
@@ -848,7 +848,7 @@ fn JogDefaultsStep(
                         </label>
                         <input
                             type="text"
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || rotation_jog_step.get()
                             on:input=move |ev| set_rotation_jog_step.set(event_target_value(&ev))
                             placeholder="1.0"
@@ -892,7 +892,7 @@ fn DefaultConfigurationStep(
                 </label>
                 <input
                     type="text"
-                    class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                    class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                     prop:value=move || config_name.get()
                     on:input=move |ev| set_config_name.set(event_target_value(&ev))
                     placeholder="Default"
@@ -907,7 +907,7 @@ fn DefaultConfigurationStep(
                     </label>
                     <input
                         type="text"
-                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                         prop:value=move || u_frame_number.get()
                         on:input=move |ev| set_u_frame_number.set(event_target_value(&ev))
                         placeholder="0"
@@ -921,7 +921,7 @@ fn DefaultConfigurationStep(
                     </label>
                     <input
                         type="text"
-                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                        class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                         prop:value=move || u_tool_number.get()
                         on:input=move |ev| set_u_tool_number.set(event_target_value(&ev))
                         placeholder="1"
@@ -931,12 +931,12 @@ fn DefaultConfigurationStep(
             </div>
 
             <div class="border-t border-border/8 pt-4">
-                <h4 class="text-sm font-semibold text-white mb-3">"Arm Configuration"</h4>
+                <h4 class="text-sm font-semibold text-foreground mb-3">"Arm Configuration"</h4>
                 <div class="grid grid-cols-4 gap-4">
                     <div>
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Front"</label>
                         <select
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                             prop:value=move || front.get()
                             on:change=move |ev| set_front.set(event_target_value(&ev))
                         >
@@ -948,7 +948,7 @@ fn DefaultConfigurationStep(
                     <div>
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Up"</label>
                         <select
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                             prop:value=move || up.get()
                             on:change=move |ev| set_up.set(event_target_value(&ev))
                         >
@@ -960,7 +960,7 @@ fn DefaultConfigurationStep(
                     <div>
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Left"</label>
                         <select
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                             prop:value=move || left.get()
                             on:change=move |ev| set_left.set(event_target_value(&ev))
                         >
@@ -972,7 +972,7 @@ fn DefaultConfigurationStep(
                     <div>
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Flip"</label>
                         <select
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors"
                             prop:value=move || flip.get()
                             on:change=move |ev| set_flip.set(event_target_value(&ev))
                         >
@@ -984,13 +984,13 @@ fn DefaultConfigurationStep(
             </div>
 
             <div class="border-t border-border/8 pt-4">
-                <h4 class="text-sm font-semibold text-white mb-3">"Turn Numbers"</h4>
+                <h4 class="text-sm font-semibold text-foreground mb-3">"Turn Numbers"</h4>
                 <div class="grid grid-cols-3 gap-4">
                     <div>
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Turn 4"</label>
                         <input
                             type="text"
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || turn4.get()
                             on:input=move |ev| set_turn4.set(event_target_value(&ev))
                             placeholder="0"
@@ -1001,7 +1001,7 @@ fn DefaultConfigurationStep(
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Turn 5"</label>
                         <input
                             type="text"
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || turn5.get()
                             on:input=move |ev| set_turn5.set(event_target_value(&ev))
                             placeholder="0"
@@ -1012,7 +1012,7 @@ fn DefaultConfigurationStep(
                         <label class="block text-muted-foreground text-xs mb-1.5 font-medium">"Turn 6"</label>
                         <input
                             type="text"
-                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors font-mono"
+                            class="w-full bg-card border border-border/8 rounded px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors font-mono"
                             prop:value=move || turn6.get()
                             on:input=move |ev| set_turn6.set(event_target_value(&ev))
                             placeholder="0"

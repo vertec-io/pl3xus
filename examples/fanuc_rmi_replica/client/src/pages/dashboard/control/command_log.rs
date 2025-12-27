@@ -17,7 +17,7 @@ pub fn CommandLogPanel() -> impl IntoView {
     let (active_tab, set_active_tab) = signal("messages");
 
     view! {
-        <div class="bg-card backdrop-blur-theme rounded-theme border border-border shadow-theme flex flex-col overflow-hidden transition-all duration-300">
+        <div class="bg-surface-1 backdrop-blur-theme rounded-theme border border-border shadow-theme flex flex-col overflow-hidden transition-all duration-300">
             <div class="flex items-center justify-between p-2 border-b border-border/8 shrink-0">
                 <div class="flex items-center gap-2">
                     <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center">
@@ -59,7 +59,7 @@ pub fn CommandLogPanel() -> impl IntoView {
                                 let count = error_log.get().len();
                                 if count > 0 {
                                     Some(view! {
-                                        <span class="ml-1 bg-destructive text-black text-[8px] px-1 rounded-full font-bold">
+                                        <span class="ml-1 bg-destructive text-destructive-foreground text-[8px] px-1 rounded-full font-bold">
                                             {count}
                                         </span>
                                     })

@@ -150,7 +150,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
     // Note: TargetedMutationHandle is Copy, so it can be used directly in closures
 
     view! {
-        <div class="bg-card backdrop-blur-theme rounded-theme border border-border shadow-theme flex flex-col overflow-hidden transition-all duration-300">
+        <div class="bg-surface-1 backdrop-blur-theme rounded-theme border border-border shadow-theme flex flex-col overflow-hidden transition-all duration-300">
             <div class="flex items-center justify-between p-2 border-b border-border/8 shrink-0">
                 <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center">
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -167,7 +167,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Load button - server tells us when loading is available
                     <Show when=can_load>
                         <button
-                            class="bg-primary text-white text-[8px] px-2 py-0.5 rounded hover:brightness-110"
+                            class="bg-primary text-primary-foreground text-[8px] px-2 py-0.5 rounded hover:brightness-110"
                             on:click=move |_| set_show_load_modal.set(true)
                         >
                             "📂 Load"
@@ -176,7 +176,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Run button - server tells us when starting is available
                     <Show when=move || can_start()>
                         <button
-                            class="bg-success text-white text-[8px] px-2 py-0.5 rounded hover:brightness-110"
+                            class="bg-success text-success-foreground text-[8px] px-2 py-0.5 rounded hover:brightness-110"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     start.send(entity_id, StartProgram);
@@ -189,7 +189,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Pause button - server tells us when pausing is available
                     <Show when=move || can_pause()>
                         <button
-                            class="bg-warning text-white text-[8px] px-2 py-0.5 rounded hover:brightness-110"
+                            class="bg-warning text-warning-foreground text-[8px] px-2 py-0.5 rounded hover:brightness-110"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     pause.send(entity_id, PauseProgram);
@@ -202,7 +202,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Resume button - server tells us when resuming is available
                     <Show when=move || can_resume()>
                         <button
-                            class="bg-success text-white text-[8px] px-2 py-0.5 rounded hover:brightness-110"
+                            class="bg-success text-success-foreground text-[8px] px-2 py-0.5 rounded hover:brightness-110"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     resume.send(entity_id, ResumeProgram);
@@ -215,7 +215,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Stop button - server tells us when stopping is available
                     <Show when=move || can_stop()>
                         <button
-                            class="bg-destructive text-white text-[8px] px-2 py-0.5 rounded hover:brightness-110"
+                            class="bg-destructive text-destructive-foreground text-[8px] px-2 py-0.5 rounded hover:brightness-110"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     stop.send(entity_id, StopProgram);
@@ -228,7 +228,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Unload button - server tells us when unloading is available
                     <Show when=move || can_unload()>
                         <button
-                            class="bg-destructive text-white text-[8px] px-2 py-0.5 rounded hover:brightness-110 flex items-center gap-1"
+                            class="bg-destructive text-destructive-foreground text-[8px] px-2 py-0.5 rounded hover:brightness-110 flex items-center gap-1"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     unload.send(entity_id, UnloadProgram);

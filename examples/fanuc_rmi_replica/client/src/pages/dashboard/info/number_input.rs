@@ -28,7 +28,7 @@ pub fn NumberInput(
             type="text"
             inputmode="decimal"
             class=move || format!(
-                "w-full bg-background rounded px-2 py-1 text-[10px] text-white {} {}",
+                "w-full bg-background rounded px-2 py-1 text-[10px] text-foreground {} {}",
                 if is_valid() {
                     "border border-border/8"
                 } else {

@@ -1,17 +1,10 @@
 /* ============================================
-   FANUC RMI REPLICA - SOPHISTICATED THEME SYSTEM
+   FANUC RMI REPLICA - THEME SYSTEM
    ============================================
-
+   
    Design Philosophy:
    - Industrial robotics UI with dense data displays
-   - Inspired by: Linear, Vercel, Stripe, Bloomberg Terminal
-   - Focus on readability, subtle depth, and professional aesthetics
-
-   Theme Categories:
-   1. Professional Dark - Minimal, sophisticated dark themes
-   2. Glass/Translucent - Modern glassmorphism effects
-   3. Vibrant Accent - Distinctive accent colors on dark
-   4. Light Themes - Clean, readable light modes
+   - Professional dark themes with distinctive accents
    ============================================ */
 
 :root {
@@ -33,18 +26,16 @@
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
   --success: 142 71% 45%;
+  --success-foreground: 0 0% 100%;
   --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 0%;
   --border: 0 0% 18%;
   --input: 0 0% 12%;
   --ring: 189 94% 43%;
-
-  /* Subtle styling - shadcn aesthetic */
   --radius: 0.5rem;
   --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --blur: 0px;
   --border-opacity: 1;
-
-  /* Extended tokens for sophisticated styling */
   --glow: none;
   --header-bg: 0 0% 5%;
   --surface-1: 0 0% 8%;
@@ -52,11 +43,10 @@
 }
 
 /* ============================================
-   PROFESSIONAL DARK THEMES
-   Minimal, sophisticated, corporate-ready
+   ORIGINAL THEMES (KEPT)
    ============================================ */
 
-/* Indigo Knight - Deep navy with electric indigo glow (Linear-inspired) */
+/* Indigo Night - Deep navy with electric indigo glow */
 .theme-indigo {
   --background: 230 25% 5%;
   --foreground: 220 15% 93%;
@@ -81,80 +71,6 @@
   --surface-2: 230 20% 11%;
 }
 
-/* Emerald Grove - Matrix-inspired green terminal aesthetic */
-.theme-emerald {
-  --background: 150 20% 4%;
-  --foreground: 145 15% 90%;
-  --card: 150 18% 6%;
-  --card-foreground: 145 15% 90%;
-  --popover: 150 16% 8%;
-  --popover-foreground: 145 15% 90%;
-  --muted: 150 14% 11%;
-  --muted-foreground: 145 10% 52%;
-  --primary: 155 70% 42%;
-  --primary-foreground: 155 90% 5%;
-  --secondary: 150 14% 13%;
-  --secondary-foreground: 145 15% 90%;
-  --accent: 150 14% 13%;
-  --accent-foreground: 145 15% 90%;
-  --border: 150 12% 18%;
-  --border-opacity: 0.5;
-  --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.5);
-  --glow: 0 0 15px -5px rgba(52, 211, 153, 0.1);
-  --header-bg: 150 20% 5%;
-  --surface-1: 150 18% 7%;
-  --surface-2: 150 16% 9%;
-}
-
-/* Slate Blue - Corporate professional with blue undertones (Stripe-inspired) */
-.theme-slate {
-  --background: 222 30% 7%;
-  --foreground: 215 20% 94%;
-  --card: 222 28% 9%;
-  --card-foreground: 215 20% 94%;
-  --popover: 222 26% 11%;
-  --popover-foreground: 215 20% 94%;
-  --muted: 220 24% 13%;
-  --muted-foreground: 218 15% 55%;
-  --primary: 217 91% 60%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 220 24% 15%;
-  --secondary-foreground: 215 20% 94%;
-  --accent: 220 24% 15%;
-  --accent-foreground: 215 20% 94%;
-  --border: 220 20% 22%;
-  --border-opacity: 0.5;
-  --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.35);
-  --header-bg: 222 30% 7%;
-  --surface-1: 222 28% 10%;
-  --surface-2: 222 26% 12%;
-}
-
-/* Obsidian Sharp - Pure black, minimal, monochrome (Bloomberg-inspired) */
-.theme-obsidian {
-  --background: 0 0% 2%;
-  --foreground: 0 0% 92%;
-  --card: 0 0% 5%;
-  --card-foreground: 0 0% 92%;
-  --popover: 0 0% 7%;
-  --popover-foreground: 0 0% 92%;
-  --muted: 0 0% 10%;
-  --muted-foreground: 0 0% 50%;
-  --primary: 0 0% 100%;
-  --primary-foreground: 0 0% 5%;
-  --secondary: 0 0% 12%;
-  --secondary-foreground: 0 0% 92%;
-  --accent: 0 0% 12%;
-  --accent-foreground: 0 0% 92%;
-  --border: 0 0% 18%;
-  --border-opacity: 0.4;
-  --radius: 0.25rem;
-  --shadow: none;
-  --header-bg: 0 0% 3%;
-  --surface-1: 0 0% 6%;
-  --surface-2: 0 0% 8%;
-}
-
 /* Coffee Bean - Warm carbon with brown undertones */
 .theme-coffee {
   --background: 25 15% 5%;
@@ -177,61 +93,6 @@
   --header-bg: 25 15% 6%;
   --surface-1: 25 14% 9%;
   --surface-2: 25 12% 11%;
-}
-
-/* ============================================
-   VIBRANT ACCENT THEMES
-   Distinctive accent colors on sophisticated dark bases
-   ============================================ */
-
-/* Cyberpunk - Magenta/cyan neon with high contrast */
-.theme-cyber {
-  --background: 280 25% 4%;
-  --foreground: 280 8% 94%;
-  --card: 280 22% 7%;
-  --card-foreground: 280 8% 94%;
-  --popover: 280 20% 9%;
-  --popover-foreground: 280 8% 94%;
-  --muted: 280 18% 12%;
-  --muted-foreground: 280 8% 55%;
-  --primary: 310 95% 58%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 280 18% 14%;
-  --secondary-foreground: 280 8% 94%;
-  --accent: 185 100% 50%;
-  --accent-foreground: 185 100% 8%;
-  --border: 280 15% 20%;
-  --border-opacity: 0.5;
-  --shadow: 0 4px 24px -6px rgba(217, 70, 239, 0.2);
-  --glow: 0 0 30px -8px rgba(217, 70, 239, 0.25);
-  --header-bg: 280 25% 5%;
-  --surface-1: 280 22% 8%;
-  --surface-2: 280 20% 10%;
-}
-
-/* Rose Carbon - Elegant pink on dark carbon */
-.theme-rose {
-  --background: 350 18% 5%;
-  --foreground: 350 8% 93%;
-  --card: 350 16% 8%;
-  --card-foreground: 350 8% 93%;
-  --popover: 350 14% 10%;
-  --popover-foreground: 350 8% 93%;
-  --muted: 350 12% 13%;
-  --muted-foreground: 350 6% 55%;
-  --primary: 350 85% 55%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 350 12% 15%;
-  --secondary-foreground: 350 8% 93%;
-  --accent: 350 12% 15%;
-  --accent-foreground: 350 8% 93%;
-  --border: 350 10% 20%;
-  --border-opacity: 0.5;
-  --shadow: 0 2px 10px -3px rgb(0 0 0 / 0.45);
-  --glow: 0 0 20px -6px rgba(251, 113, 133, 0.12);
-  --header-bg: 350 18% 6%;
-  --surface-1: 350 16% 9%;
-  --surface-2: 350 14% 11%;
 }
 
 /* Amber Glow - Warm industrial with orange accent */
@@ -259,361 +120,7 @@
   --surface-2: 32 14% 11%;
 }
 
-/* Midnight Teal - Cool aquatic depth */
-.theme-teal {
-  --background: 185 25% 5%;
-  --foreground: 180 12% 92%;
-  --card: 185 22% 8%;
-  --card-foreground: 180 12% 92%;
-  --popover: 185 20% 10%;
-  --popover-foreground: 180 12% 92%;
-  --muted: 185 18% 12%;
-  --muted-foreground: 180 10% 55%;
-  --primary: 175 85% 42%;
-  --primary-foreground: 175 95% 5%;
-  --secondary: 185 18% 14%;
-  --secondary-foreground: 180 12% 92%;
-  --accent: 185 18% 14%;
-  --accent-foreground: 180 12% 92%;
-  --border: 185 15% 20%;
-  --border-opacity: 0.5;
-  --shadow: 0 2px 10px -3px rgb(0 0 0 / 0.45);
-  --glow: 0 0 20px -6px rgba(45, 212, 191, 0.1);
-  --header-bg: 185 25% 6%;
-  --surface-1: 185 22% 9%;
-  --surface-2: 185 20% 11%;
-}
-
-/* Neon Pulse - Violet/purple glow */
-.theme-neon {
-  --background: 270 25% 5%;
-  --foreground: 265 10% 93%;
-  --card: 270 22% 8%;
-  --card-foreground: 265 10% 93%;
-  --popover: 270 20% 10%;
-  --popover-foreground: 265 10% 93%;
-  --muted: 270 18% 12%;
-  --muted-foreground: 265 8% 55%;
-  --primary: 270 95% 62%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 270 18% 14%;
-  --secondary-foreground: 265 10% 93%;
-  --accent: 270 18% 14%;
-  --accent-foreground: 265 10% 93%;
-  --border: 270 15% 20%;
-  --border-opacity: 0.5;
-  --shadow: 0 4px 20px -5px rgba(168, 85, 247, 0.18);
-  --glow: 0 0 25px -6px rgba(168, 85, 247, 0.2);
-  --header-bg: 270 25% 6%;
-  --surface-1: 270 22% 9%;
-  --surface-2: 270 20% 11%;
-}
-
-/* ============================================
-   GLASS/TRANSLUCENT THEMES
-   Modern glassmorphism with backdrop blur
-   Note: Blur effects require backdrop-filter support
-   ============================================ */
-
-/* Arctic Frost - Light frosted glass (Apple-inspired) */
-.theme-arctic {
-  --background: 215 25% 96%;
-  --foreground: 220 40% 10%;
-  --card: 210 30% 98%;
-  --card-foreground: 220 40% 10%;
-  --popover: 210 25% 99%;
-  --popover-foreground: 220 40% 10%;
-  --muted: 215 20% 92%;
-  --muted-foreground: 220 15% 42%;
-  --primary: 220 90% 52%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 215 20% 94%;
-  --secondary-foreground: 220 40% 10%;
-  --accent: 215 20% 94%;
-  --accent-foreground: 220 40% 10%;
-  --border: 220 18% 82%;
-  --border-opacity: 0.6;
-  --radius: 0.75rem;
-  --blur: 20px;
-  --shadow: 0 4px 12px -2px rgb(0 0 0 / 0.06), 0 2px 6px -2px rgb(0 0 0 / 0.04);
-  --header-bg: 215 25% 97%;
-  --surface-1: 215 22% 95%;
-  --surface-2: 215 20% 93%;
-}
-
-/* Forest Mist - Soft sage glass (light) */
-.theme-mist {
-  --background: 145 22% 95%;
-  --foreground: 150 35% 12%;
-  --card: 145 28% 97%;
-  --card-foreground: 150 35% 12%;
-  --popover: 145 25% 98%;
-  --popover-foreground: 150 35% 12%;
-  --muted: 145 18% 90%;
-  --muted-foreground: 150 12% 42%;
-  --primary: 150 70% 38%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 145 18% 92%;
-  --secondary-foreground: 150 35% 12%;
-  --accent: 145 18% 92%;
-  --accent-foreground: 150 35% 12%;
-  --border: 145 15% 78%;
-  --border-opacity: 0.5;
-  --radius: 0.625rem;
-  --blur: 16px;
-  --shadow: 0 4px 12px -2px rgb(0 0 0 / 0.05), 0 2px 6px -2px rgb(0 0 0 / 0.03);
-  --header-bg: 145 22% 96%;
-  --surface-1: 145 20% 94%;
-  --surface-2: 145 18% 92%;
-}
-
-/* Glass Dark - Deep frosted glass with blue tint */
-.theme-glass-dark {
-  --background: 225 35% 6%;
-  --foreground: 220 18% 93%;
-  --card: 225 32% 10%;
-  --card-foreground: 220 18% 93%;
-  --popover: 225 30% 12%;
-  --popover-foreground: 220 18% 93%;
-  --muted: 225 28% 14%;
-  --muted-foreground: 220 12% 55%;
-  --primary: 220 95% 58%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 225 28% 16%;
-  --secondary-foreground: 220 18% 93%;
-  --accent: 225 28% 16%;
-  --accent-foreground: 220 18% 93%;
-  --border: 225 22% 22%;
-  --border-opacity: 0.45;
-  --radius: 0.75rem;
-  --blur: 24px;
-  --shadow: 0 8px 32px -8px rgb(0 0 0 / 0.5), 0 4px 16px -4px rgb(0 0 0 / 0.35);
-  --glow: 0 0 30px -10px rgba(96, 165, 250, 0.12);
-  --header-bg: 225 35% 7%;
-  --surface-1: 225 32% 11%;
-  --surface-2: 225 30% 13%;
-}
-
-/* Deep Space - Cosmic purple glass */
-.theme-space {
-  --background: 255 30% 5%;
-  --foreground: 255 12% 93%;
-  --card: 255 28% 9%;
-  --card-foreground: 255 12% 93%;
-  --popover: 255 26% 11%;
-  --popover-foreground: 255 12% 93%;
-  --muted: 255 24% 13%;
-  --muted-foreground: 255 10% 55%;
-  --primary: 255 90% 65%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 255 24% 15%;
-  --secondary-foreground: 255 12% 93%;
-  --accent: 255 24% 15%;
-  --accent-foreground: 255 12% 93%;
-  --border: 255 20% 20%;
-  --border-opacity: 0.4;
-  --radius: 0.875rem;
-  --blur: 20px;
-  --shadow: 0 8px 32px -8px rgba(139, 92, 246, 0.18), 0 4px 16px -4px rgb(0 0 0 / 0.4);
-  --glow: 0 0 35px -10px rgba(167, 139, 250, 0.15);
-  --header-bg: 255 30% 6%;
-  --surface-1: 255 28% 10%;
-  --surface-2: 255 26% 12%;
-}
-
-/* ============================================
-   LIGHT THEMES
-   Clean, readable, professional light modes
-   ============================================ */
-
-/* Industrial Light - Clean white (shadcn light) */
-.theme-light {
-  --background: 0 0% 100%;
-  --foreground: 220 40% 10%;
-  --card: 0 0% 100%;
-  --card-foreground: 220 40% 10%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 220 40% 10%;
-  --muted: 220 15% 96%;
-  --muted-foreground: 220 10% 45%;
-  --primary: 189 94% 40%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 220 15% 96%;
-  --secondary-foreground: 220 40% 10%;
-  --accent: 220 15% 96%;
-  --accent-foreground: 220 40% 10%;
-  --border: 220 15% 88%;
-  --border-opacity: 1;
-  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.03);
-  --header-bg: 220 15% 98%;
-  --surface-1: 220 15% 97%;
-  --surface-2: 220 15% 95%;
-}
-
-/* Retro Slate - Warm cream with chunky shadows */
-.theme-retro {
-  --background: 42 35% 96%;
-  --foreground: 35 45% 12%;
-  --card: 42 40% 98%;
-  --card-foreground: 35 45% 12%;
-  --popover: 42 35% 99%;
-  --popover-foreground: 35 45% 12%;
-  --muted: 38 25% 91%;
-  --muted-foreground: 35 18% 42%;
-  --primary: 25 95% 50%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 38 25% 93%;
-  --secondary-foreground: 35 45% 12%;
-  --accent: 38 25% 93%;
-  --accent-foreground: 35 45% 12%;
-  --border: 35 18% 78%;
-  --border-opacity: 1;
-  --radius: 0.625rem;
-  --shadow: 3px 3px 0px 0px rgba(0, 0, 0, 0.06);
-  --header-bg: 42 35% 97%;
-  --surface-1: 42 32% 95%;
-  --surface-2: 42 28% 93%;
-}
-
-/* ============================================
-   SPECIALTY ACCENT THEMES
-   Additional distinctive color themes
-   ============================================ */
-
-/* Deep Ocean - Navy with teal accents */
-.theme-ocean {
-  --background: 215 40% 5%;
-  --foreground: 200 15% 93%;
-  --card: 215 38% 8%;
-  --card-foreground: 200 15% 93%;
-  --popover: 215 36% 10%;
-  --popover-foreground: 200 15% 93%;
-  --muted: 215 32% 13%;
-  --muted-foreground: 205 12% 55%;
-  --primary: 185 95% 42%;
-  --primary-foreground: 185 100% 5%;
-  --secondary: 215 32% 15%;
-  --secondary-foreground: 200 15% 93%;
-  --accent: 215 32% 15%;
-  --accent-foreground: 200 15% 93%;
-  --border: 215 25% 20%;
-  --border-opacity: 0.5;
-  --shadow: 0 2px 10px -3px rgb(0 0 0 / 0.5);
-  --glow: 0 0 20px -6px rgba(56, 189, 248, 0.1);
-  --header-bg: 215 40% 6%;
-  --surface-1: 215 38% 9%;
-  --surface-2: 215 36% 11%;
-}
-
-/* Solar Flare - Dark with warm orange glow */
-.theme-solar {
-  --background: 28 22% 5%;
-  --foreground: 35 12% 92%;
-  --card: 28 20% 8%;
-  --card-foreground: 35 12% 92%;
-  --popover: 28 18% 10%;
-  --popover-foreground: 35 12% 92%;
-  --muted: 28 16% 13%;
-  --muted-foreground: 30 10% 55%;
-  --primary: 35 100% 52%;
-  --primary-foreground: 35 100% 8%;
-  --secondary: 28 16% 15%;
-  --secondary-foreground: 35 12% 92%;
-  --accent: 22 95% 52%;
-  --accent-foreground: 22 100% 8%;
-  --border: 28 12% 20%;
-  --border-opacity: 0.5;
-  --shadow: 0 4px 20px -5px rgba(251, 146, 60, 0.12);
-  --glow: 0 0 25px -8px rgba(251, 146, 60, 0.15);
-  --header-bg: 28 22% 6%;
-  --surface-1: 28 20% 9%;
-  --surface-2: 28 18% 11%;
-}
-
-/* Crimson Peak - Deep red professional */
-.theme-crimson {
-  --background: 0 22% 5%;
-  --foreground: 0 8% 93%;
-  --card: 0 20% 8%;
-  --card-foreground: 0 8% 93%;
-  --popover: 0 18% 10%;
-  --popover-foreground: 0 8% 93%;
-  --muted: 0 16% 13%;
-  --muted-foreground: 0 6% 55%;
-  --primary: 0 85% 52%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 0 16% 15%;
-  --secondary-foreground: 0 8% 93%;
-  --accent: 0 16% 15%;
-  --accent-foreground: 0 8% 93%;
-  --border: 0 12% 20%;
-  --border-opacity: 0.5;
-  --shadow: 0 2px 10px -3px rgb(0 0 0 / 0.5);
-  --glow: 0 0 20px -6px rgba(248, 113, 113, 0.1);
-  --header-bg: 0 22% 6%;
-  --surface-1: 0 20% 9%;
-  --surface-2: 0 18% 11%;
-}
-
-/* Blood Moon - Crimson with dramatic glow */
-.theme-blood {
-  --background: 0 35% 4%;
-  --foreground: 0 12% 93%;
-  --card: 0 32% 7%;
-  --card-foreground: 0 12% 93%;
-  --popover: 0 30% 9%;
-  --popover-foreground: 0 12% 93%;
-  --muted: 0 28% 11%;
-  --muted-foreground: 0 10% 52%;
-  --primary: 0 90% 50%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 0 28% 13%;
-  --secondary-foreground: 0 12% 93%;
-  --accent: 0 28% 13%;
-  --accent-foreground: 0 12% 93%;
-  --border: 0 22% 18%;
-  --border-opacity: 0.5;
-  --shadow: 0 4px 20px -5px rgba(239, 68, 68, 0.15);
-  --glow: 0 0 30px -8px rgba(239, 68, 68, 0.18);
-  --header-bg: 0 35% 5%;
-  --surface-1: 0 32% 8%;
-  --surface-2: 0 30% 10%;
-}
-
-/* Golden Hour - Luxurious dark with gold accents */
-.theme-gold {
-  --background: 42 18% 5%;
-  --foreground: 45 10% 92%;
-  --card: 42 16% 8%;
-  --card-foreground: 45 10% 92%;
-  --popover: 42 14% 10%;
-  --popover-foreground: 45 10% 92%;
-  --muted: 42 12% 13%;
-  --muted-foreground: 42 8% 55%;
-  --primary: 45 95% 48%;
-  --primary-foreground: 45 100% 8%;
-  --secondary: 42 12% 15%;
-  --secondary-foreground: 45 10% 92%;
-  --accent: 42 12% 15%;
-  --accent-foreground: 45 10% 92%;
-  --border: 42 10% 20%;
-  --border-opacity: 0.5;
-  --shadow: 0 2px 10px -3px rgb(0 0 0 / 0.5);
-  --glow: 0 0 20px -6px rgba(250, 204, 21, 0.08);
-  --header-bg: 42 18% 6%;
-  --surface-1: 42 16% 9%;
-  --surface-2: 42 14% 11%;
-}
-
-/* ============================================
-   SOPHISTICATED MINIMAL THEMES
-   Modern, neutral-based themes with subtle accents
-   Inspired by shadcn/ui, Vercel, Linear
-   ============================================ */
-
-/* --- DARK SOPHISTICATED THEMES --- */
-
-/* Zinc Blue - True neutral zinc gray with blue accent (Vercel-inspired) */
+/* Zinc Blue - True neutral zinc gray with blue accent */
 .theme-zinc-blue {
   --background: 240 6% 10%;
   --foreground: 0 0% 98%;
@@ -745,138 +252,708 @@
   --surface-2: 0 0% 14%;
 }
 
-/* --- LIGHT SOPHISTICATED THEMES --- */
+/* ============================================
+   TWEAKCN THEMES
+   ============================================ */
 
-/* Paper Blue - Warm white paper with blue accent */
-.theme-paper-blue {
-  --background: 0 0% 99%;
-  --foreground: 222 47% 11%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --muted: 220 14% 94%;
-  --muted-foreground: 220 13% 35%;
-  --primary: 221 83% 50%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 220 14% 88%;
-  --secondary-foreground: 222 47% 11%;
-  --accent: 220 14% 88%;
-  --accent-foreground: 222 47% 11%;
-  --destructive: 0 84% 50%;
+/* Amber Minimal */
+.theme-amber-minimal {
+  --background: 0 0% 20%;
+  --foreground: 0 0% 92%;
+  --card: 0 0% 27%;
+  --card-foreground: 0 0% 92%;
+  --popover: 0 0% 27%;
+  --popover-foreground: 0 0% 92%;
+  --primary: 38 92% 50%;
+  --primary-foreground: 0 0% 0%;
+  --secondary: 0 0% 27%;
+  --secondary-foreground: 0 0% 92%;
+  --muted: 0 0% 24%;
+  --muted-foreground: 0 0% 72%;
+  --accent: 23 82% 31%;
+  --accent-foreground: 48 97% 77%;
+  --destructive: 0 55% 50%;
   --destructive-foreground: 0 0% 100%;
-  --success: 142 71% 35%;
-  --warning: 38 92% 40%;
-  --border: 220 13% 78%;
-  --input: 220 13% 85%;
-  --ring: 221 83% 50%;
+  --success: 85 35% 45%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 0%;
+  --border: 0 0% 37%;
+  --input: 0 0% 37%;
+  --ring: 38 92% 50%;
   --radius: 0.5rem;
-  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
   --blur: 0px;
   --border-opacity: 1;
   --glow: none;
-  --header-bg: 220 14% 96%;
-  --surface-1: 220 14% 95%;
-  --surface-2: 220 14% 92%;
+  --header-bg: 0 0% 18%;
+  --surface-1: 0 0% 15%;
+  --surface-2: 0 0% 12%;
 }
 
-/* Snow Mint - Cool white with mint/emerald accent */
-.theme-snow-mint {
-  --background: 150 10% 98%;
-  --foreground: 160 84% 4%;
-  --card: 0 0% 100%;
-  --card-foreground: 160 84% 4%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 160 84% 4%;
-  --muted: 150 8% 94%;
-  --muted-foreground: 150 10% 35%;
-  --primary: 160 84% 35%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 150 8% 88%;
-  --secondary-foreground: 160 84% 4%;
-  --accent: 150 8% 88%;
-  --accent-foreground: 160 84% 4%;
-  --destructive: 0 84% 50%;
+/* Amethyst Haze */
+.theme-amethyst-haze {
+  --background: 251 19% 12%;
+  --foreground: 250 36% 90%;
+  --card: 251 20% 16%;
+  --card-foreground: 250 36% 90%;
+  --popover: 251 20% 16%;
+  --popover-foreground: 250 36% 90%;
+  --primary: 263 33% 69%;
+  --primary-foreground: 251 19% 12%;
+  --secondary: 254 15% 38%;
+  --secondary-foreground: 250 36% 90%;
+  --muted: 254 21% 16%;
+  --muted-foreground: 259 10% 64%;
+  --accent: 272 16% 21%;
+  --accent-foreground: 346 69% 84%;
+  --destructive: 346 69% 60%;
   --destructive-foreground: 0 0% 100%;
-  --success: 142 71% 35%;
-  --warning: 38 92% 40%;
-  --border: 150 10% 80%;
-  --input: 150 10% 85%;
-  --ring: 160 84% 35%;
+  --success: 168 35% 55%;
+  --success-foreground: 251 19% 12%;
+  --warning: 32 60% 60%;
+  --warning-foreground: 251 19% 12%;
+  --border: 252 19% 21%;
+  --input: 249 20% 19%;
+  --ring: 263 33% 69%;
   --radius: 0.5rem;
-  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
   --blur: 0px;
   --border-opacity: 1;
   --glow: none;
-  --header-bg: 150 8% 96%;
-  --surface-1: 150 8% 95%;
-  --surface-2: 150 8% 91%;
+  --header-bg: 251 19% 10%;
+  --surface-1: 251 20% 9%;
+  --surface-2: 251 20% 7%;
 }
 
-/* Ivory Teal - Warm ivory with teal accent */
-.theme-ivory-teal {
-  --background: 40 20% 97%;
-  --foreground: 173 50% 10%;
-  --card: 40 25% 99%;
-  --card-foreground: 173 50% 10%;
-  --popover: 40 25% 99%;
-  --popover-foreground: 173 50% 10%;
-  --muted: 40 16% 92%;
-  --muted-foreground: 40 10% 32%;
-  --primary: 172 66% 32%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 40 14% 86%;
-  --secondary-foreground: 173 50% 10%;
-  --accent: 40 14% 86%;
-  --accent-foreground: 173 50% 10%;
-  --destructive: 0 84% 50%;
+/* Caffeine */
+.theme-caffeine {
+  --background: 0 0% 18%;
+  --foreground: 0 0% 95%;
+  --card: 0 0% 21%;
+  --card-foreground: 0 0% 95%;
+  --popover: 0 0% 21%;
+  --popover-foreground: 0 0% 95%;
+  --primary: 30 100% 88%;
+  --primary-foreground: 183 54% 7%;
+  --secondary: 28 18% 19%;
+  --secondary-foreground: 30 100% 88%;
+  --muted: 0 0% 25%;
+  --muted-foreground: 0 0% 77%;
+  --accent: 0 0% 28%;
+  --accent-foreground: 0 0% 95%;
+  --destructive: 10 55% 45%;
   --destructive-foreground: 0 0% 100%;
-  --success: 142 71% 35%;
-  --warning: 38 92% 40%;
-  --border: 40 12% 75%;
-  --input: 40 14% 82%;
-  --ring: 172 66% 32%;
+  --success: 95 30% 50%;
+  --success-foreground: 0 0% 0%;
+  --warning: 30 80% 60%;
+  --warning-foreground: 0 0% 0%;
+  --border: 45 14% 11%;
+  --input: 0 0% 40%;
+  --ring: 30 100% 88%;
   --radius: 0.5rem;
-  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
   --blur: 0px;
   --border-opacity: 1;
   --glow: none;
-  --header-bg: 40 18% 95%;
-  --surface-1: 40 18% 94%;
-  --surface-2: 40 16% 90%;
+  --header-bg: 0 0% 15%;
+  --surface-1: 0 0% 12%;
+  --surface-2: 0 0% 10%;
 }
 
-/* Cloud Slate - Light gray cloud with slate blue accent */
-.theme-cloud-slate {
-  --background: 210 15% 97%;
-  --foreground: 215 25% 12%;
-  --card: 0 0% 100%;
-  --card-foreground: 215 25% 12%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 215 25% 12%;
-  --muted: 210 12% 93%;
-  --muted-foreground: 215 15% 35%;
-  --primary: 215 25% 45%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 210 12% 87%;
-  --secondary-foreground: 215 25% 12%;
-  --accent: 210 12% 87%;
-  --accent-foreground: 215 25% 12%;
-  --destructive: 0 84% 50%;
-  --destructive-foreground: 0 0% 100%;
-  --success: 142 71% 35%;
-  --warning: 38 92% 40%;
-  --border: 210 12% 78%;
-  --input: 210 12% 84%;
-  --ring: 215 25% 45%;
-  --radius: 0.5rem;
-  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+/* Catppuccin - Pastel aesthetic */
+.theme-catppuccin {
+  --background: 240 21% 12%;
+  --foreground: 226 64% 88%;
+  --card: 240 21% 15%;
+  --card-foreground: 226 64% 88%;
+  --popover: 234 13% 31%;
+  --popover-foreground: 226 64% 88%;
+  --primary: 267 84% 81%;
+  --primary-foreground: 240 21% 15%;
+  --secondary: 233 12% 39%;
+  --secondary-foreground: 226 64% 88%;
+  --muted: 231 19% 20%;
+  --muted-foreground: 228 24% 72%;
+  --accent: 189 71% 73%;
+  --accent-foreground: 240 21% 15%;
+  --destructive: 343 81% 75%;
+  --destructive-foreground: 240 21% 15%;
+  --success: 115 54% 76%;
+  --success-foreground: 240 21% 15%;
+  --warning: 41 86% 83%;
+  --warning-foreground: 240 21% 15%;
+  --border: 237 16% 23%;
+  --input: 237 16% 23%;
+  --ring: 267 84% 81%;
+  --radius: 0.75rem;
+  --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.3);
   --blur: 0px;
   --border-opacity: 1;
   --glow: none;
-  --header-bg: 210 12% 95%;
-  --surface-1: 210 12% 94%;
-  --surface-2: 210 12% 90%;
+  --header-bg: 240 21% 10%;
+  --surface-1: 240 21% 9%;
+  --surface-2: 240 21% 7%;
+}
+
+/* Claude - Warm terracotta aesthetic */
+.theme-claude {
+  --background: 60 3% 15%;
+  --foreground: 46 10% 74%;
+  --card: 60 3% 15%;
+  --card-foreground: 48 33% 97%;
+  --popover: 60 2% 18%;
+  --popover-foreground: 60 5% 89%;
+  --primary: 15 63% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 48 33% 97%;
+  --secondary-foreground: 60 2% 18%;
+  --muted: 60 4% 10%;
+  --muted-foreground: 51 9% 69%;
+  --accent: 48 11% 9%;
+  --accent-foreground: 51 26% 95%;
+  --destructive: 0 50% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 95 35% 45%;
+  --success-foreground: 0 0% 100%;
+  --warning: 35 70% 55%;
+  --warning-foreground: 0 0% 0%;
+  --border: 60 5% 23%;
+  --input: 53 5% 31%;
+  --ring: 15 63% 60%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 60 3% 12%;
+  --surface-1: 60 3% 10%;
+  --surface-2: 60 3% 8%;
+}
+
+/* Claymorphism - Soft clay with rounded forms */
+.theme-claymorphism {
+  --background: 30 11% 11%;
+  --foreground: 214 32% 91%;
+  --card: 26 9% 16%;
+  --card-foreground: 214 32% 91%;
+  --popover: 26 9% 16%;
+  --popover-foreground: 214 32% 91%;
+  --primary: 234 89% 74%;
+  --primary-foreground: 30 11% 11%;
+  --secondary: 26 6% 21%;
+  --secondary-foreground: 216 12% 84%;
+  --muted: 30 11% 11%;
+  --muted-foreground: 218 11% 65%;
+  --accent: 26 5% 27%;
+  --accent-foreground: 216 12% 84%;
+  --destructive: 0 45% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 160 40% 50%;
+  --success-foreground: 30 11% 11%;
+  --warning: 35 60% 55%;
+  --warning-foreground: 30 11% 11%;
+  --border: 26 6% 21%;
+  --input: 26 6% 21%;
+  --ring: 234 89% 74%;
+  --radius: 1rem;
+  --shadow: 0 4px 12px -2px rgb(0 0 0 / 0.2);
+  --blur: 8px;
+  --border-opacity: 0.5;
+  --glow: none;
+  --header-bg: 30 11% 9%;
+  --surface-1: 30 11% 8%;
+  --surface-2: 30 11% 6%;
+}
+
+/* Clean Slate - Cool blue-gray professional */
+.theme-clean-slate {
+  --background: 222 47% 11%;
+  --foreground: 214 32% 91%;
+  --card: 217 33% 17%;
+  --card-foreground: 214 32% 91%;
+  --popover: 217 33% 17%;
+  --popover-foreground: 214 32% 91%;
+  --primary: 234 89% 74%;
+  --primary-foreground: 222 47% 11%;
+  --secondary: 218 23% 23%;
+  --secondary-foreground: 216 12% 84%;
+  --muted: 217 41% 14%;
+  --muted-foreground: 218 11% 65%;
+  --accent: 217 19% 27%;
+  --accent-foreground: 216 12% 84%;
+  --destructive: 0 65% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 175 50% 45%;
+  --success-foreground: 222 47% 11%;
+  --warning: 45 70% 55%;
+  --warning-foreground: 222 47% 11%;
+  --border: 215 14% 34%;
+  --input: 215 14% 34%;
+  --ring: 234 89% 74%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 222 47% 9%;
+  --surface-1: 222 47% 8%;
+  --surface-2: 222 47% 6%;
+}
+
+/* Cosmic Night - Deep space purple */
+.theme-cosmic-night {
+  --background: 240 27% 8%;
+  --foreground: 240 49% 92%;
+  --card: 240 28% 14%;
+  --card-foreground: 240 49% 92%;
+  --popover: 240 28% 14%;
+  --popover-foreground: 240 49% 92%;
+  --primary: 251 100% 78%;
+  --primary-foreground: 240 27% 8%;
+  --secondary: 243 33% 25%;
+  --secondary-foreground: 242 100% 88%;
+  --muted: 240 33% 20%;
+  --muted-foreground: 240 20% 69%;
+  --accent: 240 33% 28%;
+  --accent-foreground: 240 49% 92%;
+  --destructive: 350 80% 65%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 180 60% 55%;
+  --success-foreground: 240 27% 8%;
+  --warning: 45 80% 65%;
+  --warning-foreground: 240 27% 8%;
+  --border: 240 26% 25%;
+  --input: 240 26% 25%;
+  --ring: 251 100% 78%;
+  --radius: 0.5rem;
+  --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.4);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: 0 0 15px -5px rgba(168, 128, 255, 0.2);
+  --header-bg: 240 27% 6%;
+  --surface-1: 240 27% 5%;
+  --surface-2: 240 27% 4%;
+}
+
+/* Dark Matter - Orange/teal complementary */
+.theme-darkmatter {
+  --background: 270 6% 7%;
+  --foreground: 0 0% 81%;
+  --card: 0 0% 18%;
+  --card-foreground: 0 0% 81%;
+  --popover: 270 6% 7%;
+  --popover-foreground: 0 0% 81%;
+  --primary: 22 76% 62%;
+  --primary-foreground: 270 6% 7%;
+  --secondary: 180 17% 45%;
+  --secondary-foreground: 270 6% 7%;
+  --muted: 0 0% 25%;
+  --muted-foreground: 0 0% 63%;
+  --accent: 0 0% 32%;
+  --accent-foreground: 0 0% 81%;
+  --destructive: 0 55% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 180 40% 45%;
+  --success-foreground: 270 6% 7%;
+  --warning: 22 76% 55%;
+  --warning-foreground: 270 6% 7%;
+  --border: 0 0% 25%;
+  --input: 0 0% 25%;
+  --ring: 22 76% 62%;
+  --radius: 0.375rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.2);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 270 6% 5%;
+  --surface-1: 270 6% 4%;
+  --surface-2: 270 6% 3%;
+}
+
+/* Doom 64 - Retro game RGB aesthetic */
+.theme-doom-64 {
+  --background: 0 0% 22%;
+  --foreground: 0 0% 91%;
+  --card: 0 0% 28%;
+  --card-foreground: 0 0% 91%;
+  --popover: 0 0% 28%;
+  --popover-foreground: 0 0% 91%;
+  --primary: 1 77% 55%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 92 48% 42%;
+  --secondary-foreground: 0 0% 0%;
+  --muted: 0 0% 26%;
+  --muted-foreground: 0 0% 71%;
+  --accent: 207 89% 68%;
+  --accent-foreground: 0 0% 0%;
+  --destructive: 1 77% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 92 48% 42%;
+  --success-foreground: 0 0% 0%;
+  --warning: 38 100% 50%;
+  --warning-foreground: 0 0% 0%;
+  --border: 0 0% 41%;
+  --input: 0 0% 41%;
+  --ring: 1 77% 55%;
+  --radius: 0.25rem;
+  --shadow: 0 2px 4px 0 rgb(0 0 0 / 0.3);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 0 0% 18%;
+  --surface-1: 0 0% 16%;
+  --surface-2: 0 0% 14%;
+}
+
+/* Graphite - Pure grayscale minimalist */
+.theme-graphite {
+  --background: 0 0% 22%;
+  --foreground: 0 0% 89%;
+  --card: 0 0% 24%;
+  --card-foreground: 0 0% 89%;
+  --popover: 0 0% 24%;
+  --popover-foreground: 0 0% 89%;
+  --primary: 0 0% 71%;
+  --primary-foreground: 0 0% 22%;
+  --secondary: 0 0% 31%;
+  --secondary-foreground: 0 0% 89%;
+  --muted: 0 0% 28%;
+  --muted-foreground: 0 0% 60%;
+  --accent: 0 0% 37%;
+  --accent-foreground: 0 0% 89%;
+  --destructive: 0 30% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 0 0% 55%;
+  --success-foreground: 0 0% 100%;
+  --warning: 0 0% 65%;
+  --warning-foreground: 0 0% 22%;
+  --border: 0 0% 33%;
+  --input: 0 0% 31%;
+  --ring: 0 0% 71%;
+  --radius: 0.375rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 0 0% 18%;
+  --surface-1: 0 0% 16%;
+  --surface-2: 0 0% 14%;
+}
+
+/* Mono - Pure black and white contrast */
+.theme-mono {
+  --background: 0 0% 14%;
+  --foreground: 0 0% 99%;
+  --card: 0 0% 21%;
+  --card-foreground: 0 0% 99%;
+  --popover: 0 0% 27%;
+  --popover-foreground: 0 0% 99%;
+  --primary: 0 0% 56%;
+  --primary-foreground: 0 0% 99%;
+  --secondary: 0 0% 27%;
+  --secondary-foreground: 0 0% 99%;
+  --muted: 0 0% 27%;
+  --muted-foreground: 0 0% 71%;
+  --accent: 0 0% 37%;
+  --accent-foreground: 0 0% 99%;
+  --destructive: 0 0% 40%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 0 0% 65%;
+  --success-foreground: 0 0% 14%;
+  --warning: 0 0% 75%;
+  --warning-foreground: 0 0% 14%;
+  --border: 0 0% 34%;
+  --input: 0 0% 44%;
+  --ring: 0 0% 56%;
+  --radius: 0.25rem;
+  --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 0 0% 10%;
+  --surface-1: 0 0% 8%;
+  --surface-2: 0 0% 6%;
+}
+
+/* Ocean Breeze - Teal ocean aesthetic */
+.theme-ocean-breeze {
+  --background: 222 47% 11%;
+  --foreground: 216 12% 84%;
+  --card: 217 33% 17%;
+  --card-foreground: 216 12% 84%;
+  --popover: 217 33% 17%;
+  --popover-foreground: 216 12% 84%;
+  --primary: 158 64% 52%;
+  --primary-foreground: 222 47% 11%;
+  --secondary: 218 23% 23%;
+  --secondary-foreground: 240 5% 65%;
+  --muted: 217 30% 14%;
+  --muted-foreground: 220 9% 46%;
+  --accent: 217 19% 27%;
+  --accent-foreground: 240 5% 65%;
+  --destructive: 350 55% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 158 64% 52%;
+  --success-foreground: 222 47% 11%;
+  --warning: 40 65% 55%;
+  --warning-foreground: 222 47% 11%;
+  --border: 215 14% 34%;
+  --input: 215 14% 34%;
+  --ring: 158 64% 52%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 222 47% 9%;
+  --surface-1: 222 47% 8%;
+  --surface-2: 222 47% 6%;
+}
+
+/* Sage Garden - Natural sage green */
+.theme-sage-garden {
+  --background: 0 0% 14%;
+  --foreground: 0 0% 97%;
+  --card: 0 0% 18%;
+  --card-foreground: 0 0% 97%;
+  --popover: 0 0% 18%;
+  --popover-foreground: 0 0% 97%;
+  --primary: 138 8% 53%;
+  --primary-foreground: 0 0% 0%;
+  --secondary: 0 0% 22%;
+  --secondary-foreground: 0 0% 97%;
+  --muted: 0 0% 22%;
+  --muted-foreground: 0 0% 71%;
+  --accent: 137 11% 24%;
+  --accent-foreground: 0 0% 97%;
+  --destructive: 0 40% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 138 25% 50%;
+  --success-foreground: 0 0% 0%;
+  --warning: 35 45% 55%;
+  --warning-foreground: 0 0% 0%;
+  --border: 0 0% 28%;
+  --input: 0 0% 18%;
+  --ring: 138 8% 53%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 0 0% 10%;
+  --surface-1: 0 0% 8%;
+  --surface-2: 0 0% 6%;
+}
+
+/* Soft Pop - Vibrant colorful aesthetic */
+.theme-soft-pop {
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
+  --card: 215 25% 14%;
+  --card-foreground: 0 0% 100%;
+  --popover: 215 25% 14%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 234 89% 74%;
+  --primary-foreground: 0 0% 0%;
+  --secondary: 172 66% 50%;
+  --secondary-foreground: 0 0% 0%;
+  --muted: 0 0% 32%;
+  --muted-foreground: 0 0% 85%;
+  --accent: 46 97% 65%;
+  --accent-foreground: 0 0% 0%;
+  --destructive: 0 91% 71%;
+  --destructive-foreground: 0 0% 0%;
+  --success: 172 66% 50%;
+  --success-foreground: 0 0% 0%;
+  --warning: 46 97% 65%;
+  --warning-foreground: 0 0% 0%;
+  --border: 0 0% 45%;
+  --input: 0 0% 100%;
+  --ring: 234 89% 74%;
+  --radius: 0.75rem;
+  --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.3);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 215 25% 8%;
+  --surface-1: 215 25% 6%;
+  --surface-2: 215 25% 4%;
+}
+
+/* Solar Dusk - Warm sunset orange */
+.theme-solar-dusk {
+  --background: 24 10% 10%;
+  --foreground: 60 5% 96%;
+  --card: 12 7% 15%;
+  --card-foreground: 60 5% 96%;
+  --popover: 12 7% 15%;
+  --popover-foreground: 60 5% 96%;
+  --primary: 25 95% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 33 5% 32%;
+  --secondary-foreground: 20 6% 90%;
+  --muted: 30 10% 11%;
+  --muted-foreground: 24 5% 64%;
+  --accent: 198 46% 22%;
+  --accent-foreground: 20 6% 90%;
+  --destructive: 350 60% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 85 45% 45%;
+  --success-foreground: 0 0% 100%;
+  --warning: 25 95% 53%;
+  --warning-foreground: 0 0% 0%;
+  --border: 30 6% 25%;
+  --input: 30 6% 25%;
+  --ring: 25 95% 53%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 24 10% 8%;
+  --surface-1: 24 10% 6%;
+  --surface-2: 24 10% 5%;
+}
+
+/* Supabase - Green database brand */
+.theme-supabase {
+  --background: 0 0% 18%;
+  --foreground: 214 32% 91%;
+  --card: 0 0% 20%;
+  --card-foreground: 214 32% 91%;
+  --popover: 0 0% 26%;
+  --popover-foreground: 0 0% 73%;
+  --primary: 155 100% 19%;
+  --primary-foreground: 153 19% 89%;
+  --secondary: 0 0% 26%;
+  --secondary-foreground: 0 0% 99%;
+  --muted: 0 0% 24%;
+  --muted-foreground: 0 0% 71%;
+  --accent: 0 0% 31%;
+  --accent-foreground: 0 0% 99%;
+  --destructive: 0 55% 45%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 155 60% 40%;
+  --success-foreground: 0 0% 100%;
+  --warning: 45 65% 50%;
+  --warning-foreground: 0 0% 0%;
+  --border: 0 0% 28%;
+  --input: 0 0% 26%;
+  --ring: 142 69% 58%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 0 0% 14%;
+  --surface-1: 0 0% 12%;
+  --surface-2: 0 0% 10%;
+}
+
+/* Twitter/X - Bold blue brand */
+.theme-twitter {
+  --background: 0 0% 0%;
+  --foreground: 200 7% 91%;
+  --card: 228 10% 10%;
+  --card-foreground: 0 0% 89%;
+  --popover: 0 0% 0%;
+  --popover-foreground: 200 7% 91%;
+  --primary: 204 88% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 195 15% 95%;
+  --secondary-foreground: 210 25% 8%;
+  --muted: 0 0% 21%;
+  --muted-foreground: 210 3% 46%;
+  --accent: 206 70% 8%;
+  --accent-foreground: 204 88% 53%;
+  --destructive: 356 75% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 160 60% 45%;
+  --success-foreground: 0 0% 100%;
+  --warning: 45 80% 55%;
+  --warning-foreground: 0 0% 0%;
+  --border: 210 5% 15%;
+  --input: 208 28% 18%;
+  --ring: 203 89% 53%;
+  --radius: 1rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 228 10% 6%;
+  --surface-1: 228 10% 5%;
+  --surface-2: 228 10% 3%;
+}
+
+/* Vercel - Minimalist black/white */
+.theme-vercel {
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
+  --card: 0 0% 14%;
+  --card-foreground: 0 0% 100%;
+  --popover: 0 0% 18%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 0 0% 100%;
+  --primary-foreground: 0 0% 0%;
+  --secondary: 0 0% 25%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 0 0% 23%;
+  --muted-foreground: 0 0% 72%;
+  --accent: 0 0% 32%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 70% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 145 60% 42%;
+  --success-foreground: 0 0% 100%;
+  --warning: 45 85% 55%;
+  --warning-foreground: 0 0% 0%;
+  --border: 0 0% 26%;
+  --input: 0 0% 32%;
+  --ring: 0 0% 72%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 0 0% 4%;
+  --surface-1: 0 0% 3%;
+  --surface-2: 0 0% 2%;
+}
+
+/* Violet Bloom - Vibrant purple/violet */
+.theme-violet-bloom {
+  --background: 225 7% 11%;
+  --foreground: 0 0% 96%;
+  --card: 228 7% 14%;
+  --card-foreground: 0 0% 96%;
+  --popover: 228 7% 14%;
+  --popover-foreground: 0 0% 96%;
+  --primary: 258 100% 68%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 227 10% 18%;
+  --secondary-foreground: 0 0% 96%;
+  --muted: 227 10% 18%;
+  --muted-foreground: 0 0% 71%;
+  --accent: 217 33% 17%;
+  --accent-foreground: 208 100% 74%;
+  --destructive: 350 70% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 175 55% 50%;
+  --success-foreground: 225 7% 11%;
+  --warning: 40 75% 60%;
+  --warning-foreground: 225 7% 11%;
+  --border: 223 6% 21%;
+  --input: 223 6% 21%;
+  --ring: 258 100% 68%;
+  --radius: 0.5rem;
+  --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.3);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: 0 0 15px -5px rgba(168, 85, 247, 0.2);
+  --header-bg: 225 7% 8%;
+  --surface-1: 225 7% 7%;
+  --surface-2: 225 7% 5%;
 }
 
 /* ============================================
@@ -900,4 +977,26 @@ body {
 /* Utility class for glow effects */
 .glow {
   box-shadow: var(--glow, none);
+}
+
+/* Theme-aware utility classes */
+.rounded-theme {
+  border-radius: var(--radius, 0.5rem);
+}
+
+.shadow-theme {
+  box-shadow: var(--shadow, 0 1px 3px 0 rgb(0 0 0 / 0.1));
+}
+
+.backdrop-blur-theme {
+  backdrop-filter: blur(var(--blur, 0px));
+}
+
+/* Darker surface utilities for nested elements */
+.bg-surface-1 {
+  background-color: hsl(var(--surface-1));
+}
+
+.bg-surface-2 {
+  background-color: hsl(var(--surface-2));
 }

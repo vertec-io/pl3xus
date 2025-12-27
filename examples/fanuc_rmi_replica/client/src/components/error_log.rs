@@ -25,7 +25,7 @@ pub fn ErrorLog() -> impl IntoView {
                     let count = error_count();
                     if count > 0 {
                         Some(view! {
-                            <span class="ml-1.5 bg-destructive text-black text-[9px] px-1 py-0.5 rounded-full font-bold">
+                            <span class="ml-1.5 bg-destructive text-destructive-foreground text-[9px] px-1 py-0.5 rounded-full font-bold">
                                 {count}
                             </span>
                         })

@@ -108,7 +108,7 @@ pub fn ProgramDetails(
                             <div class="p-3 border-b border-border/8">
                                 <div class="flex items-start justify-between">
                                     <div>
-                                        <h2 class="text-sm font-semibold text-white">{prog_name}</h2>
+                                        <h2 class="text-sm font-semibold text-foreground">{prog_name}</h2>
                                         <p class="text-muted-foreground text-[9px] mt-0.5">{prog_desc}</p>
                                     </div>
                                     <div class="flex gap-1">
@@ -138,7 +138,7 @@ pub fn ProgramDetails(
                             <div class="px-3 pt-3 pb-2">
                                 <div>
                                     <div class="text-[8px] text-muted-foreground uppercase">"Instructions"</div>
-                                    <div class="text-[11px] text-white font-mono">{line_count}" lines"</div>
+                                    <div class="text-[11px] text-foreground font-mono">{line_count}" lines"</div>
                                 </div>
                             </div>
 
@@ -177,7 +177,7 @@ pub fn ProgramDetails(
                                     </div>
                                     <input
                                         type="text"
-                                        class="w-20 bg-card border border-border/6 rounded px-2 py-1 text-[10px] text-white font-mono"
+                                        class="w-20 bg-card border border-border/6 rounded px-2 py-1 text-[10px] text-foreground font-mono"
                                         placeholder="100"
                                         prop:value=move || move_speed.get()
                                         on:input=move |ev| {
@@ -189,7 +189,7 @@ pub fn ProgramDetails(
                                 <div>
                                     <div class="text-[8px] text-muted-foreground uppercase mb-1">"Term Type"</div>
                                     <select
-                                        class="w-20 bg-card border border-border/6 rounded px-2 py-1 text-[10px] text-white"
+                                        class="w-20 bg-card border border-border/6 rounded px-2 py-1 text-[10px] text-foreground"
                                         prop:value=move || term_type.get()
                                         on:change=move |ev| {
                                             set_term_type.set(event_target_value(&ev));
@@ -207,7 +207,7 @@ pub fn ProgramDetails(
                                     </div>
                                     <input
                                         type="text"
-                                        class="w-16 bg-card border border-border/6 rounded px-2 py-1 text-[10px] text-white font-mono"
+                                        class="w-16 bg-card border border-border/6 rounded px-2 py-1 text-[10px] text-foreground font-mono"
                                         placeholder="100"
                                         prop:value=move || term_value.get()
                                         on:input=move |ev| {
@@ -341,7 +341,7 @@ fn PositionInput(
             <label class="text-[7px] text-muted">{label}</label>
             <input
                 type="text"
-                class="w-full bg-card border border-border/6 rounded px-2 py-1 text-[10px] text-white font-mono"
+                class="w-full bg-card border border-border/6 rounded px-2 py-1 text-[10px] text-foreground font-mono"
                 placeholder=label
                 prop:value=move || value.get()
                 on:input=move |ev| {
@@ -393,9 +393,9 @@ fn InstructionsTable(instructions: Vec<fanuc_replica_types::Instruction>) -> imp
                             view! {
                                 <tr class="border-t border-border/8 hover:bg-border/4">
                                     <td class="px-2 py-1 text-primary">{instr.line_number}</td>
-                                    <td class="px-2 py-1 text-white">{format!("{:.2}", instr.x)}</td>
-                                    <td class="px-2 py-1 text-white">{format!("{:.2}", instr.y)}</td>
-                                    <td class="px-2 py-1 text-white">{format!("{:.2}", instr.z)}</td>
+                                    <td class="px-2 py-1 text-foreground">{format!("{:.2}", instr.x)}</td>
+                                    <td class="px-2 py-1 text-foreground">{format!("{:.2}", instr.y)}</td>
+                                    <td class="px-2 py-1 text-foreground">{format!("{:.2}", instr.z)}</td>
                                     <td class="px-2 py-1 text-muted-foreground">{w_str}</td>
                                     <td class="px-2 py-1 text-muted-foreground">{p_str}</td>
                                     <td class="px-2 py-1 text-muted-foreground">{r_str}</td>

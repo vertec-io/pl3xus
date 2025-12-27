@@ -69,7 +69,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
 
     view! {
         <Show when=move || robot_connected.get()>
-            <div class="bg-background rounded border border-border/8 p-3 shrink-0">
+            <div class="bg-surface-1 rounded-theme border border-border shadow-theme p-3 shrink-0 transition-all duration-300">
                 <div class="flex items-center justify-between mb-2">
                     <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center group">
                         <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,7 +154,7 @@ pub fn JogDefaultsPanel() -> impl IntoView {
                 <Show when=move || has_changes.get()>
                     <div class="flex justify-end mt-2 gap-2">
                         <button
-                            class="px-3 py-1 text-[9px] bg-popover border border-border/8 text-muted-foreground rounded hover:text-white"
+                            class="px-3 py-1 text-[9px] bg-popover border border-border/8 text-muted-foreground rounded hover:text-foreground"
                             on:click=move |_| {
                                 // Reset to synced settings
                                 let settings = jog_value.get();

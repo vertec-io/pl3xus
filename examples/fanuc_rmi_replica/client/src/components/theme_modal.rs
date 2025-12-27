@@ -20,9 +20,9 @@ pub fn ThemeModal(
                 <div class="bg-card border border-border/10 rounded-theme shadow-theme backdrop-blur-theme w-[650px] max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
                     // Header
                     <div class="p-4 border-b border-border/10 flex items-center justify-between bg-muted/30">
-                        <h2 class="text-lg font-semibold text-white">"Select Theme"</h2>
-                        <button 
-                            class="text-muted-foreground hover:text-white transition-colors"
+                        <h2 class="text-lg font-semibold text-foreground">"Select Theme"</h2>
+                        <button
+                            class="text-muted-foreground hover:text-foreground transition-colors"
                             on:click=move |_| show.set(false)
                         >
                             "✕"
@@ -54,7 +54,7 @@ pub fn ThemeModal(
                                             class="w-3.5 h-3.5 rounded-full border border-white/10 shrink-0"
                                             style=format!("background-color: {}", theme.preview_color())
                                         />
-                                        <span class="text-xs font-medium text-white group-hover:text-primary transition-colors truncate">
+                                        <span class="text-xs font-medium text-foreground group-hover:text-primary transition-colors truncate">
                                             {theme.name()}
                                         </span>
                                     </div>

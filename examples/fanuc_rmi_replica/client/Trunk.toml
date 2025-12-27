@@ -7,10 +7,6 @@
 # NOTE: Re-enable for production builds!
 no_sri = true
 
-[watch]
-# Ignore these directories to avoid unnecessary rebuilds
-ignore = ["./dist", "./target"]
-
 [serve]
 # Development server settings
 port = 8080

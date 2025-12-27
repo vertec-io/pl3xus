@@ -167,7 +167,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Load button - server tells us when loading is available
                     <Show when=can_load>
                         <button
-                            class="bg-primary/20 border border-primary/40 text-primary text-[8px] px-2 py-0.5 rounded hover:bg-primary/30"
+                            class="bg-primary text-white text-[8px] px-2 py-0.5 rounded hover:brightness-110"
                             on:click=move |_| set_show_load_modal.set(true)
                         >
                             "📂 Load"
@@ -176,7 +176,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Run button - server tells us when starting is available
                     <Show when=move || can_start()>
                         <button
-                            class="bg-success/20 border border-success/40 text-success text-[8px] px-2 py-0.5 rounded hover:bg-success/30"
+                            class="bg-success text-white text-[8px] px-2 py-0.5 rounded hover:brightness-110"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     start.send(entity_id, StartProgram);
@@ -189,7 +189,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Pause button - server tells us when pausing is available
                     <Show when=move || can_pause()>
                         <button
-                            class="bg-warning/20 border border-warning/40 text-warning text-[8px] px-2 py-0.5 rounded hover:bg-warning/30"
+                            class="bg-warning text-white text-[8px] px-2 py-0.5 rounded hover:brightness-110"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     pause.send(entity_id, PauseProgram);
@@ -202,7 +202,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Resume button - server tells us when resuming is available
                     <Show when=move || can_resume()>
                         <button
-                            class="bg-success/20 border border-success/40 text-success text-[8px] px-2 py-0.5 rounded hover:bg-success/30"
+                            class="bg-success text-white text-[8px] px-2 py-0.5 rounded hover:brightness-110"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     resume.send(entity_id, ResumeProgram);
@@ -215,7 +215,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Stop button - server tells us when stopping is available
                     <Show when=move || can_stop()>
                         <button
-                            class="bg-destructive/20 border border-destructive/40 text-destructive text-[8px] px-2 py-0.5 rounded hover:bg-destructive/30"
+                            class="bg-destructive text-white text-[8px] px-2 py-0.5 rounded hover:brightness-110"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     stop.send(entity_id, StopProgram);
@@ -228,7 +228,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     // Unload button - server tells us when unloading is available
                     <Show when=move || can_unload()>
                         <button
-                            class="bg-destructive/20 border border-destructive/40 text-destructive text-[8px] px-2 py-0.5 rounded hover:bg-destructive/30 flex items-center gap-1"
+                            class="bg-destructive text-white text-[8px] px-2 py-0.5 rounded hover:brightness-110 flex items-center gap-1"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
                                     unload.send(entity_id, UnloadProgram);

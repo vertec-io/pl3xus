@@ -6,9 +6,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fanuc RMI Replica</title>
 
+    <!-- Critical CSS variables inlined to prevent FOUC -->
+    <style id="critical-theme">
+      :root {
+        --background: 0 0% 4%;
+        --foreground: 0 0% 98%;
+        --card: 0 0% 7%;
+        --card-foreground: 0 0% 98%;
+        --popover: 0 0% 9%;
+        --popover-foreground: 0 0% 98%;
+        --primary: 189 94% 43%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 0 0% 12%;
+        --secondary-foreground: 0 0% 98%;
+        --muted: 0 0% 12%;
+        --muted-foreground: 0 0% 55%;
+        --accent: 0 0% 12%;
+        --accent-foreground: 0 0% 98%;
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 98%;
+        --success: 142 71% 45%;
+        --warning: 38 92% 50%;
+        --border: 0 0% 18%;
+        --input: 0 0% 12%;
+        --ring: 189 94% 43%;
+        --radius: 0.5rem;
+        --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --blur: 0px;
+        --border-opacity: 1;
+        --glow: none;
+        --header-bg: 0 0% 5%;
+        --surface-1: 0 0% 8%;
+        --surface-2: 0 0% 10%;
+      }
+    </style>
+
     <!-- Using Tailwind CDN with custom config -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="assets/globals.css">
+    <!-- Use data-trunk to properly hash the CSS file for cache busting -->
+    <link data-trunk rel="css" href="assets/globals.css">
 
     <script>
         /**
@@ -122,6 +158,51 @@
 </head>
 
 <body>
+    <!-- Apply saved theme immediately to prevent flash -->
+    <script>
+        (function() {
+            var theme = localStorage.getItem('app-theme');
+            if (theme && theme !== 'Industrial') {
+                // Convert theme name to class: "Indigo" -> "theme-indigo", etc.
+                var themeMap = {
+                    'Indigo': 'theme-indigo',
+                    'Emerald': 'theme-emerald',
+                    'Rose': 'theme-rose',
+                    'Teal': 'theme-teal',
+                    'Cyber': 'theme-cyber',
+                    'Amber': 'theme-amber',
+                    'Slate': 'theme-slate',
+                    'Crimson': 'theme-crimson',
+                    'Gold': 'theme-gold',
+                    'DeepOcean': 'theme-ocean',
+                    'Arctic': 'theme-arctic',
+                    'Obsidian': 'theme-obsidian',
+                    'Neon': 'theme-neon',
+                    'Retro': 'theme-retro',
+                    'Mist': 'theme-mist',
+                    'Solar': 'theme-solar',
+                    'Space': 'theme-space',
+                    'Light': 'theme-light',
+                    'Blood': 'theme-blood',
+                    'Coffee': 'theme-coffee',
+                    'GlassDark': 'theme-glass-dark',
+                    // New sophisticated themes
+                    'ZincBlue': 'theme-zinc-blue',
+                    'SlateTeal': 'theme-slate-teal',
+                    'StoneOrange': 'theme-stone-orange',
+                    'NeutralGreen': 'theme-neutral-green',
+                    'PaperBlue': 'theme-paper-blue',
+                    'SnowMint': 'theme-snow-mint',
+                    'IvoryTeal': 'theme-ivory-teal',
+                    'CloudSlate': 'theme-cloud-slate'
+                };
+                var cls = themeMap[theme];
+                if (cls) {
+                    document.body.classList.add(cls);
+                }
+            }
+        })();
+    </script>
     <!-- App injection point -->
 </body>
 

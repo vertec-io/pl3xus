@@ -151,7 +151,7 @@ where
                         class=move || format!(
                             "text-[10px] px-4 py-1.5 rounded transition-colors {}",
                             if selected_id.get().is_some() && !load.is_loading() {
-                                "bg-primary text-black hover:bg-primary"
+                                "bg-primary text-white hover:brightness-110"
                             } else {
                                 "bg-muted text-muted-foreground cursor-not-allowed"
                             }

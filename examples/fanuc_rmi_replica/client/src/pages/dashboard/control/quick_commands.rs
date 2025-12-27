@@ -179,7 +179,7 @@ pub fn QuickCommandsPanel() -> impl IntoView {
             <div class="flex gap-2 flex-wrap items-center">
                 // Initialize button
                 <button
-                    class="bg-success/20 border border-success/40 text-success text-[9px] px-3 py-1.5 rounded hover:bg-success/30 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="bg-success text-white text-[9px] px-3 py-1.5 rounded hover:brightness-110 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled=move || !robot_connected.get()
                     on:click=init_click
                 >
@@ -190,7 +190,7 @@ pub fn QuickCommandsPanel() -> impl IntoView {
                 </button>
                 // Reset button
                 <button
-                    class="bg-warning/20 border border-warning/40 text-warning text-[9px] px-3 py-1.5 rounded hover:bg-warning/30 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="bg-warning text-white text-[9px] px-3 py-1.5 rounded hover:brightness-110 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled=move || !robot_connected.get()
                     on:click=reset_click
                 >
@@ -201,7 +201,7 @@ pub fn QuickCommandsPanel() -> impl IntoView {
                 </button>
                 // Abort button
                 <button
-                    class="bg-destructive/20 border border-destructive/40 text-destructive text-[9px] px-3 py-1.5 rounded hover:bg-destructive/30 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="bg-destructive text-white text-[9px] px-3 py-1.5 rounded hover:brightness-110 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled=move || !robot_connected.get()
                     on:click=abort_click
                 >

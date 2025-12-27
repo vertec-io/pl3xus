@@ -319,7 +319,7 @@ fn WebSocketDropdown(
                 </div>
                 <div class="text-[9px] text-muted-foreground mb-2">"ws://127.0.0.1:8083"</div>
                 <button
-                    class="w-full text-[9px] px-2 py-1 bg-primary/20 text-primary rounded hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="w-full text-[9px] px-2 py-1 bg-primary text-white rounded hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled=move || ws_connected.get() || ws_connecting.get()
                     on:click={
                         let open = connection.open.clone();
@@ -654,7 +654,7 @@ fn SavedConnectionsList(
                                     // Show disconnect button for active connection
                                     view! {
                                         <button
-                                            class="text-[8px] px-2 py-0.5 bg-destructive/20 text-destructive rounded hover:bg-destructive/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            class="text-[8px] px-2 py-0.5 bg-destructive text-white rounded hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
                                             disabled=move || !has_control.get() || robot_connecting.get()
                                             title=move || if has_control.get() { "Disconnect" } else { "Need control to disconnect" }
                                             on:click=move |_| {
@@ -675,7 +675,7 @@ fn SavedConnectionsList(
                                     // Show connect button for other connections - requires control
                                     view! {
                                         <button
-                                            class="text-[8px] px-2 py-0.5 bg-primary/20 text-primary rounded hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            class="text-[8px] px-2 py-0.5 bg-primary text-white rounded hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
                                             disabled=move || !can_connect()
                                             title=move || {
                                                 if robot_connecting.get() || connecting_to_id.get().is_some() {
@@ -732,7 +732,7 @@ fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
                 view! {
                     <div class="p-2 border-b border-border/6">
                         <button
-                            class="w-full text-[9px] px-3 py-1.5 bg-primary/20 border border-primary/40 text-primary rounded hover:bg-primary/30"
+                            class="w-full text-[9px] px-3 py-1.5 bg-primary text-white rounded hover:brightness-110"
                             on:click=move |_| {
                                 if let Some(entity_bits) = system_entity_bits() {
                                     ctx.send(ControlRequest::Take(entity_bits));
@@ -747,7 +747,7 @@ fn ControlActions(has_control: Signal<bool>) -> impl IntoView {
                 view! {
                     <div class="p-2 border-b border-border/6">
                         <button
-                            class="w-full text-[9px] px-3 py-1.5 bg-destructive/20 border border-destructive/40 text-destructive rounded hover:bg-destructive/30"
+                            class="w-full text-[9px] px-3 py-1.5 bg-destructive text-white rounded hover:brightness-110"
                             on:click=move |_| {
                                 if let Some(entity_bits) = system_entity_bits() {
                                     ctx.send(ControlRequest::Release(entity_bits));

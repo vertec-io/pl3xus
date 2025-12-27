@@ -458,13 +458,13 @@ pub fn CommandComposerModal() -> impl IntoView {
                     </button>
                     <div class="flex gap-2">
                         <button
-                            class="bg-primary/20 border border-primary/40 text-primary text-[10px] px-4 py-1.5 rounded hover:bg-primary/30"
+                            class="bg-primary text-white text-[10px] px-4 py-1.5 rounded hover:brightness-110"
                             on:click=move |_| apply_command.get_value()()
                         >
                             "Apply"
                         </button>
                         <button
-                            class="bg-success text-black text-[10px] px-4 py-1.5 rounded hover:bg-success font-medium"
+                            class="bg-success text-white text-[10px] px-4 py-1.5 rounded hover:brightness-110 font-medium"
                             on:click=move |_| execute_command()
                         >
                             "▶ Execute Now"

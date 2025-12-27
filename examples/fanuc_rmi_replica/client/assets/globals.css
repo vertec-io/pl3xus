@@ -606,6 +606,280 @@
 }
 
 /* ============================================
+   SOPHISTICATED MINIMAL THEMES
+   Modern, neutral-based themes with subtle accents
+   Inspired by shadcn/ui, Vercel, Linear
+   ============================================ */
+
+/* --- DARK SOPHISTICATED THEMES --- */
+
+/* Zinc Blue - True neutral zinc gray with blue accent (Vercel-inspired) */
+.theme-zinc-blue {
+  --background: 240 6% 10%;
+  --foreground: 0 0% 98%;
+  --card: 240 5% 12%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 5% 14%;
+  --popover-foreground: 0 0% 98%;
+  --muted: 240 4% 16%;
+  --muted-foreground: 240 5% 65%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 4% 18%;
+  --secondary-foreground: 0 0% 98%;
+  --accent: 240 4% 18%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 142 71% 45%;
+  --warning: 38 92% 50%;
+  --border: 240 4% 20%;
+  --input: 240 4% 16%;
+  --ring: 217 91% 60%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 240 6% 11%;
+  --surface-1: 240 5% 13%;
+  --surface-2: 240 5% 15%;
+}
+
+/* Slate Teal - Cool slate gray with teal accent */
+.theme-slate-teal {
+  --background: 222 13% 10%;
+  --foreground: 210 20% 98%;
+  --card: 222 12% 12%;
+  --card-foreground: 210 20% 98%;
+  --popover: 222 11% 14%;
+  --popover-foreground: 210 20% 98%;
+  --muted: 222 10% 17%;
+  --muted-foreground: 215 14% 65%;
+  --primary: 173 80% 40%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 222 9% 18%;
+  --secondary-foreground: 210 20% 98%;
+  --accent: 222 9% 18%;
+  --accent-foreground: 210 20% 98%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 142 71% 45%;
+  --warning: 38 92% 50%;
+  --border: 222 9% 22%;
+  --input: 222 10% 17%;
+  --ring: 173 80% 40%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 222 13% 11%;
+  --surface-1: 222 12% 13%;
+  --surface-2: 222 11% 15%;
+}
+
+/* Stone Orange - Warm stone gray with orange accent */
+.theme-stone-orange {
+  --background: 24 6% 10%;
+  --foreground: 20 5% 96%;
+  --card: 24 5% 12%;
+  --card-foreground: 20 5% 96%;
+  --popover: 24 5% 14%;
+  --popover-foreground: 20 5% 96%;
+  --muted: 24 4% 17%;
+  --muted-foreground: 24 5% 60%;
+  --primary: 25 95% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 24 4% 18%;
+  --secondary-foreground: 20 5% 96%;
+  --accent: 24 4% 18%;
+  --accent-foreground: 20 5% 96%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 142 71% 45%;
+  --warning: 38 92% 50%;
+  --border: 24 4% 20%;
+  --input: 24 4% 17%;
+  --ring: 25 95% 53%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 24 6% 11%;
+  --surface-1: 24 5% 13%;
+  --surface-2: 24 5% 15%;
+}
+
+/* Neutral Green - Pure neutral gray with green accent */
+.theme-neutral-green {
+  --background: 0 0% 9%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 11%;
+  --card-foreground: 0 0% 98%;
+  --popover: 0 0% 13%;
+  --popover-foreground: 0 0% 98%;
+  --muted: 0 0% 16%;
+  --muted-foreground: 0 0% 64%;
+  --primary: 142 72% 46%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 17%;
+  --secondary-foreground: 0 0% 98%;
+  --accent: 0 0% 17%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 142 71% 45%;
+  --warning: 38 92% 50%;
+  --border: 0 0% 20%;
+  --input: 0 0% 16%;
+  --ring: 142 72% 46%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 0 0% 10%;
+  --surface-1: 0 0% 12%;
+  --surface-2: 0 0% 14%;
+}
+
+/* --- LIGHT SOPHISTICATED THEMES --- */
+
+/* Paper Blue - Warm white paper with blue accent */
+.theme-paper-blue {
+  --background: 0 0% 99%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --muted: 220 14% 94%;
+  --muted-foreground: 220 13% 35%;
+  --primary: 221 83% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 88%;
+  --secondary-foreground: 222 47% 11%;
+  --accent: 220 14% 88%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 84% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 71% 35%;
+  --warning: 38 92% 40%;
+  --border: 220 13% 78%;
+  --input: 220 13% 85%;
+  --ring: 221 83% 50%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 220 14% 96%;
+  --surface-1: 220 14% 95%;
+  --surface-2: 220 14% 92%;
+}
+
+/* Snow Mint - Cool white with mint/emerald accent */
+.theme-snow-mint {
+  --background: 150 10% 98%;
+  --foreground: 160 84% 4%;
+  --card: 0 0% 100%;
+  --card-foreground: 160 84% 4%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 160 84% 4%;
+  --muted: 150 8% 94%;
+  --muted-foreground: 150 10% 35%;
+  --primary: 160 84% 35%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 150 8% 88%;
+  --secondary-foreground: 160 84% 4%;
+  --accent: 150 8% 88%;
+  --accent-foreground: 160 84% 4%;
+  --destructive: 0 84% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 71% 35%;
+  --warning: 38 92% 40%;
+  --border: 150 10% 80%;
+  --input: 150 10% 85%;
+  --ring: 160 84% 35%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 150 8% 96%;
+  --surface-1: 150 8% 95%;
+  --surface-2: 150 8% 91%;
+}
+
+/* Ivory Teal - Warm ivory with teal accent */
+.theme-ivory-teal {
+  --background: 40 20% 97%;
+  --foreground: 173 50% 10%;
+  --card: 40 25% 99%;
+  --card-foreground: 173 50% 10%;
+  --popover: 40 25% 99%;
+  --popover-foreground: 173 50% 10%;
+  --muted: 40 16% 92%;
+  --muted-foreground: 40 10% 32%;
+  --primary: 172 66% 32%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 40 14% 86%;
+  --secondary-foreground: 173 50% 10%;
+  --accent: 40 14% 86%;
+  --accent-foreground: 173 50% 10%;
+  --destructive: 0 84% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 71% 35%;
+  --warning: 38 92% 40%;
+  --border: 40 12% 75%;
+  --input: 40 14% 82%;
+  --ring: 172 66% 32%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 40 18% 95%;
+  --surface-1: 40 18% 94%;
+  --surface-2: 40 16% 90%;
+}
+
+/* Cloud Slate - Light gray cloud with slate blue accent */
+.theme-cloud-slate {
+  --background: 210 15% 97%;
+  --foreground: 215 25% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 215 25% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 215 25% 12%;
+  --muted: 210 12% 93%;
+  --muted-foreground: 215 15% 35%;
+  --primary: 215 25% 45%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 12% 87%;
+  --secondary-foreground: 215 25% 12%;
+  --accent: 210 12% 87%;
+  --accent-foreground: 215 25% 12%;
+  --destructive: 0 84% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 71% 35%;
+  --warning: 38 92% 40%;
+  --border: 210 12% 78%;
+  --input: 210 12% 84%;
+  --ring: 215 25% 45%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: none;
+  --header-bg: 210 12% 95%;
+  --surface-1: 210 12% 94%;
+  --surface-2: 210 12% 90%;
+}
+
+/* ============================================
    BASE STYLES
    ============================================ */
 

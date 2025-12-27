@@ -75,10 +75,11 @@ fn process_poll_responses(
         &mut RobotPosition,
         &mut JointAngles,
         &mut RobotStatus,
+        &mut FrameToolDataState,
         &RobotConnectionState,
     ), With<FanucRobot>>,
 ) {
-    for (mut response_channel, mut position, mut joints, mut status, state) in robots.iter_mut() {
+    for (mut response_channel, mut position, mut joints, mut status, mut frame_tool_state, state) in robots.iter_mut() {
         if *state != RobotConnectionState::Connected {
             continue;
         }
@@ -122,9 +123,13 @@ fn process_poll_responses(
                     } else {
                         status.error_message = None;
                     }
-                    // Update active frame/tool numbers
+                    // Update active frame/tool numbers in RobotStatus
                     status.active_uframe = status_resp.number_uframe as u8;
                     status.active_utool = status_resp.number_utool as u8;
+
+                    // Also update FrameToolDataState so the UI gets the actual robot values
+                    frame_tool_state.active_frame = status_resp.number_uframe as i32;
+                    frame_tool_state.active_tool = status_resp.number_utool as i32;
 
                     // NOTE: We intentionally do NOT sync the driver's sequence counter here.
                     // The driver's counter is authoritative - it knows what sequence IDs it has

@@ -18,10 +18,13 @@ use super::connection::{FanucRobot, RmiDriver, RobotConnectionState};
 /// Speed and step values are read from the robot's JogSettingsState component,
 /// not from the client message. This ensures jog settings are tied to the robot
 /// entity, not the client, so any client that takes control uses the same settings.
+///
+/// GAP-010: Frame and tool values are read from FrameToolDataState to use the
+/// currently active frame/tool for jog movements.
 pub fn handle_authorized_jog_commands(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut events: MessageReader<AuthorizedTargetedMessage<JogCommand>>,
-    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, &JogSettingsState), With<FanucRobot>>,
+    robot_query: Query<(Entity, &RobotConnectionState, Option<&RmiDriver>, &JogSettingsState, &FrameToolDataState), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
@@ -32,14 +35,18 @@ pub fn handle_authorized_jog_commands(
         let target_entity = event.target_entity;
 
         // Find a connected robot (in future, match by target_entity)
-        let Some((entity, _, driver, jog_settings)) = robot_query.iter()
-            .find(|(_, state, driver, _)| **state == RobotConnectionState::Connected && driver.is_some())
+        let Some((entity, _, driver, jog_settings, frame_tool_state)) = robot_query.iter()
+            .find(|(_, state, driver, _, _)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("Authorized jog rejected: No connected robot");
             continue;
         };
 
         let driver = driver.expect("Checked above");
+
+        // GAP-010: Get active frame and tool from FrameToolDataState
+        let active_uframe = frame_tool_state.active_frame as i8;
+        let active_utool = frame_tool_state.active_tool as i8;
 
         // Get speed and step from the robot's JogSettingsState
         let (speed, step) = match cmd.axis {
@@ -55,8 +62,8 @@ pub fn handle_authorized_jog_commands(
         };
 
         info!(
-            "Processing authorized JogCommand for entity {:?}: {:?} direction={:?} (using server settings: step={}, speed={})",
-            target_entity, cmd.axis, cmd.direction, step, speed
+            "Processing authorized JogCommand for entity {:?}: {:?} direction={:?} (using server settings: step={}, speed={}, uframe={}, utool={})",
+            target_entity, cmd.axis, cmd.direction, step, speed, active_uframe, active_utool
         );
 
         // Build position delta (PositionDto uses f32)
@@ -82,11 +89,12 @@ pub fn handle_authorized_jog_commands(
         }
 
         // Build instruction - use FrcLinearRelative for Cartesian jogs
+        // GAP-010: Use active frame/tool from FrameToolDataState instead of hardcoded 0
         let instruction = raw_dto::Instruction::FrcLinearRelative(raw_dto::FrcLinearRelative {
             sequence_id: 0,
             configuration: raw_dto::Configuration {
-                u_frame_number: 0,
-                u_tool_number: 0,
+                u_frame_number: active_uframe,
+                u_tool_number: active_utool,
                 turn4: 0, turn5: 0, turn6: 0,
                 front: 0, up: 0, left: 0, flip: 0,
             },
@@ -103,7 +111,8 @@ pub fn handle_authorized_jog_commands(
 
         match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
             Ok(seq) => {
-                info!("Sent authorized Cartesian jog command on {:?} with sequence {}", entity, seq);
+                info!("Sent authorized Cartesian jog command on {:?} with sequence {} (uframe={}, utool={})",
+                    entity, seq, active_uframe, active_utool);
             }
             Err(e) => {
                 error!("Failed to send jog instruction: {:?}", e);
@@ -361,6 +370,9 @@ pub fn handle_send_packet(
 ///
 /// Authorization is handled by middleware - no manual control check needed.
 /// This is a targeted request that returns a response to the client.
+///
+/// GAP-011: Speed override must be validated to be in range 1-100%.
+/// FANUC robots do not accept 0% speed override.
 pub fn handle_set_speed_override(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut events: MessageReader<AuthorizedRequest<SetSpeedOverride>>,
@@ -373,6 +385,25 @@ pub fn handle_set_speed_override(
         let event = event.clone();
         let cmd = event.get_request().clone();
         let target_entity = event.target_entity;
+
+        // GAP-011: Validate speed override range (1-100%)
+        // FANUC robots do not accept 0% speed override
+        if cmd.speed == 0 {
+            warn!("SetSpeedOverride rejected: Speed 0% is not valid (must be 1-100%)");
+            let _ = event.respond(SetSpeedOverrideResponse {
+                success: false,
+                error: Some("Speed override must be 1-100% (0% is not valid)".to_string()),
+            });
+            continue;
+        }
+        if cmd.speed > 100 {
+            warn!("SetSpeedOverride rejected: Speed {}% exceeds maximum (100%)", cmd.speed);
+            let _ = event.respond(SetSpeedOverrideResponse {
+                success: false,
+                error: Some(format!("Speed override {}% exceeds maximum (100%)", cmd.speed)),
+            });
+            continue;
+        }
 
         // Find a connected robot
         let Some((entity, _, driver)) = robot_query.iter()
@@ -388,7 +419,7 @@ pub fn handle_set_speed_override(
 
         let driver = driver.expect("Checked above");
 
-        info!("Processing authorized SetSpeedOverride for {:?} on {:?}: speed={}", target_entity, entity, cmd.speed);
+        info!("Processing authorized SetSpeedOverride for {:?} on {:?}: speed={}%", target_entity, entity, cmd.speed);
 
         // Send FrcSetOverRide command
         let command = raw_dto::Command::FrcSetOverRide(raw_dto::FrcSetOverRide { value: cmd.speed });

@@ -1544,9 +1544,32 @@ pub struct SetDefaultConfigurationResponse {
     pub error: Option<String>,
 }
 
+/// Request to save the current active configuration to the database.
+/// If `name` is provided, creates a new configuration with that name.
+/// If `name` is None and `loaded_from_id` exists, updates the existing configuration.
+/// Resets `changes_count` to 0 after successful save.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SaveConfiguration {
-    pub name: Option<String>, // If provided, saves as new config
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetRobotConfigurations"))]
+pub struct SaveCurrentConfiguration {
+    /// If provided, saves as a new configuration with this name.
+    /// If None, updates the currently loaded configuration.
+    pub name: Option<String>,
+}
+
+impl RequestMessage for SaveCurrentConfiguration {
+    type ResponseMessage = SaveCurrentConfigurationResponse;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
+pub struct SaveCurrentConfigurationResponse {
+    pub success: bool,
+    /// The ID of the saved configuration (new or updated)
+    pub configuration_id: Option<i64>,
+    /// The name of the saved configuration
+    pub configuration_name: Option<String>,
+    pub error: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

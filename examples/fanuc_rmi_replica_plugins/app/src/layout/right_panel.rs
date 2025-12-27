@@ -4,7 +4,7 @@ use leptos::prelude::*;
 use pl3xus_client::use_entity_component;
 use fanuc_replica_plugins::ConnectionState;
 
-use crate::components::{StatusPanel, PositionDisplay, JogControls, IoStatusPanel, ErrorLog};
+use crate::components::{StatusPanel, PositionDisplay, JogControls, IoStatusPanel};
 use crate::layout::LayoutContext;
 use crate::pages::dashboard::use_system_entity;
 
@@ -22,14 +22,11 @@ pub fn RightPanel() -> impl IntoView {
     view! {
         <aside class="w-56 bg-background border-l border-border/8 flex flex-col overflow-hidden shrink-0">
             <div class="flex-1 overflow-y-auto p-1.5 space-y-1.5">
-                // Robot status (compact)
+                // Robot status (compact) - includes error count display
                 <StatusPanel/>
 
                 // Position display
                 <PositionDisplay/>
-
-                // Errors panel
-                <ErrorLog/>
 
                 // I/O Status (only show when robot connected and not popped)
                 <Show when=move || robot_connected.get() && !layout_ctx.io_popped.get()>

@@ -262,13 +262,32 @@ pub struct ConnectionState {
     pub tp_initialized: bool,
 }
 
+/// A single change entry in the active config changelog.
+/// Tracks field-level changes made since the configuration was loaded.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConfigChangeEntry {
+    pub field_name: String,
+    pub old_value: String,
+    pub new_value: String,
+}
+
 /// Active configuration state (Synced 1-way: Server -> Client)
+///
+/// Tracks the currently loaded configuration and any changes made since loading.
+/// When `changes_count > 0`, the UI shows a warning and Save/Revert buttons.
+/// The `change_log` stores detailed changes for display in the save modal.
 #[cfg_attr(feature = "ecs", derive(Component))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct ActiveConfigState {
+    /// ID of the configuration this was loaded from (None if new/unsaved)
     pub loaded_from_id: Option<i64>,
+    /// Name of the configuration this was loaded from
     pub loaded_from_name: Option<String>,
+    /// Number of changes made since loading (0 = no changes)
     pub changes_count: u32,
+    /// Detailed log of each change made since loading
+    pub change_log: Vec<ConfigChangeEntry>,
+    // Current active values:
     pub u_frame_number: i32,
     pub u_tool_number: i32,
     pub front: i32,
@@ -1545,9 +1564,32 @@ pub struct SetDefaultConfigurationResponse {
     pub error: Option<String>,
 }
 
+/// Request to save the current active configuration to the database.
+/// If `name` is provided, creates a new configuration with that name.
+/// If `name` is None and `loaded_from_id` exists, updates the existing configuration.
+/// Resets `changes_count` to 0 after successful save.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SaveConfiguration {
-    pub name: Option<String>, // If provided, saves as new config
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetRobotConfigurations"))]
+pub struct SaveCurrentConfiguration {
+    /// If provided, saves as a new configuration with this name.
+    /// If None, updates the currently loaded configuration.
+    pub name: Option<String>,
+}
+
+impl RequestMessage for SaveCurrentConfiguration {
+    type ResponseMessage = SaveCurrentConfigurationResponse;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
+pub struct SaveCurrentConfigurationResponse {
+    pub success: bool,
+    /// The ID of the saved configuration (new or updated)
+    pub configuration_id: Option<i64>,
+    /// The name of the saved configuration
+    pub configuration_name: Option<String>,
+    pub error: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

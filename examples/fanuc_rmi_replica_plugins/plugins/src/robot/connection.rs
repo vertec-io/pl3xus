@@ -503,12 +503,31 @@ fn handle_disconnect_requests(
 
 /// Load the default configuration for a robot after connection.
 /// This system runs when a robot has the NeedsDefaultConfigLoad marker.
+///
+/// This will:
+/// 1. Load the default configuration from the database
+/// 2. Send FrcSetUFrameUTool command to the robot to apply frame/tool settings
+/// 3. Update the ActiveConfigState to track the loaded configuration
 fn load_default_configuration(
+    tokio_runtime: Res<TokioTasksRuntime>,
     mut commands: Commands,
     db: Option<Res<DatabaseResource>>,
-    mut robots: Query<(Entity, &NeedsDefaultConfigLoad, &mut ActiveConfigState), With<FanucRobot>>,
+    mut robots: Query<(
+        Entity,
+        &NeedsDefaultConfigLoad,
+        &mut ActiveConfigState,
+        &mut FrameToolDataState,
+        &RobotConnectionState,
+        Option<&RmiDriver>,
+    ), With<FanucRobot>>,
 ) {
-    for (entity, needs_config, mut active_config) in robots.iter_mut() {
+    use fanuc_rmi::dto as raw_dto;
+    use fanuc_rmi::packets::PacketPriority;
+
+    // Enter the Tokio runtime context so send_packet can use tokio::spawn
+    let _guard = tokio_runtime.runtime().enter();
+
+    for (entity, needs_config, mut active_config, mut ft_state, conn_state, driver) in robots.iter_mut() {
         // Remove the marker first to prevent re-running
         commands.entity(entity).remove::<NeedsDefaultConfigLoad>();
 
@@ -526,6 +545,34 @@ fn load_default_configuration(
         match db.get_default_configuration_for_robot(connection_id) {
             Ok(Some(config)) => {
                 info!("📋 Loading default configuration '{}' for connection {}", config.name, connection_id);
+
+                // Send FrcSetUFrameUTool command to robot if connected
+                if *conn_state == RobotConnectionState::Connected {
+                    if let Some(driver) = driver {
+                        let command = raw_dto::Command::FrcSetUFrameUTool(raw_dto::FrcSetUFrameUTool {
+                            group: 1,
+                            u_frame_number: config.u_frame_number as u8,
+                            u_tool_number: config.u_tool_number as u8,
+                        });
+                        let send_packet: fanuc_rmi::packets::SendPacket = raw_dto::SendPacket::Command(command).into();
+
+                        match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
+                            Ok(seq) => {
+                                info!("Sent FrcSetUFrameUTool command (frame={}, tool={}) with sequence {}",
+                                    config.u_frame_number, config.u_tool_number, seq);
+
+                                // Update FrameToolDataState (will be confirmed by next poll)
+                                ft_state.active_frame = config.u_frame_number;
+                                ft_state.active_tool = config.u_tool_number;
+                            }
+                            Err(e) => {
+                                error!("Failed to send FrcSetUFrameUTool command: {:?}", e);
+                            }
+                        }
+                    }
+                }
+
+                // Update ActiveConfigState
                 active_config.loaded_from_id = Some(config.id);
                 active_config.loaded_from_name = Some(config.name);
                 active_config.u_frame_number = config.u_frame_number;
@@ -538,6 +585,7 @@ fn load_default_configuration(
                 active_config.turn5 = config.turn5;
                 active_config.turn6 = config.turn6;
                 active_config.changes_count = 0;
+                active_config.change_log.clear();
             }
             Ok(None) => {
                 info!("No default configuration found for connection {}", connection_id);

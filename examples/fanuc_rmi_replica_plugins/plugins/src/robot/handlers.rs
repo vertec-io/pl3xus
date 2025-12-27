@@ -53,6 +53,7 @@ impl Plugin for RequestHandlerPlugin {
             DeleteConfiguration,
             SetDefaultConfiguration,
             LoadConfiguration,
+            SaveCurrentConfiguration,
         ), WS>().register();
 
         // Programs (non-targeted CRUD operations)
@@ -93,6 +94,7 @@ impl Plugin for RequestHandlerPlugin {
             handle_delete_configuration,
             handle_set_default_configuration,
             handle_load_configuration,
+            handle_save_current_configuration,
         ));
 
         // Add handler systems - Programs
@@ -444,12 +446,28 @@ fn handle_set_default_configuration(
     }
 }
 
-/// Handle LoadConfiguration request - loads a configuration and updates the active config state.
+/// Handle LoadConfiguration request - loads a configuration and applies it to the robot.
+///
+/// This handler:
+/// 1. Loads the configuration from the database
+/// 2. Sends FrcSetUFrameUTool command to the robot to apply frame/tool settings
+/// 3. Updates the ActiveConfigState to track the loaded configuration
 fn handle_load_configuration(
+    tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<Request<LoadConfiguration>>,
     db: Option<Res<DatabaseResource>>,
-    mut robot_query: Query<&mut ActiveConfigState, With<FanucRobot>>,
+    mut robot_query: Query<(
+        &mut ActiveConfigState,
+        &mut FrameToolDataState,
+        &RobotConnectionState,
+        Option<&RmiDriver>,
+    ), With<FanucRobot>>,
 ) {
+    use fanuc_rmi::dto as raw_dto;
+
+    // Enter the Tokio runtime context so send_packet can use tokio::spawn
+    let _guard = tokio_runtime.runtime().enter();
+
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling LoadConfiguration for id={}", inner.configuration_id);
@@ -463,8 +481,37 @@ fn handle_load_configuration(
             Ok(config) => {
                 info!("✅ Loaded configuration id={}", inner.configuration_id);
 
-                // Update the ActiveConfigState on the robot entity
-                for mut active_config in robot_query.iter_mut() {
+                // Find connected robot with driver
+                let robot_result = robot_query.iter_mut()
+                    .find(|(_, _, state, driver)| **state == RobotConnectionState::Connected && driver.is_some());
+
+                if let Some((mut active_config, mut ft_state, _, driver)) = robot_result {
+                    let driver = driver.expect("Checked above");
+
+                    // Send FrcSetUFrameUTool command to robot
+                    let command = raw_dto::Command::FrcSetUFrameUTool(raw_dto::FrcSetUFrameUTool {
+                        group: 1,
+                        u_frame_number: config.u_frame_number as u8,
+                        u_tool_number: config.u_tool_number as u8,
+                    });
+                    let send_packet: fanuc_rmi::packets::SendPacket = raw_dto::SendPacket::Command(command).into();
+
+                    match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
+                        Ok(seq) => {
+                            info!("Sent FrcSetUFrameUTool command (frame={}, tool={}) with sequence {}",
+                                config.u_frame_number, config.u_tool_number, seq);
+
+                            // Update FrameToolDataState (will be confirmed by next poll)
+                            ft_state.active_frame = config.u_frame_number;
+                            ft_state.active_tool = config.u_tool_number;
+                        }
+                        Err(e) => {
+                            error!("Failed to send FrcSetUFrameUTool command: {:?}", e);
+                            // Continue anyway - we still update the config state
+                        }
+                    }
+
+                    // Update the ActiveConfigState on the robot entity
                     active_config.loaded_from_id = Some(config.id);
                     active_config.u_frame_number = config.u_frame_number;
                     active_config.u_tool_number = config.u_tool_number;
@@ -476,11 +523,35 @@ fn handle_load_configuration(
                     active_config.turn5 = config.turn5;
                     active_config.turn6 = config.turn6;
                     active_config.changes_count = 0; // Reset changes count
-                }
+                    active_config.change_log.clear(); // Clear change log
 
-                LoadConfigurationResponse {
-                    success: true,
-                    error: None,
+                    LoadConfigurationResponse {
+                        success: true,
+                        error: None,
+                    }
+                } else {
+                    // No connected robot - still update config state but warn
+                    warn!("LoadConfiguration: No connected robot - configuration loaded but not applied");
+
+                    for (mut active_config, _, _, _) in robot_query.iter_mut() {
+                        active_config.loaded_from_id = Some(config.id);
+                        active_config.u_frame_number = config.u_frame_number;
+                        active_config.u_tool_number = config.u_tool_number;
+                        active_config.front = config.front;
+                        active_config.up = config.up;
+                        active_config.left = config.left;
+                        active_config.flip = config.flip;
+                        active_config.turn4 = config.turn4;
+                        active_config.turn5 = config.turn5;
+                        active_config.turn6 = config.turn6;
+                        active_config.changes_count = 0;
+                        active_config.change_log.clear();
+                    }
+
+                    LoadConfigurationResponse {
+                        success: true,
+                        error: None,
+                    }
                 }
             }
             Err(e) => {
@@ -493,6 +564,88 @@ fn handle_load_configuration(
         };
 
         if let Err(e) = request.clone().respond(response) {
+            error!("Failed to send response: {:?}", e);
+        }
+    }
+}
+
+/// Handle SaveCurrentConfiguration request - saves the active config to database.
+/// If `name` is provided, creates a new configuration.
+/// If `name` is None, updates the currently loaded configuration.
+/// Resets `changes_count` and `change_log` to empty after successful save.
+fn handle_save_current_configuration(
+    mut requests: MessageReader<Request<SaveCurrentConfiguration>>,
+    db: Option<Res<DatabaseResource>>,
+    net: Res<Network<WebSocketProvider>>,
+    mut robot_query: Query<(&mut ActiveConfigState, &ConnectionState), With<FanucRobot>>,
+) {
+    for request in requests.read() {
+        let inner = request.get_request();
+        info!("📋 Handling SaveCurrentConfiguration, name={:?}", inner.name);
+
+        // Get the active config and connection state from the robot entity
+        let query_result: Option<(ActiveConfigState, i64)> = robot_query.iter().next().and_then(|(config, conn_state)| {
+            conn_state.active_connection_id.map(|id| (config.clone(), id))
+        });
+
+        let (active_config, robot_connection_id) = match query_result {
+            Some((config, id)) => (config, id),
+            None => {
+                let response = SaveCurrentConfigurationResponse {
+                    success: false,
+                    configuration_id: None,
+                    configuration_name: None,
+                    error: Some("No robot connection active".to_string()),
+                };
+                if let Err(e) = request.clone().respond(response) {
+                    error!("Failed to send response: {:?}", e);
+                }
+                continue;
+            }
+        };
+
+        // Save to database
+        let result = db.as_ref()
+            .map(|db| db.save_current_configuration(
+                robot_connection_id,
+                active_config.loaded_from_id,
+                inner.name.clone(),
+                &active_config,
+            ))
+            .unwrap_or(Err(anyhow::anyhow!("Database not available")));
+
+        let response = match result {
+            Ok((config_id, config_name)) => {
+                info!("✅ Saved configuration id={}, name='{}'", config_id, config_name);
+
+                // Update the ActiveConfigState on the robot entity - reset changes tracking
+                for (mut active, _) in robot_query.iter_mut() {
+                    active.loaded_from_id = Some(config_id);
+                    active.loaded_from_name = Some(config_name.clone());
+                    active.changes_count = 0;
+                    active.change_log.clear();
+                }
+
+                SaveCurrentConfigurationResponse {
+                    success: true,
+                    configuration_id: Some(config_id),
+                    configuration_name: Some(config_name),
+                    error: None,
+                }
+            }
+            Err(e) => {
+                error!("❌ Failed to save configuration: {}", e);
+                SaveCurrentConfigurationResponse {
+                    success: false,
+                    configuration_id: None,
+                    configuration_name: None,
+                    error: Some(e.to_string()),
+                }
+            }
+        };
+
+        // respond_and_invalidate automatically broadcasts invalidations on success
+        if let Err(e) = request.clone().respond_and_invalidate(response, &net) {
             error!("Failed to send response: {:?}", e);
         }
     }
@@ -1447,43 +1600,138 @@ pub fn handle_get_active_frame_tool(
 
 /// Handle SetActiveFrameTool request - sets active frame and tool on robot.
 /// This is a targeted request that requires entity control.
+///
+/// This handler:
+/// 1. Sends FrcSetUFrameUTool command to the robot
+/// 2. Updates ActiveConfigState to track changes for the save functionality
+/// 3. Adds entries to the change log for display in the save modal
+///
+/// Note: FrameToolDataState is updated by polling - we don't update it directly here
+/// so that the UI reflects the actual robot state after the command is executed.
 pub fn handle_set_active_frame_tool(
+    tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<AuthorizedRequest<SetActiveFrameTool>>,
-    mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
+    mut robots: Query<(
+        &mut FrameToolDataState,
+        &mut ActiveConfigState,
+        &RobotConnectionState,
+        Option<&RmiDriver>,
+    ), With<FanucRobot>>,
 ) {
+    use fanuc_rmi::dto as raw_dto;
+
+    // Enter the Tokio runtime context so send_packet can use tokio::spawn
+    let _guard = tokio_runtime.runtime().enter();
+
     for request in requests.read() {
         let inner = request.get_request();
         info!("📋 Handling SetActiveFrameTool: uframe={}, utool={}", inner.uframe, inner.utool);
 
-        // Update synced component so all clients get the active frame/tool
-        for mut ft_state in robots.iter_mut() {
-            ft_state.active_frame = inner.uframe;
-            ft_state.active_tool = inner.utool;
-        }
+        // Find connected robot with driver
+        let Some((mut ft_state, mut active_config, _, driver)) = robots.iter_mut()
+            .find(|(_, _, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
+        else {
+            warn!("SetActiveFrameTool rejected: No connected robot");
+            let _ = request.clone().respond(SetActiveFrameToolResponse {
+                success: false,
+                error: Some("No connected robot".to_string()),
+            });
+            continue;
+        };
 
-        // TODO: Send to connected robot driver when available
-        // For now, just acknowledge success
-        let response = SetActiveFrameToolResponse { success: true, error: None };
+        let driver = driver.expect("Checked above");
+        let old_frame = ft_state.active_frame;
+        let old_tool = ft_state.active_tool;
 
-        if let Err(e) = request.clone().respond(response) {
-            error!("Failed to send response: {:?}", e);
+        // Send FrcSetUFrameUTool command to robot
+        let command = raw_dto::Command::FrcSetUFrameUTool(raw_dto::FrcSetUFrameUTool {
+            group: 1,
+            u_frame_number: inner.uframe as u8,
+            u_tool_number: inner.utool as u8,
+        });
+        let send_packet: fanuc_rmi::packets::SendPacket = raw_dto::SendPacket::Command(command).into();
+
+        match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
+            Ok(seq) => {
+                info!("Sent FrcSetUFrameUTool command with sequence {}", seq);
+
+                // Update FrameToolDataState (will be confirmed by next poll)
+                ft_state.active_frame = inner.uframe;
+                ft_state.active_tool = inner.utool;
+
+                // Update ActiveConfigState and track changes with change log entries
+                if old_frame != inner.uframe {
+                    active_config.u_frame_number = inner.uframe;
+                    active_config.changes_count += 1;
+                    active_config.change_log.push(ConfigChangeEntry {
+                        field_name: "UFrame".to_string(),
+                        old_value: format!("{}", old_frame),
+                        new_value: format!("{}", inner.uframe),
+                    });
+                    info!("📊 UFrame changed: {} -> {} (changes_count={})", old_frame, inner.uframe, active_config.changes_count);
+                }
+                if old_tool != inner.utool {
+                    active_config.u_tool_number = inner.utool;
+                    active_config.changes_count += 1;
+                    active_config.change_log.push(ConfigChangeEntry {
+                        field_name: "UTool".to_string(),
+                        old_value: format!("{}", old_tool),
+                        new_value: format!("{}", inner.utool),
+                    });
+                    info!("📊 UTool changed: {} -> {} (changes_count={})", old_tool, inner.utool, active_config.changes_count);
+                }
+
+                let _ = request.clone().respond(SetActiveFrameToolResponse { success: true, error: None });
+            }
+            Err(e) => {
+                error!("Failed to send FrcSetUFrameUTool command: {:?}", e);
+                let _ = request.clone().respond(SetActiveFrameToolResponse {
+                    success: false,
+                    error: Some(format!("Failed to send command: {:?}", e)),
+                });
+            }
         }
     }
 }
 
 /// Handle GetFrameData request - reads frame data from robot and updates synced state.
 /// This is a targeted query (no authorization required).
+///
+/// GAP-002: UFrame 0 represents world coordinates and cannot be queried.
+/// GAP-007: Now reads actual frame data from robot via FrcReadUFrameData.
 pub fn handle_get_frame_data(
+    tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<Request<TargetedRequest<GetFrameData>>>,
-    mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
+    robots: Query<(&FrameToolDataState, Option<&RmiDriver>, &RobotConnectionState), With<FanucRobot>>,
 ) {
+    use fanuc_rmi::packets::{SendPacket, Command, ResponsePacket, CommandResponse};
+    use fanuc_rmi::commands::FrcReadUFrameData;
+    use std::time::Duration;
+
+    // Enter the Tokio runtime context
+    let _guard = tokio_runtime.runtime().enter();
+
     for request in requests.read() {
         let targeted = request.get_request();
         let frame_number = targeted.request.frame_number;
         info!("📋 Handling GetFrameData for frame {} on target {}", frame_number, targeted.target_id);
 
-        // Parse target entity from bits string
-        let target = match targeted.target_id.parse::<u64>() {
+        // GAP-002: UFrame 0 cannot be queried - it represents world coordinates
+        if frame_number == 0 {
+            warn!("Cannot read UFrame 0 - world coordinates have no frame data");
+            let response = FrameDataResponse {
+                frame_number: 0,
+                x: 0.0, y: 0.0, z: 0.0,
+                w: 0.0, p: 0.0, r: 0.0,
+            };
+            if let Err(e) = request.clone().respond(response) {
+                error!("Failed to send response: {:?}", e);
+            }
+            continue;
+        }
+
+        // Parse target entity from bits string (used for entity matching in future)
+        let _target = match targeted.target_id.parse::<u64>() {
             Ok(bits) => Entity::from_bits(bits),
             Err(_) => {
                 error!("Invalid target entity: {}", targeted.target_id);
@@ -1491,154 +1739,549 @@ pub fn handle_get_frame_data(
             }
         };
 
-        // TODO: Read from connected robot driver when available
-        // For now, return mock data (zeros)
-        let frame_data = FrameToolData {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-            w: 0.0,
-            p: 0.0,
-            r: 0.0,
-        };
+        // Find connected robot with driver
+        let robot_info = robots.iter()
+            .find(|(_, driver, state)| **state == RobotConnectionState::Connected && driver.is_some());
 
-        // Update synced component on target entity so all clients get the data
-        if let Ok(mut ft_state) = robots.get_mut(target) {
-            ft_state.frames.insert(frame_number, frame_data.clone());
-        }
+        if let Some((_, Some(driver), _)) = robot_info {
+            let driver = driver.0.clone();
+            let request = request.clone();
 
-        let response = FrameDataResponse {
-            frame_number,
-            x: frame_data.x,
-            y: frame_data.y,
-            z: frame_data.z,
-            w: frame_data.w,
-            p: frame_data.p,
-            r: frame_data.r,
-        };
+            // GAP-007: Read actual frame data from robot via async call
+            tokio_runtime.spawn_background_task(move |mut ctx| async move {
+                let packet = SendPacket::Command(Command::FrcReadUFrameData(FrcReadUFrameData {
+                    frame_number: frame_number as i8,
+                    group: 1,
+                }));
 
-        if let Err(e) = request.clone().respond(response) {
-            error!("Failed to send response: {:?}", e);
+                // Subscribe before sending to avoid race condition
+                let mut response_rx = driver.response_tx.subscribe();
+
+                if let Err(e) = driver.send_packet(packet, PacketPriority::Standard) {
+                    bevy::log::error!("Failed to send FrcReadUFrameData: {}", e);
+                    let response = FrameDataResponse {
+                        frame_number,
+                        x: 0.0, y: 0.0, z: 0.0,
+                        w: 0.0, p: 0.0, r: 0.0,
+                    };
+                    let _ = request.respond(response);
+                    return;
+                }
+
+                // Wait for response with timeout
+                let result = tokio::time::timeout(Duration::from_secs(5), async {
+                    while let Ok(response) = response_rx.recv().await {
+                        if let ResponsePacket::CommandResponse(CommandResponse::FrcReadUFrameData(resp)) = response {
+                            return Some(resp);
+                        }
+                    }
+                    None
+                }).await;
+
+                match result {
+                    Ok(Some(resp)) => {
+                        if resp.error_id != 0 {
+                            bevy::log::error!("Robot error reading UFrame {}: error_id={}", frame_number, resp.error_id);
+                            let response = FrameDataResponse {
+                                frame_number,
+                                x: 0.0, y: 0.0, z: 0.0,
+                                w: 0.0, p: 0.0, r: 0.0,
+                            };
+                            let _ = request.respond(response);
+                        } else {
+                            bevy::log::info!("✅ Read UFrame {} data from robot", frame_number);
+
+                            // Update FrameToolDataState on main thread
+                            let frame_data = FrameToolData {
+                                x: resp.frame.x,
+                                y: resp.frame.y,
+                                z: resp.frame.z,
+                                w: resp.frame.w,
+                                p: resp.frame.p,
+                                r: resp.frame.r,
+                            };
+                            let frame_data_clone = frame_data.clone();
+                            let frame_num = frame_number;
+                            ctx.run_on_main_thread(move |ctx| {
+                                let mut query = ctx.world.query_filtered::<&mut FrameToolDataState, With<FanucRobot>>();
+                                for mut ft_state in query.iter_mut(ctx.world) {
+                                    ft_state.frames.insert(frame_num, frame_data_clone.clone());
+                                }
+                            }).await;
+
+                            let response = FrameDataResponse {
+                                frame_number,
+                                x: frame_data.x,
+                                y: frame_data.y,
+                                z: frame_data.z,
+                                w: frame_data.w,
+                                p: frame_data.p,
+                                r: frame_data.r,
+                            };
+                            let _ = request.respond(response);
+                        }
+                    }
+                    Ok(None) => {
+                        bevy::log::error!("No response received for UFrame {}", frame_number);
+                        let response = FrameDataResponse {
+                            frame_number,
+                            x: 0.0, y: 0.0, z: 0.0,
+                            w: 0.0, p: 0.0, r: 0.0,
+                        };
+                        let _ = request.respond(response);
+                    }
+                    Err(_) => {
+                        bevy::log::error!("Timeout waiting for UFrame {} response", frame_number);
+                        let response = FrameDataResponse {
+                            frame_number,
+                            x: 0.0, y: 0.0, z: 0.0,
+                            w: 0.0, p: 0.0, r: 0.0,
+                        };
+                        let _ = request.respond(response);
+                    }
+                }
+            });
+        } else {
+            // No connected robot - return zeros
+            warn!("GetFrameData: No connected robot");
+            let response = FrameDataResponse {
+                frame_number,
+                x: 0.0, y: 0.0, z: 0.0,
+                w: 0.0, p: 0.0, r: 0.0,
+            };
+            if let Err(e) = request.clone().respond(response) {
+                error!("Failed to send response: {:?}", e);
+            }
         }
     }
 }
 
 /// Handle WriteFrameData request - writes frame data to robot and updates synced state.
 /// This is a targeted request that requires entity control.
+///
+/// GAP-008: Now writes actual frame data to robot via FrcWriteUFrameData.
 pub fn handle_write_frame_data(
+    tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<AuthorizedRequest<WriteFrameData>>,
-    mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
+    robots: Query<(Option<&RmiDriver>, &RobotConnectionState), With<FanucRobot>>,
 ) {
+    use fanuc_rmi::packets::{SendPacket, Command, ResponsePacket, CommandResponse};
+    use fanuc_rmi::commands::FrcWriteUFrameData;
+    use fanuc_rmi::FrameData;
+    use std::time::Duration;
+
+    // Enter the Tokio runtime context
+    let _guard = tokio_runtime.runtime().enter();
+
     for request in requests.read() {
         let inner = request.get_request();
         let target = request.target_entity;
-        info!("📋 Handling WriteFrameData for frame {} on entity {:?}", inner.frame_number, target);
+        let frame_number = inner.frame_number;
+        info!("📋 Handling WriteFrameData for frame {} on entity {:?}", frame_number, target);
 
-        // Update synced component on target entity
-        let frame_data = FrameToolData {
-            x: inner.x,
-            y: inner.y,
-            z: inner.z,
-            w: inner.w,
-            p: inner.p,
-            r: inner.r,
-        };
-        if let Ok(mut ft_state) = robots.get_mut(target) {
-            ft_state.frames.insert(inner.frame_number, frame_data);
+        // UFrame 0 cannot be written - it represents world coordinates
+        if frame_number == 0 {
+            warn!("Cannot write UFrame 0 - world coordinates cannot be modified");
+            let response = WriteFrameDataResponse {
+                success: false,
+                error: Some("UFrame 0 (world coordinates) cannot be modified".to_string()),
+            };
+            if let Err(e) = request.clone().respond(response) {
+                error!("Failed to send response: {:?}", e);
+            }
+            continue;
         }
 
-        // TODO: Write to connected robot driver when available
-        // For now, just acknowledge success
-        let response = WriteFrameDataResponse { success: true, error: None };
+        // Find connected robot with driver
+        let robot_info = robots.iter()
+            .find(|(driver, state)| **state == RobotConnectionState::Connected && driver.is_some());
 
-        if let Err(e) = request.clone().respond(response) {
-            error!("Failed to send response: {:?}", e);
+        if let Some((Some(driver), _)) = robot_info {
+            let driver = driver.0.clone();
+            let request = request.clone();
+            let x = inner.x;
+            let y = inner.y;
+            let z = inner.z;
+            let w = inner.w;
+            let p = inner.p;
+            let r = inner.r;
+
+            // Write frame data to robot via async call
+            tokio_runtime.spawn_background_task(move |mut ctx| async move {
+                let packet = SendPacket::Command(Command::FrcWriteUFrameData(FrcWriteUFrameData {
+                    frame_number: frame_number as i8,
+                    frame: FrameData { x, y, z, w, p, r },
+                    group: 1,
+                }));
+
+                // Subscribe before sending to avoid race condition
+                let mut response_rx = driver.response_tx.subscribe();
+
+                if let Err(e) = driver.send_packet(packet, PacketPriority::Standard) {
+                    bevy::log::error!("Failed to send FrcWriteUFrameData: {}", e);
+                    let response = WriteFrameDataResponse {
+                        success: false,
+                        error: Some(format!("Failed to send command: {}", e)),
+                    };
+                    let _ = request.respond(response);
+                    return;
+                }
+
+                // Wait for response with timeout
+                let result = tokio::time::timeout(Duration::from_secs(5), async {
+                    while let Ok(response) = response_rx.recv().await {
+                        if let ResponsePacket::CommandResponse(CommandResponse::FrcWriteUFrameData(resp)) = response {
+                            return Some(resp);
+                        }
+                    }
+                    None
+                }).await;
+
+                match result {
+                    Ok(Some(resp)) => {
+                        if resp.error_id != 0 {
+                            bevy::log::error!("Robot error writing UFrame {}: error_id={}", frame_number, resp.error_id);
+                            let response = WriteFrameDataResponse {
+                                success: false,
+                                error: Some(format!("Robot error: {}", resp.error_id)),
+                            };
+                            let _ = request.respond(response);
+                        } else {
+                            bevy::log::info!("✅ Wrote UFrame {} data to robot", frame_number);
+
+                            // Update FrameToolDataState on main thread
+                            let frame_data = FrameToolData { x, y, z, w, p, r };
+                            let frame_num = frame_number;
+                            ctx.run_on_main_thread(move |ctx| {
+                                let mut query = ctx.world.query_filtered::<&mut FrameToolDataState, With<FanucRobot>>();
+                                for mut ft_state in query.iter_mut(ctx.world) {
+                                    ft_state.frames.insert(frame_num, frame_data.clone());
+                                }
+                            }).await;
+
+                            let response = WriteFrameDataResponse { success: true, error: None };
+                            let _ = request.respond(response);
+                        }
+                    }
+                    Ok(None) => {
+                        bevy::log::error!("No response received for WriteUFrame {}", frame_number);
+                        let response = WriteFrameDataResponse {
+                            success: false,
+                            error: Some("No response received".to_string()),
+                        };
+                        let _ = request.respond(response);
+                    }
+                    Err(_) => {
+                        bevy::log::error!("Timeout waiting for WriteUFrame {} response", frame_number);
+                        let response = WriteFrameDataResponse {
+                            success: false,
+                            error: Some("Timeout waiting for response".to_string()),
+                        };
+                        let _ = request.respond(response);
+                    }
+                }
+            });
+        } else {
+            // No connected robot
+            warn!("WriteFrameData: No connected robot");
+            let response = WriteFrameDataResponse {
+                success: false,
+                error: Some("No connected robot".to_string()),
+            };
+            if let Err(e) = request.clone().respond(response) {
+                error!("Failed to send response: {:?}", e);
+            }
         }
     }
 }
 
 /// Handle GetToolData request - reads tool data from robot and updates synced state.
 /// This is a targeted query (no authorization required).
+///
+/// GAP-009: Now reads actual tool data from robot via FrcReadUToolData.
 pub fn handle_get_tool_data(
+    tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<Request<TargetedRequest<GetToolData>>>,
-    mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
+    robots: Query<(&FrameToolDataState, Option<&RmiDriver>, &RobotConnectionState), With<FanucRobot>>,
 ) {
+    use fanuc_rmi::packets::{SendPacket, Command, ResponsePacket, CommandResponse};
+    use fanuc_rmi::commands::FrcReadUToolData;
+    use std::time::Duration;
+
+    // Enter the Tokio runtime context
+    let _guard = tokio_runtime.runtime().enter();
+
     for request in requests.read() {
         let targeted = request.get_request();
         let tool_number = targeted.request.tool_number;
         info!("📋 Handling GetToolData for tool {} on target {}", tool_number, targeted.target_id);
 
-        // Parse target entity from bits string
-        let target = match targeted.target_id.parse::<u64>() {
-            Ok(bits) => Entity::from_bits(bits),
-            Err(_) => {
-                error!("Invalid target entity: {}", targeted.target_id);
-                continue;
+        // Tool 0 is typically not valid on FANUC (tools are 1-10)
+        if tool_number <= 0 {
+            warn!("Tool number {} is invalid (must be 1-10)", tool_number);
+            let response = ToolDataResponse {
+                tool_number,
+                x: 0.0, y: 0.0, z: 0.0,
+                w: 0.0, p: 0.0, r: 0.0,
+            };
+            if let Err(e) = request.clone().respond(response) {
+                error!("Failed to send response: {:?}", e);
             }
-        };
-
-        // TODO: Read from connected robot driver when available
-        // For now, return mock data (zeros)
-        let tool_data = FrameToolData {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-            w: 0.0,
-            p: 0.0,
-            r: 0.0,
-        };
-
-        // Update synced component on target entity so all clients get the data
-        if let Ok(mut ft_state) = robots.get_mut(target) {
-            ft_state.tools.insert(tool_number, tool_data.clone());
+            continue;
         }
 
-        let response = ToolDataResponse {
-            tool_number,
-            x: tool_data.x,
-            y: tool_data.y,
-            z: tool_data.z,
-            w: tool_data.w,
-            p: tool_data.p,
-            r: tool_data.r,
-        };
+        // Find connected robot with driver
+        let robot_info = robots.iter()
+            .find(|(_, driver, state)| **state == RobotConnectionState::Connected && driver.is_some());
 
-        if let Err(e) = request.clone().respond(response) {
-            error!("Failed to send response: {:?}", e);
+        if let Some((_, Some(driver), _)) = robot_info {
+            let driver = driver.0.clone();
+            let request = request.clone();
+
+            // Read tool data from robot via async call
+            tokio_runtime.spawn_background_task(move |mut ctx| async move {
+                let packet = SendPacket::Command(Command::FrcReadUToolData(FrcReadUToolData {
+                    tool_number: tool_number as i8,
+                    group: 1,
+                }));
+
+                // Subscribe before sending to avoid race condition
+                let mut response_rx = driver.response_tx.subscribe();
+
+                if let Err(e) = driver.send_packet(packet, PacketPriority::Standard) {
+                    bevy::log::error!("Failed to send FrcReadUToolData: {}", e);
+                    let response = ToolDataResponse {
+                        tool_number,
+                        x: 0.0, y: 0.0, z: 0.0,
+                        w: 0.0, p: 0.0, r: 0.0,
+                    };
+                    let _ = request.respond(response);
+                    return;
+                }
+
+                // Wait for response with timeout
+                let result = tokio::time::timeout(Duration::from_secs(5), async {
+                    while let Ok(response) = response_rx.recv().await {
+                        if let ResponsePacket::CommandResponse(CommandResponse::FrcReadUToolData(resp)) = response {
+                            return Some(resp);
+                        }
+                    }
+                    None
+                }).await;
+
+                match result {
+                    Ok(Some(resp)) => {
+                        if resp.error_id != 0 {
+                            bevy::log::error!("Robot error reading UTool {}: error_id={}", tool_number, resp.error_id);
+                            let response = ToolDataResponse {
+                                tool_number,
+                                x: 0.0, y: 0.0, z: 0.0,
+                                w: 0.0, p: 0.0, r: 0.0,
+                            };
+                            let _ = request.respond(response);
+                        } else {
+                            bevy::log::info!("✅ Read UTool {} data from robot", tool_number);
+
+                            // Update FrameToolDataState on main thread
+                            let tool_data = FrameToolData {
+                                x: resp.frame.x,
+                                y: resp.frame.y,
+                                z: resp.frame.z,
+                                w: resp.frame.w,
+                                p: resp.frame.p,
+                                r: resp.frame.r,
+                            };
+                            let tool_data_clone = tool_data.clone();
+                            let tool_num = tool_number;
+                            ctx.run_on_main_thread(move |ctx| {
+                                let mut query = ctx.world.query_filtered::<&mut FrameToolDataState, With<FanucRobot>>();
+                                for mut ft_state in query.iter_mut(ctx.world) {
+                                    ft_state.tools.insert(tool_num, tool_data_clone.clone());
+                                }
+                            }).await;
+
+                            let response = ToolDataResponse {
+                                tool_number,
+                                x: tool_data.x,
+                                y: tool_data.y,
+                                z: tool_data.z,
+                                w: tool_data.w,
+                                p: tool_data.p,
+                                r: tool_data.r,
+                            };
+                            let _ = request.respond(response);
+                        }
+                    }
+                    Ok(None) => {
+                        bevy::log::error!("No response received for UTool {}", tool_number);
+                        let response = ToolDataResponse {
+                            tool_number,
+                            x: 0.0, y: 0.0, z: 0.0,
+                            w: 0.0, p: 0.0, r: 0.0,
+                        };
+                        let _ = request.respond(response);
+                    }
+                    Err(_) => {
+                        bevy::log::error!("Timeout waiting for UTool {} response", tool_number);
+                        let response = ToolDataResponse {
+                            tool_number,
+                            x: 0.0, y: 0.0, z: 0.0,
+                            w: 0.0, p: 0.0, r: 0.0,
+                        };
+                        let _ = request.respond(response);
+                    }
+                }
+            });
+        } else {
+            // No connected robot - return zeros
+            warn!("GetToolData: No connected robot");
+            let response = ToolDataResponse {
+                tool_number,
+                x: 0.0, y: 0.0, z: 0.0,
+                w: 0.0, p: 0.0, r: 0.0,
+            };
+            if let Err(e) = request.clone().respond(response) {
+                error!("Failed to send response: {:?}", e);
+            }
         }
     }
 }
 
 /// Handle WriteToolData request - writes tool data to robot and updates synced state.
 /// This is a targeted request that requires entity control.
+///
+/// GAP-009: Now writes actual tool data to robot via FrcWriteUToolData.
 pub fn handle_write_tool_data(
+    tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<AuthorizedRequest<WriteToolData>>,
-    mut robots: Query<&mut FrameToolDataState, With<FanucRobot>>,
+    robots: Query<(Option<&RmiDriver>, &RobotConnectionState), With<FanucRobot>>,
 ) {
+    use fanuc_rmi::packets::{SendPacket, Command, ResponsePacket, CommandResponse};
+    use fanuc_rmi::commands::FrcWriteUToolData;
+    use fanuc_rmi::FrameData;
+    use std::time::Duration;
+
+    // Enter the Tokio runtime context
+    let _guard = tokio_runtime.runtime().enter();
+
     for request in requests.read() {
         let inner = request.get_request();
         let target = request.target_entity;
-        info!("📋 Handling WriteToolData for tool {} on entity {:?}", inner.tool_number, target);
+        let tool_number = inner.tool_number;
+        info!("📋 Handling WriteToolData for tool {} on entity {:?}", tool_number, target);
 
-        // Update synced component on target entity
-        let tool_data = FrameToolData {
-            x: inner.x,
-            y: inner.y,
-            z: inner.z,
-            w: inner.w,
-            p: inner.p,
-            r: inner.r,
-        };
-        if let Ok(mut ft_state) = robots.get_mut(target) {
-            ft_state.tools.insert(inner.tool_number, tool_data);
+        // Tool 0 is typically not valid on FANUC (tools are 1-10)
+        if tool_number <= 0 {
+            warn!("Tool number {} is invalid (must be 1-10)", tool_number);
+            let response = WriteToolDataResponse {
+                success: false,
+                error: Some("Tool number must be 1-10".to_string()),
+            };
+            if let Err(e) = request.clone().respond(response) {
+                error!("Failed to send response: {:?}", e);
+            }
+            continue;
         }
 
-        // TODO: Write to connected robot driver when available
-        // For now, just acknowledge success
-        let response = WriteToolDataResponse { success: true, error: None };
+        // Find connected robot with driver
+        let robot_info = robots.iter()
+            .find(|(driver, state)| **state == RobotConnectionState::Connected && driver.is_some());
 
-        if let Err(e) = request.clone().respond(response) {
-            error!("Failed to send response: {:?}", e);
+        if let Some((Some(driver), _)) = robot_info {
+            let driver = driver.0.clone();
+            let request = request.clone();
+            let x = inner.x;
+            let y = inner.y;
+            let z = inner.z;
+            let w = inner.w;
+            let p = inner.p;
+            let r = inner.r;
+
+            // Write tool data to robot via async call
+            tokio_runtime.spawn_background_task(move |mut ctx| async move {
+                let packet = SendPacket::Command(Command::FrcWriteUToolData(FrcWriteUToolData {
+                    tool_number: tool_number as i8,
+                    frame: FrameData { x, y, z, w, p, r },
+                    group: 1,
+                }));
+
+                // Subscribe before sending to avoid race condition
+                let mut response_rx = driver.response_tx.subscribe();
+
+                if let Err(e) = driver.send_packet(packet, PacketPriority::Standard) {
+                    bevy::log::error!("Failed to send FrcWriteUToolData: {}", e);
+                    let response = WriteToolDataResponse {
+                        success: false,
+                        error: Some(format!("Failed to send command: {}", e)),
+                    };
+                    let _ = request.respond(response);
+                    return;
+                }
+
+                // Wait for response with timeout
+                let result = tokio::time::timeout(Duration::from_secs(5), async {
+                    while let Ok(response) = response_rx.recv().await {
+                        if let ResponsePacket::CommandResponse(CommandResponse::FrcWriteUToolData(resp)) = response {
+                            return Some(resp);
+                        }
+                    }
+                    None
+                }).await;
+
+                match result {
+                    Ok(Some(resp)) => {
+                        if resp.error_id != 0 {
+                            bevy::log::error!("Robot error writing UTool {}: error_id={}", tool_number, resp.error_id);
+                            let response = WriteToolDataResponse {
+                                success: false,
+                                error: Some(format!("Robot error: {}", resp.error_id)),
+                            };
+                            let _ = request.respond(response);
+                        } else {
+                            bevy::log::info!("✅ Wrote UTool {} data to robot", tool_number);
+
+                            // Update FrameToolDataState on main thread
+                            let tool_data = FrameToolData { x, y, z, w, p, r };
+                            let tool_num = tool_number;
+                            ctx.run_on_main_thread(move |ctx| {
+                                let mut query = ctx.world.query_filtered::<&mut FrameToolDataState, With<FanucRobot>>();
+                                for mut ft_state in query.iter_mut(ctx.world) {
+                                    ft_state.tools.insert(tool_num, tool_data.clone());
+                                }
+                            }).await;
+
+                            let response = WriteToolDataResponse { success: true, error: None };
+                            let _ = request.respond(response);
+                        }
+                    }
+                    Ok(None) => {
+                        bevy::log::error!("No response received for WriteUTool {}", tool_number);
+                        let response = WriteToolDataResponse {
+                            success: false,
+                            error: Some("No response received".to_string()),
+                        };
+                        let _ = request.respond(response);
+                    }
+                    Err(_) => {
+                        bevy::log::error!("Timeout waiting for WriteUTool {} response", tool_number);
+                        let response = WriteToolDataResponse {
+                            success: false,
+                            error: Some("Timeout waiting for response".to_string()),
+                        };
+                        let _ = request.respond(response);
+                    }
+                }
+            });
+        } else {
+            // No connected robot
+            warn!("WriteToolData: No connected robot");
+            let response = WriteToolDataResponse {
+                success: false,
+                error: Some("No connected robot".to_string()),
+            };
+            if let Err(e) = request.clone().respond(response) {
+                error!("Failed to send response: {:?}", e);
+            }
         }
     }
 }

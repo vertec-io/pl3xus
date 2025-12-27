@@ -147,23 +147,66 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
     // Get the system entity ID for targeting
     let system_entity_id = system_ctx.system_entity_id;
 
+    // Collapsed state
+    let (collapsed, set_collapsed) = signal(false);
+
     // Note: TargetedMutationHandle is Copy, so it can be used directly in closures
 
+    // Container class changes based on collapsed state - justify-end pushes header to bottom
+    let container_class = move || {
+        if collapsed.get() {
+            "flex flex-col justify-end h-full transition-all duration-300 ease-in-out"
+        } else {
+            "bg-background rounded border border-border/8 flex flex-col overflow-hidden h-full transition-all duration-300 ease-in-out"
+        }
+    };
+
     view! {
-        <div class="bg-background rounded border border-border/8 flex flex-col overflow-hidden">
-            <div class="flex items-center justify-between p-2 border-b border-border/8 shrink-0">
-                <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center">
-                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        <div class=container_class>
+            // Header - clickable to toggle collapse
+            <button
+                class=move || format!(
+                    "flex items-center justify-between p-2 shrink-0 hover:bg-card/50 transition-all duration-300 w-full text-left bg-background rounded border border-border/8 {}",
+                    if collapsed.get() { "" } else { "border-b" }
+                )
+                on:click=move |_| set_collapsed.update(|c| *c = !*c)
+            >
+                <div class="flex items-center gap-2">
+                    // Collapse indicator
+                    <svg
+                        class=move || format!("w-3 h-3 text-muted-foreground transition-transform duration-300 {}", if collapsed.get() { "" } else { "rotate-90" })
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                     </svg>
-                    {move || loaded_name().unwrap_or_else(|| "Program".to_string())}
-                </h3>
+                    <h3 class="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        {move || loaded_name().unwrap_or_else(|| "Program".to_string())}
+                    </h3>
+                    // Badge when collapsed showing line count and state
+                    <Show when=move || collapsed.get()>
+                        <span class="text-[8px] text-muted-foreground font-mono">
+                            {move || format!("{} lines", lines().len())}
+                        </span>
+                        <Show when=move || is_active()>
+                            <span class=move || format!("text-[8px] px-1.5 rounded-full font-mono {}",
+                                if is_paused() { "bg-warning/20 text-warning" } else { "bg-success/20 text-success" }
+                            )>
+                                {move || if is_paused() { "paused" } else { "running" }}
+                            </span>
+                        </Show>
+                    </Show>
+                </div>
                 // === Server-Driven Action Buttons ===
                 // Button visibility is determined entirely by server's can_* flags.
-                <div class="flex items-center gap-1">
-                    <span class="text-[8px] text-muted-foreground mr-1">
-                        {move || format!("{} lines", lines().len())}
-                    </span>
+                <div class="flex items-center gap-1" on:click=move |ev| ev.stop_propagation()>
+                    <Show when=move || !collapsed.get()>
+                        <span class="text-[8px] text-muted-foreground mr-1">
+                            {move || format!("{} lines", lines().len())}
+                        </span>
+                    </Show>
                     // Load button - server tells us when loading is available
                     <Show when=can_load>
                         <button
@@ -243,8 +286,9 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                         </button>
                     </Show>
                 </div>
-            </div>
-            // Progress bar - show when program is active (running or paused)
+            </button>
+            // Progress bar - always visible when program is active (running or paused)
+            // This allows users to see progress even when panel is collapsed
             <Show when=move || is_active() && (total_lines() > 0)>
                 <ProgramProgressBar
                     current_line=Signal::derive(move || executing().max(0) as usize)
@@ -252,10 +296,13 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                     is_paused=Signal::derive(move || is_paused())
                 />
             </Show>
-            <ProgramTable
-                lines=Signal::derive(move || lines())
-                executing=Signal::derive(move || executing())
-            />
+            // Table content - only shown when expanded
+            <Show when=move || !collapsed.get()>
+                <ProgramTable
+                    lines=Signal::derive(move || lines())
+                    executing=Signal::derive(move || executing())
+                />
+            </Show>
         </div>
 
         // Load Program Modal

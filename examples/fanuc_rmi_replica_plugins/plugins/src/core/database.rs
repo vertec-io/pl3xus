@@ -605,6 +605,75 @@ impl DatabaseResource {
         Ok(())
     }
 
+    /// Save the current active configuration to the database.
+    /// If `name` is provided, creates a new configuration with that name.
+    /// If `name` is None and `loaded_from_id` is Some, updates the existing configuration.
+    /// Returns (config_id, config_name) on success.
+    pub fn save_current_configuration(
+        &self,
+        robot_connection_id: i64,
+        loaded_from_id: Option<i64>,
+        name: Option<String>,
+        active_config: &ActiveConfigState,
+    ) -> anyhow::Result<(i64, String)> {
+        let conn = self.0.lock().unwrap();
+
+        if let Some(new_name) = name {
+            // Create a new configuration
+            conn.execute(
+                "INSERT INTO robot_configurations
+                 (robot_connection_id, name, is_default, u_frame_number, u_tool_number,
+                  front, up, left, flip, turn4, turn5, turn6)
+                 VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                rusqlite::params![
+                    robot_connection_id,
+                    new_name,
+                    active_config.u_frame_number,
+                    active_config.u_tool_number,
+                    active_config.front,
+                    active_config.up,
+                    active_config.left,
+                    active_config.flip,
+                    active_config.turn4,
+                    active_config.turn5,
+                    active_config.turn6,
+                ],
+            )?;
+            let new_id = conn.last_insert_rowid();
+            Ok((new_id, new_name))
+        } else if let Some(existing_id) = loaded_from_id {
+            // Update the existing configuration
+            conn.execute(
+                "UPDATE robot_configurations SET
+                 u_frame_number = ?, u_tool_number = ?,
+                 front = ?, up = ?, left = ?, flip = ?,
+                 turn4 = ?, turn5 = ?, turn6 = ?
+                 WHERE id = ?",
+                rusqlite::params![
+                    active_config.u_frame_number,
+                    active_config.u_tool_number,
+                    active_config.front,
+                    active_config.up,
+                    active_config.left,
+                    active_config.flip,
+                    active_config.turn4,
+                    active_config.turn5,
+                    active_config.turn6,
+                    existing_id,
+                ],
+            )?;
+            // Get the name of the updated configuration
+            let config_name: String = conn.query_row(
+                "SELECT name FROM robot_configurations WHERE id = ?",
+                [existing_id],
+                |row| row.get(0),
+            )?;
+            Ok((existing_id, config_name))
+        } else {
+            anyhow::bail!("No configuration name provided and no configuration is currently loaded")
+        }
+    }
+
     // ==================== Programs ====================
     pub fn list_programs(&self) -> anyhow::Result<Vec<ProgramInfo>> {
         let conn = self.0.lock().unwrap();

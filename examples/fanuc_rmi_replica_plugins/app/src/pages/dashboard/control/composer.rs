@@ -417,23 +417,7 @@ pub fn CommandComposerModal() -> impl IntoView {
 
                     // Motion Parameters
                     <div class="grid grid-cols-2 gap-3">
-                        <div class="space-y-1">
-                            <label class="text-[10px] text-muted-foreground uppercase tracking-wide">"Speed"</label>
-                            <div class="flex">
-                                <input
-                                    type="text"
-                                    inputmode="decimal"
-                                    class="flex-1 bg-card border border-border/8 rounded-l px-2 py-1.5 text-[11px] text-foreground focus:border-primary focus:outline-none text-center"
-                                    prop:value=move || format!("{:.1}", speed.get())
-                                    on:input=move |ev| {
-                                        if let Ok(v) = event_target_value(&ev).parse::<f64>() {
-                                            set_speed.set(v);
-                                        }
-                                    }
-                                />
-                                <span class="bg-popover border border-l-0 border-border/8 rounded-r px-2 py-1.5 text-[9px] text-muted-foreground">"mm/s"</span>
-                            </div>
-                        </div>
+                        <SpeedInput speed=speed set_speed=set_speed />
                         <div class="space-y-1">
                             <label class="text-[10px] text-muted-foreground uppercase tracking-wide">"Termination"</label>
                             <select
@@ -543,6 +527,94 @@ where
                     }
                 />
                 <span class="bg-popover border border-l-0 border-border/8 rounded-r px-1 py-1 text-[8px] text-muted-foreground">{unit}</span>
+            </div>
+        </div>
+    }
+}
+
+
+/// Speed input field with proper cursor handling.
+/// - Typing doesn't cause cursor to jump
+/// - Enter key applies the value
+/// - Blur reverts to the last confirmed value (before editing started)
+#[component]
+fn SpeedInput(
+    speed: ReadSignal<f64>,
+    set_speed: WriteSignal<f64>,
+) -> impl IntoView {
+    // Local text state for editing
+    let (text, set_text) = signal(format!("{:.1}", speed.get_untracked()));
+    // Track if user is actively editing (focused)
+    let (is_editing, set_is_editing) = signal(false);
+    // Store the value when user started editing (for revert on blur)
+    let (edit_start_value, set_edit_start_value) = signal(speed.get_untracked());
+    // Track the last value we synced to, to detect external changes
+    let (last_synced_value, set_last_synced_value) = signal(speed.get_untracked());
+
+    // Sync text when value changes externally (not from our own input)
+    Effect::new(move |_| {
+        let v = speed.get();
+        let last = last_synced_value.get_untracked();
+        // Only update text if not editing AND value changed externally
+        if !is_editing.get_untracked() && (v - last).abs() > 0.0001 {
+            set_text.set(format!("{:.1}", v));
+            set_last_synced_value.set(v);
+        }
+    });
+
+    view! {
+        <div class="space-y-1">
+            <label class="text-[10px] text-muted-foreground uppercase tracking-wide">"Speed"</label>
+            <div class="flex">
+                <input
+                    type="text"
+                    inputmode="decimal"
+                    class="flex-1 bg-card border border-border/8 rounded-l px-2 py-1.5 text-[11px] text-foreground focus:border-primary focus:outline-none text-center"
+                    prop:value=move || text.get()
+                    on:focus=move |_| {
+                        set_is_editing.set(true);
+                        set_edit_start_value.set(speed.get_untracked());
+                    }
+                    on:blur=move |_| {
+                        set_is_editing.set(false);
+                        // Revert to the value before editing started
+                        let revert_value = edit_start_value.get_untracked();
+                        set_speed.set(revert_value);
+                        set_text.set(format!("{:.1}", revert_value));
+                        set_last_synced_value.set(revert_value);
+                    }
+                    on:keydown=move |ev: web_sys::KeyboardEvent| {
+                        if ev.key() == "Enter" {
+                            // Apply the current text value
+                            let current_text = text.get_untracked();
+                            if let Ok(v) = current_text.parse::<f64>() {
+                                set_speed.set(v);
+                                set_edit_start_value.set(v); // Update so blur doesn't revert
+                                set_last_synced_value.set(v);
+                            }
+                            // Blur to exit edit mode
+                            if let Some(target) = ev.target() {
+                                if let Ok(el) = target.dyn_into::<web_sys::HtmlElement>() {
+                                    let _ = el.blur();
+                                }
+                            }
+                        } else if ev.key() == "Escape" {
+                            // Revert and blur
+                            if let Some(target) = ev.target() {
+                                if let Ok(el) = target.dyn_into::<web_sys::HtmlElement>() {
+                                    let _ = el.blur();
+                                }
+                            }
+                        }
+                    }
+                    on:input=move |ev| {
+                        let s = event_target_value(&ev);
+                        set_text.set(s.clone());
+                        // Parse but don't commit to the signal - only update on Enter
+                        // This allows typing freely without affecting the form state
+                    }
+                />
+                <span class="bg-popover border border-l-0 border-border/8 rounded-r px-2 py-1.5 text-[9px] text-muted-foreground">"mm/s"</span>
             </div>
         </div>
     }

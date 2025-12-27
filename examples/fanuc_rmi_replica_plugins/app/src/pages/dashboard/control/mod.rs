@@ -1,7 +1,7 @@
 //! Dashboard Control tab - Robot control and program execution.
 //!
-//! Contains components for quick commands, command composition,
-//! console logging, program execution visualization, and joint jogging.
+//! Contains components for quick commands (consolidated with recent commands and speed),
+//! command composition, console logging, program execution visualization, and joint jogging.
 
 mod quick_commands;
 mod command_input;
@@ -10,14 +10,18 @@ mod program_display;
 mod load_modal;
 mod composer;
 mod joint_jog;
+mod jog_io_tabs;
 
 pub use quick_commands::QuickCommandsPanel;
+// CommandInputSection is now consolidated into QuickCommandsPanel
+#[allow(unused_imports)]
 pub use command_input::CommandInputSection;
 pub use command_log::CommandLogPanel;
 pub use program_display::ProgramVisualDisplay;
 pub use load_modal::LoadProgramModal;
 pub use composer::CommandComposerModal;
 pub use joint_jog::JointJogPanel;
+pub use jog_io_tabs::JogIoTabs;
 
 use leptos::prelude::*;
 use pl3xus_client::use_entity_component;
@@ -40,18 +44,15 @@ pub fn ControlTab() -> impl IntoView {
 
     view! {
         <div class="h-full flex flex-col gap-2">
-            // Quick Commands section
+            // Consolidated Commands section (quick actions + recent commands + speed override)
             <QuickCommandsPanel/>
 
-            // Command input section
-            <CommandInputSection/>
-
-            // Joint Jog Panel (only show when connected to robot)
+            // Tabbed Jog/IO Panel (only show when connected to robot)
             <Show when=move || robot_connected.get()>
-                <JointJogPanel/>
+                <JogIoTabs/>
             </Show>
 
-            // Two-column layout for Command Log and Program Display
+            // Two-column layout for Command Log and Program Display (both collapsible)
             <div class="flex-1 grid grid-cols-2 gap-2 min-h-0">
                 <CommandLogPanel/>
                 <ProgramVisualDisplay/>

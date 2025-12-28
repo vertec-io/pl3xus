@@ -5,10 +5,15 @@
 //! - Dropdown to switch between saved configurations
 //! - Revert button to reload the current configuration (discarding changes)
 //! - Save button to persist changes to database (update existing or save as new)
+//! - Sync status indicator showing if robot values match configuration
+//! - Retry button when sync fails
 
 use leptos::prelude::*;
-use pl3xus_client::{use_entity_component, use_query_keyed, use_mutation};
-use fanuc_replica_plugins::{ConnectionState, ActiveConfigState, GetRobotConfigurations, LoadConfiguration, SaveCurrentConfiguration};
+use pl3xus_client::{use_entity_component, use_query_keyed, use_mutation, use_mutation_targeted};
+use fanuc_replica_plugins::{
+    ConnectionState, ActiveConfigState, ActiveConfigSyncState, ConfigSyncStatus,
+    GetRobotConfigurations, LoadConfiguration, SaveCurrentConfiguration, SetActiveFrameTool,
+};
 use crate::components::use_toast;
 use crate::pages::dashboard::use_system_entity;
 
@@ -22,8 +27,20 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
     // ConnectionState lives on robot entity, not system entity
     let (connection_state, robot_exists) = use_entity_component::<ConnectionState, _>(move || system_ctx.robot_entity_id.get());
     let (active_config, _) = use_entity_component::<ActiveConfigState, _>(move || system_ctx.robot_entity_id.get());
+    let (sync_state, _) = use_entity_component::<ActiveConfigSyncState, _>(move || system_ctx.robot_entity_id.get());
 
     let robot_connected = Memo::new(move |_| robot_exists.get() && connection_state.get().robot_connected);
+
+    // Retry sync - sends SetActiveFrameTool to force resync
+    let (retry_pending, set_retry_pending) = signal(false);
+    let retry_sync = use_mutation_targeted::<SetActiveFrameTool>(move |result| {
+        set_retry_pending.set(false);
+        match result {
+            Ok(r) if r.success => toast.success("Sync retry sent - waiting for confirmation"),
+            Ok(r) => toast.error(format!("Retry failed: {}", r.error.as_deref().unwrap_or(""))),
+            Err(e) => toast.error(format!("Retry error: {e}")),
+        }
+    });
 
     // Get active connection ID (only valid when robot exists)
     let active_connection_id = Memo::new(move |_| if robot_exists.get() { connection_state.get().active_connection_id } else { None });
@@ -151,9 +168,45 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
                             </Show>
                         </div>
 
-                        // Current UFrame/UTool display (read-only)
+                        // Current UFrame/UTool display with sync status
                         <div class="bg-card rounded p-2 border border-border/8">
-                            <div class="text-[9px] text-muted-foreground mb-1">"Active Frame/Tool"</div>
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[9px] text-muted-foreground">"Active Frame/Tool"</span>
+                                // Sync status indicator
+                                {move || {
+                                    let state = sync_state.get();
+                                    match state.status {
+                                        ConfigSyncStatus::Synced => view! {
+                                            <span class="flex items-center gap-1 text-[8px] text-success">
+                                                <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                                </svg>
+                                                "Synced"
+                                            </span>
+                                        }.into_any(),
+                                        ConfigSyncStatus::Mismatch | ConfigSyncStatus::Retrying => view! {
+                                            <span class="flex items-center gap-1 text-[8px] text-warning">
+                                                <svg class="w-2.5 h-2.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                                </svg>
+                                                {if state.status == ConfigSyncStatus::Retrying {
+                                                    format!("Syncing ({}/{})", state.retry_count, state.max_retries)
+                                                } else {
+                                                    "Syncing...".to_string()
+                                                }}
+                                            </span>
+                                        }.into_any(),
+                                        ConfigSyncStatus::Failed => view! {
+                                            <span class="flex items-center gap-1 text-[8px] text-destructive">
+                                                <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                                </svg>
+                                                "Sync Failed"
+                                            </span>
+                                        }.into_any(),
+                                    }
+                                }}
+                            </div>
                             <div class="flex gap-4 text-[10px]">
                                 <div class="flex items-center gap-1">
                                     <span class="text-muted-foreground">"UFrame:"</span>
@@ -164,6 +217,32 @@ pub fn ActiveConfigurationPanel() -> impl IntoView {
                                     <span class="text-primary font-medium">{move || config.get().u_tool_number}</span>
                                 </div>
                             </div>
+
+                            // Error message and retry button when sync failed
+                            <Show when=move || sync_state.get().status == ConfigSyncStatus::Failed>
+                                <div class="mt-2 p-2 bg-destructive/10 border border-destructive/30 rounded">
+                                    <p class="text-[9px] text-destructive mb-1">
+                                        {move || sync_state.get().error_message.clone().unwrap_or_else(|| "Sync failed after multiple attempts".to_string())}
+                                    </p>
+                                    <button
+                                        class="px-2 py-0.5 text-[9px] bg-destructive/20 text-destructive border border-destructive/50 rounded hover:bg-destructive/30 disabled:opacity-50"
+                                        disabled=move || retry_pending.get()
+                                        on:click=move |_| {
+                                            if let Some(entity_bits) = system_ctx.robot_entity_id.get() {
+                                                let cfg = config.get();
+                                                set_retry_pending.set(true);
+                                                retry_sync.send(entity_bits, SetActiveFrameTool {
+                                                    uframe: cfg.u_frame_number,
+                                                    utool: cfg.u_tool_number,
+                                                });
+                                            }
+                                        }
+                                    >
+                                        {move || if retry_pending.get() { "Retrying..." } else { "Retry Sync" }}
+                                    </button>
+                                </div>
+                            </Show>
+
                             <div class="text-[8px] text-muted-foreground mt-1">
                                 "Use panels below to change"
                             </div>

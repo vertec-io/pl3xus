@@ -2,7 +2,13 @@
 resolver = "2"
 members = [
     "app",
+    "duet_simulator",
     "plugins",
+    "plugins/core",
+    "plugins/duet",
+    "plugins/execution",
+    "plugins/fanuc",
+    "plugins/robotics",
     "server",
 ]
 
@@ -20,6 +26,14 @@ pl3xus_sync = { path = "../../crates/pl3xus_sync" }
 pl3xus_macros = { path = "../../crates/pl3xus_macros" }
 pl3xus_websockets = { path = "../../crates/pl3xus_websockets" }
 
+# Plugin crates (all under plugins/)
+# IMPORTANT: default-features = false to allow WASM builds to disable server features
+fanuc_replica_core = { path = "plugins/core", default-features = false }
+fanuc_replica_robotics = { path = "plugins/robotics" }
+fanuc_replica_execution = { path = "plugins/execution", default-features = false }
+fanuc_replica_duet = { path = "plugins/duet", default-features = false }
+fanuc_replica_fanuc = { path = "plugins/fanuc", default-features = false }
+
 # Common dependencies
 bevy = { version = "0.17", default-features = false }
 bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_tasks" }
@@ -30,4 +44,7 @@ tokio = { version = "1.28", features = ["full"] }
 leptos = { version = "0.8" }
 leptos_router = { version = "0.8" }
 reactive_stores = { version = "0.2" }
+
+# Utilities
+cfg-if = "1.0"
 

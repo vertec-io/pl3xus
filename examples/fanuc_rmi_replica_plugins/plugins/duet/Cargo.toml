@@ -1,0 +1,38 @@
+[package]
+name = "fanuc_replica_duet"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Duet extruder plugin for coordinated extrusion control"
+
+[features]
+default = ["ecs", "server"]
+
+# ECS feature - enables Bevy Component derives
+ecs = [
+    "dep:bevy",
+]
+
+# Server feature - enables server-only functionality (HTTP client, systems)
+server = [
+    "ecs",
+    "dep:tokio",
+    "dep:reqwest",
+    "dep:urlencoding",
+]
+
+[dependencies]
+# Always available
+serde.workspace = true
+
+# Execution plugin for shared types
+fanuc_replica_execution.workspace = true
+
+# ECS feature dependencies
+bevy = { workspace = true, features = ["multi_threaded", "bevy_log"], optional = true }
+
+# Server feature dependencies
+tokio = { workspace = true, optional = true }
+reqwest = { version = "0.12", features = ["json"], optional = true }
+urlencoding = { version = "2", optional = true }
+

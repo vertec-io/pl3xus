@@ -7,6 +7,8 @@
 //! - I/O status and configuration
 //! - Jog commands and motion
 //! - Database operations for robot data
+//!
+//! Note: FANUC-specific motion handling is in the `fanuc_replica_fanuc` crate.
 
 pub mod types;
 

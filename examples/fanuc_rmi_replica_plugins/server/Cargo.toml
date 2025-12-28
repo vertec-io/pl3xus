@@ -4,9 +4,24 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[features]
+default = ["duet"]
+
+# Enable Duet extruder support
+duet = ["dep:fanuc_replica_duet"]
+
 [dependencies]
 # Import plugins with full server features
 fanuc_replica_plugins = { path = "../plugins", features = ["ecs", "server"] }
+
+# Execution plugin for coordinated multi-device execution
+fanuc_replica_execution = { workspace = true, features = ["ecs", "server"] }
+
+# FANUC-specific motion handling
+fanuc_replica_fanuc = { workspace = true, features = ["ecs", "server"] }
+
+# Duet extruder plugin (optional)
+fanuc_replica_duet = { workspace = true, features = ["ecs", "server"], optional = true }
 
 # Re-export fanuc_rmi with full features for the server binary
 fanuc_rmi = { workspace = true, features = ["driver", "logging", "DTO"] }

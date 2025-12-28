@@ -14,6 +14,10 @@ ecs = [
     "dep:pl3xus_macros",
     "dep:pl3xus",
     "dep:pl3xus_common",
+    "dep:fanuc_replica_core",
+    "dep:fanuc_replica_fanuc",
+    "fanuc_replica_core/ecs",
+    "fanuc_replica_fanuc/ecs",
 ]
 
 # Server feature - enables server-only functionality (driver, database, tokio)
@@ -26,21 +30,38 @@ server = [
     "dep:anyhow",
     "dep:pl3xus_websockets",
     "dep:bevy-tokio-tasks",
+    "dep:fanuc_replica_execution",
+    "fanuc_replica_core/server",
+    "fanuc_replica_fanuc/server",
+    "fanuc_replica_execution/server",
+]
+
+# Duet feature - enables Duet extruder support
+duet = [
+    "server",
+    "dep:fanuc_replica_duet",
+    "fanuc_replica_duet/server",
 ]
 
 # Stores feature - enables reactive stores for client-side fine-grained reactivity
 stores = [
     "dep:reactive_stores",
     "dep:pl3xus_common",
+    "dep:fanuc_replica_fanuc",
+    "fanuc_replica_fanuc/stores",
 ]
 
 [dependencies]
 # Always available
 serde.workspace = true
+cfg-if.workspace = true
 
 # Fanuc RMI types - always available with DTO feature
 # Server feature enables driver/logging features
 fanuc_rmi = { workspace = true, features = ["DTO"], default-features = false }
+
+# Robot-agnostic coordinate types
+fanuc_replica_robotics.workspace = true
 
 # ECS feature dependencies
 bevy = { workspace = true, features = ["multi_threaded", "bevy_log"], optional = true }
@@ -55,6 +76,12 @@ rusqlite = { version = "0.31", features = ["bundled"], optional = true }
 anyhow = { version = "1.0", optional = true }
 pl3xus_websockets = { workspace = true, optional = true }
 bevy-tokio-tasks = { workspace = true, optional = true }
+
+# Plugin crates (feature-gated, default-features = false to avoid pulling in server deps for WASM)
+fanuc_replica_core = { workspace = true, optional = true, default-features = false }
+fanuc_replica_fanuc = { workspace = true, optional = true, default-features = false }
+fanuc_replica_duet = { workspace = true, optional = true, default-features = false }
+fanuc_replica_execution = { workspace = true, optional = true, default-features = false }
 
 # Stores feature dependencies (client-side)
 reactive_stores = { workspace = true, optional = true }

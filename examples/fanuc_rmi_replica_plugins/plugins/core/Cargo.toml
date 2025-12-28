@@ -1,0 +1,54 @@
+[package]
+name = "fanuc_replica_core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Core infrastructure plugin: database resource, networking, ActiveSystem"
+
+[features]
+default = ["ecs", "server"]
+
+# ECS feature - enables Bevy Component derives
+ecs = [
+    "dep:bevy",
+    "dep:pl3xus",
+    "dep:pl3xus_common",
+    "dep:pl3xus_sync",
+]
+
+# Server feature - enables server-only functionality
+server = [
+    "ecs",
+    "dep:tokio",
+    "dep:rusqlite",
+    "dep:anyhow",
+    "dep:pl3xus_websockets",
+    "dep:bevy-tokio-tasks",
+]
+
+# Stores feature - enables reactive stores for client-side
+stores = [
+    "dep:reactive_stores",
+    "dep:pl3xus_common",
+]
+
+[dependencies]
+# Always available
+serde.workspace = true
+
+# ECS feature dependencies
+bevy = { workspace = true, features = ["multi_threaded", "bevy_log"], optional = true }
+pl3xus = { workspace = true, optional = true }
+pl3xus_common = { workspace = true, optional = true }
+pl3xus_sync = { workspace = true, features = ["runtime"], optional = true }
+
+# Server feature dependencies
+tokio = { workspace = true, optional = true }
+rusqlite = { version = "0.31", features = ["bundled"], optional = true }
+anyhow = { version = "1.0", optional = true }
+pl3xus_websockets = { workspace = true, optional = true }
+bevy-tokio-tasks = { workspace = true, optional = true }
+
+# Stores feature dependencies (client-side)
+reactive_stores = { workspace = true, optional = true }
+

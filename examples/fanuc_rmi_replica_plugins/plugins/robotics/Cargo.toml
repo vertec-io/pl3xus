@@ -1,0 +1,13 @@
+[package]
+name = "fanuc_replica_robotics"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Robot-agnostic coordinate types and conversion utilities for pl3xus robotics applications"
+
+[dependencies]
+nalgebra = { version = "0.33", features = ["serde-serialize"] }
+serde = { version = "1.0", features = ["derive"] }
+
+# Note: FANUC-specific conversions are in fanuc_replica_fanuc crate
+

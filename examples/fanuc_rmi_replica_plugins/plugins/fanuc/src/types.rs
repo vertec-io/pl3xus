@@ -299,6 +299,51 @@ pub struct ActiveConfigState {
     pub turn6: i32,
 }
 
+/// Tracks synchronization state between ActiveConfigState and the actual robot.
+///
+/// When a user sets active frame/tool, we need to verify the robot accepted the change.
+/// Polling detects mismatches and triggers resync attempts.
+#[cfg_attr(feature = "ecs", derive(Component))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct ActiveConfigSyncState {
+    /// Current sync status
+    pub status: ConfigSyncStatus,
+    /// Number of consecutive sync attempts made
+    pub retry_count: u32,
+    /// Maximum retries before giving up (default: 3)
+    pub max_retries: u32,
+    /// When true, a sync operation is currently in progress (prevent concurrent syncs)
+    pub sync_in_progress: bool,
+    /// Human-readable error message if sync failed
+    pub error_message: Option<String>,
+}
+
+impl ActiveConfigSyncState {
+    pub fn new() -> Self {
+        Self {
+            status: ConfigSyncStatus::Synced,
+            retry_count: 0,
+            max_retries: 3,
+            sync_in_progress: false,
+            error_message: None,
+        }
+    }
+}
+
+/// Status of active config synchronization with robot.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub enum ConfigSyncStatus {
+    /// Robot values match ActiveConfigState values
+    #[default]
+    Synced,
+    /// Robot values differ from ActiveConfigState, will attempt resync
+    Mismatch,
+    /// Currently retrying to sync values to robot
+    Retrying,
+    /// Sync failed after max retries - user intervention required
+    Failed,
+}
+
 /// Active jog settings state (Synced 1-way: Server -> Client)
 #[cfg_attr(feature = "ecs", derive(Component))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -1988,7 +2033,7 @@ pub mod robotics {
     };
 
     #[cfg(feature = "server")]
-    pub use fanuc_replica_fanuc::{
+    pub use crate::{
         FanucConversion, isometry_to_position, position_to_isometry,
     };
 }

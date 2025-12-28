@@ -141,10 +141,10 @@ fn ToastContainer(ctx: ToastContext) -> impl IntoView {
 #[component]
 fn ToastItem(toast: Toast, on_dismiss: impl Fn() + 'static) -> impl IntoView {
     let (bg_class, icon) = match toast.toast_type {
-        ToastType::Success => ("bg-[#22c55e20] border-[#22c55e40] text-success", "✓"),
-        ToastType::Error => ("bg-destructive/15 border-destructive/25 text-destructive", "✕"),
-        ToastType::Warning => ("bg-[#f59e0b20] border-[#f59e0b40] text-warning", "⚠"),
-        ToastType::Info => ("bg-[#00d9ff20] border-[#00d9ff40] text-primary", "ℹ"),
+        ToastType::Success => ("bg-success/30 border-succes/50 text-success", "✓"),
+        ToastType::Error => ("bg-destructive/30 border-destructive/50 text-destructive", "✕"),
+        ToastType::Warning => ("bg-warning/30 border-warning/50 text-warning", "⚠"),
+        ToastType::Info => ("bg-accent/30 border-accent/50 text-primary", "ℹ"),
     };
 
     view! {

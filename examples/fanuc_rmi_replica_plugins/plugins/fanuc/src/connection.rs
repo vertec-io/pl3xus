@@ -563,7 +563,7 @@ fn load_default_configuration(
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
 
-    for (entity, needs_config, mut active_config, mut ft_state, conn_state, driver) in robots.iter_mut() {
+    for (entity, needs_config, mut active_config, _ft_state, conn_state, driver) in robots.iter_mut() {
         // Remove the marker first to prevent re-running
         commands.entity(entity).remove::<NeedsDefaultConfigLoad>();
 
@@ -596,15 +596,14 @@ fn load_default_configuration(
 
                         match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
                             Ok(seq) => {
-                                info!("Sent FrcSetUFrameUTool command (frame={}, tool={}) with sequence {}",
+                                info!("📤 Sent default FrcSetUFrameUTool command (frame={}, tool={}) with sequence {}",
                                     config.u_frame_number, config.u_tool_number, seq);
 
-                                // Update FrameToolDataState (will be confirmed by next poll)
-                                ft_state.active_frame = config.u_frame_number;
-                                ft_state.active_tool = config.u_tool_number;
+                                // DO NOT update FrameToolDataState here - let polling confirm from robot
+                                // This ensures UI shows actual robot state, not optimistic/stale values
                             }
                             Err(e) => {
-                                error!("Failed to send FrcSetUFrameUTool command: {:?}", e);
+                                error!("❌ Failed to send FrcSetUFrameUTool command: {:?}", e);
                             }
                         }
                     }

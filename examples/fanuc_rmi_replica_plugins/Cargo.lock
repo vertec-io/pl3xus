@@ -455,6 +455,7 @@ dependencies = [
 [[package]]
 name = "bevy-tokio-tasks"
 version = "0.17.0"
+source = "git+https://github.com/vertec-io/async_bevy_web.git#a380e9d4633442ca0003b07dfc2873aa71fe4be7"
 dependencies = [
  "bevy",
  "tokio",

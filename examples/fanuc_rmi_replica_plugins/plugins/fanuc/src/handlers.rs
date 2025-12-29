@@ -749,7 +749,7 @@ pub fn handle_set_active_frame_tool(
         info!("📋 Handling SetActiveFrameTool: uframe={}, utool={}", inner.uframe, inner.utool);
 
         // Find connected robot with driver
-        let Some((mut ft_state, mut active_config, _, driver)) = robots.iter_mut()
+        let Some((_ft_state, mut active_config, _, driver)) = robots.iter_mut()
             .find(|(_, _, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("SetActiveFrameTool rejected: No connected robot");
@@ -772,15 +772,15 @@ pub fn handle_set_active_frame_tool(
         });
         let send_packet: fanuc_rmi::packets::SendPacket = raw_dto::SendPacket::Command(command).into();
 
+        info!("📤 SetActiveFrameTool: Sending FrcSetUFrameUTool with UFrame={}, UTool={}", inner.uframe, inner.utool);
+
         match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
             Ok(seq) => {
-                info!("Sent FrcSetUFrameUTool command with sequence {}", seq);
+                info!("✅ Sent FrcSetUFrameUTool command with sequence {}", seq);
 
-                // Update FrameToolDataState (will be confirmed by next poll)
-                ft_state.active_frame = inner.uframe;
-                ft_state.active_tool = inner.utool;
-
-                // Update ActiveConfigState and track changes with change log entries
+                // Update ActiveConfigState to track the intended state
+                // DO NOT update FrameToolDataState here - wait for polling to confirm from robot
+                // This prevents showing stale/intermediate states on the UI
                 if old_frame != inner.uframe {
                     active_config.u_frame_number = inner.uframe;
                     active_config.changes_count += 1;
@@ -789,7 +789,7 @@ pub fn handle_set_active_frame_tool(
                         old_value: format!("{}", old_frame),
                         new_value: format!("{}", inner.uframe),
                     });
-                    info!("📊 UFrame changed: {} -> {} (changes_count={})", old_frame, inner.uframe, active_config.changes_count);
+                    info!("📊 UFrame change requested: {} -> {} (will be confirmed by poll)", old_frame, inner.uframe);
                 }
                 if old_tool != inner.utool {
                     active_config.u_tool_number = inner.utool;
@@ -799,7 +799,7 @@ pub fn handle_set_active_frame_tool(
                         old_value: format!("{}", old_tool),
                         new_value: format!("{}", inner.utool),
                     });
-                    info!("📊 UTool changed: {} -> {} (changes_count={})", old_tool, inner.utool, active_config.changes_count);
+                    info!("📊 UTool change requested: {} -> {} (will be confirmed by poll)", old_tool, inner.utool);
                 }
 
                 let _ = request.clone().respond(SetActiveFrameToolResponse { success: true, error: None });

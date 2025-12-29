@@ -148,8 +148,15 @@ fn process_poll_responses(
                     status.active_utool = robot_utool as u8;
 
                     // Update FrameToolDataState so the UI gets the actual robot values
+                    let prev_frame = frame_tool_state.active_frame;
+                    let prev_tool = frame_tool_state.active_tool;
                     frame_tool_state.active_frame = robot_uframe;
                     frame_tool_state.active_tool = robot_utool;
+                    
+                    // Log if frame/tool changed
+                    if prev_frame != robot_uframe || prev_tool != robot_utool {
+                        trace!("🔄 FrameToolDataState updated: ({},{}) -> ({},{})", prev_frame, prev_tool, robot_uframe, robot_utool);
+                    }
 
                     // Check for mismatch between robot and ActiveConfigState
                     let config_uframe = active_config.u_frame_number;

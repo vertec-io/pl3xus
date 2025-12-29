@@ -749,7 +749,7 @@ pub fn handle_set_active_frame_tool(
         info!("📋 Handling SetActiveFrameTool: uframe={}, utool={}", inner.uframe, inner.utool);
 
         // Find connected robot with driver
-        let Some((_ft_state, mut active_config, _, driver)) = robots.iter_mut()
+        let Some((ft_state, mut active_config, _, driver)) = robots.iter_mut()
             .find(|(_, _, state, driver)| **state == RobotConnectionState::Connected && driver.is_some())
         else {
             warn!("SetActiveFrameTool rejected: No connected robot");

@@ -58,7 +58,7 @@ control_demo_types = { path = "examples/shared/control_demo_types" }
 fanuc_replica_types = { path = "examples/shared/fanuc_replica_types" }
 
 # FANUC RMI - shared across plugins with different feature flags
-fanuc_rmi = { path = "/home/apino/dev/Fanuc_RMI_API/fanuc_rmi" }
+fanuc_rmi = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git" }
 
 # Common dependencies
 bevy = { version = "0.17", default-features = false, features = ["multi_threaded", "bevy_log"] }

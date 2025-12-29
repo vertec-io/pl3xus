@@ -2776,7 +2776,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2861,7 +2861,7 @@ name = "fanuc_real_types"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "fanuc_rmi 0.3.0",
+ "fanuc_rmi",
  "serde",
 ]
 
@@ -2873,7 +2873,7 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "fanuc_replica_types",
- "fanuc_rmi 0.5.0",
+ "fanuc_rmi",
  "js-sys",
  "leptos",
  "leptos-use",
@@ -2896,7 +2896,7 @@ dependencies = [
  "bevy-tokio-tasks 0.17.0",
  "bincode 2.0.1",
  "fanuc_replica_types",
- "fanuc_rmi 0.5.0",
+ "fanuc_rmi",
  "pl3xus",
  "pl3xus_common",
  "pl3xus_sync",
@@ -2911,7 +2911,7 @@ name = "fanuc_replica_types"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "fanuc_rmi 0.3.0",
+ "fanuc_rmi",
  "pl3xus_common",
  "pl3xus_macros",
  "pl3xus_sync",
@@ -2921,23 +2921,10 @@ dependencies = [
 
 [[package]]
 name = "fanuc_rmi"
-version = "0.3.0"
-source = "git+https://github.com/vertec-io/Fanuc_RMI_API.git#020e852a458b50931f02a44eb2b128e4bf5efde8"
-dependencies = [
- "fanuc_rmi_macros 0.1.0 (git+https://github.com/vertec-io/Fanuc_RMI_API.git)",
- "int-enum",
- "serde",
- "serde_derive",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "fanuc_rmi"
 version = "0.5.0"
+source = "git+https://github.com/vertec-io/Fanuc_RMI_API.git#af5a957b20898cbaeffa01478c135eb20e594fbc"
 dependencies = [
- "fanuc_rmi_macros 0.1.0",
+ "fanuc_rmi_macros",
  "int-enum",
  "serde",
  "serde_derive",
@@ -2949,16 +2936,7 @@ dependencies = [
 [[package]]
 name = "fanuc_rmi_macros"
 version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "fanuc_rmi_macros"
-version = "0.1.0"
-source = "git+https://github.com/vertec-io/Fanuc_RMI_API.git#020e852a458b50931f02a44eb2b128e4bf5efde8"
+source = "git+https://github.com/vertec-io/Fanuc_RMI_API.git#af5a957b20898cbaeffa01478c135eb20e594fbc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2973,7 +2951,7 @@ dependencies = [
  "bevy-tokio-tasks 0.17.0 (git+https://github.com/vertec-io/async_bevy_web.git)",
  "bincode 2.0.1",
  "fanuc_real_types",
- "fanuc_rmi 0.3.0",
+ "fanuc_rmi",
  "pl3xus",
  "pl3xus_sync",
  "pl3xus_websockets",
@@ -4560,7 +4538,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5777,7 +5755,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6046,8 +6024,9 @@ dependencies = [
 [[package]]
 name = "sim"
 version = "0.1.0"
+source = "git+https://github.com/vertec-io/Fanuc_RMI_API.git#af5a957b20898cbaeffa01478c135eb20e594fbc"
 dependencies = [
- "fanuc_rmi 0.5.0",
+ "fanuc_rmi",
  "nalgebra",
  "serde",
  "serde_json",
@@ -7170,8 +7149,9 @@ dependencies = [
 [[package]]
 name = "web_common"
 version = "0.1.0"
+source = "git+https://github.com/vertec-io/Fanuc_RMI_API.git#af5a957b20898cbaeffa01478c135eb20e594fbc"
 dependencies = [
- "fanuc_rmi 0.5.0",
+ "fanuc_rmi",
  "serde",
 ]
 
@@ -7355,7 +7335,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

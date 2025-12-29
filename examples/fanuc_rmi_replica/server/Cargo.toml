@@ -24,5 +24,5 @@ bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_ta
 # Shared types
 fanuc_replica_types = { path = "../../shared/fanuc_replica_types", features = ["server"] }
 
-# Fanuc driver - use local path for latest version with sync_sequence_counter
-fanuc_rmi = { path = "/home/apino/dev/Fanuc_RMI_API/fanuc_rmi", features = ["driver", "logging", "DTO"] }
+# Fanuc driver
+fanuc_rmi = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git", features = ["driver", "logging", "DTO"] }

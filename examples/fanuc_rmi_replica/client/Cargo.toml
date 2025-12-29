@@ -31,5 +31,5 @@ reactive_stores = "0.2"
 js-sys = "0.3.83"
 
 # Fanuc RMI types (DTO only, no driver)
-fanuc_rmi = { path = "/home/apino/dev/Fanuc_RMI_API/fanuc_rmi", default-features = false, features = ["DTO"] }
+fanuc_rmi = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git", default-features = false, features = ["DTO"] }
 leptos-use = "0.16"

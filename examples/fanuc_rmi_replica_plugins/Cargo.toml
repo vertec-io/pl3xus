@@ -17,7 +17,7 @@ members = [
 # Shared fanuc_rmi dependency - all workspace members use the same version
 # This prevents type mismatches between different versions
 # IMPORTANT: default-features = false to avoid pulling tokio into WASM builds
-fanuc_rmi = { path = "/home/apino/dev/Fanuc_RMI_API/fanuc_rmi", default-features = false }
+fanuc_rmi = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git", default-features = false }
 
 # Pl3xus dependencies - adjust paths when copying this template
 pl3xus = { path = "../../crates/pl3xus", features = ["debug_messages"] }

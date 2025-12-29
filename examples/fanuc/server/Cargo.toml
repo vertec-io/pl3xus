@@ -16,6 +16,6 @@ tokio = { version = "1", features = ["full"] }
 bincode = { workspace = true }
 fanuc_rmi = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git", features = ["driver"], default-features = true }
 
-# Local simulator for testing
-sim = { path = "../../../../Fanuc_RMI_API/sim" }
+# Simulator from fanuc_rmi_api repo
+sim = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git" }
 

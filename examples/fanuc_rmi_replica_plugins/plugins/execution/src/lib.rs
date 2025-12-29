@@ -53,7 +53,7 @@ pub use traits::{AuxiliaryCommand, AuxiliaryDevice, DeviceError, MotionDevice};
 
 #[cfg(feature = "server")]
 pub use systems::{
-    AuxiliaryCommandEvent, DeviceStatus, DeviceType, MotionCommandEvent,
+    AuxiliaryCommandEvent, DeviceConnected, DeviceStatus, DeviceType, MotionCommandEvent,
 };
 
 #[cfg(feature = "ecs")]

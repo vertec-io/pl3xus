@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 #[cfg(feature = "server")]
 use crate::systems::{
-    orchestrator_system, update_buffer_state_system,
+    orchestrator_system, reset_on_disconnect_system, update_buffer_state_system,
     AuxiliaryCommandEvent, MotionCommandEvent,
 };
 
@@ -45,9 +45,10 @@ impl Plugin for ExecutionPlugin {
             app.add_message::<MotionCommandEvent>();
             app.add_message::<AuxiliaryCommandEvent>();
 
-            // Register systems - update_buffer_state runs first, then orchestrator
+            // Register systems - update_buffer_state runs first, then orchestrator, then lifecycle
             app.add_systems(Update, update_buffer_state_system);
             app.add_systems(Update, orchestrator_system.after(update_buffer_state_system));
+            app.add_systems(Update, reset_on_disconnect_system.after(orchestrator_system));
 
             info!("Execution plugin loaded");
         }

@@ -49,9 +49,12 @@ pub use conversion::{
     FanucConversion, isometry_f32_to_position, isometry_to_position, position_to_isometry,
 };
 
-// Re-export motion handler
+// Re-export motion handler and related systems
 #[cfg(feature = "server")]
-pub use motion::{fanuc_motion_handler_system, robot_pose_to_fanuc_position, FanucMotionDevice};
+pub use motion::{
+    fanuc_motion_handler_system, fanuc_motion_response_system, fanuc_sent_instruction_system,
+    robot_pose_to_fanuc_position, FanucInFlightInstructions, FanucMotionDevice,
+};
 
 // Re-export plugin
 #[cfg(feature = "ecs")]

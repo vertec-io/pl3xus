@@ -19,7 +19,9 @@ use tokio::sync::broadcast;
 use fanuc_rmi::drivers::{FanucDriver, FanucDriverConfig, LogLevel};
 use crate::types::*;
 use crate::database;
+use crate::motion::FanucMotionDevice;
 use fanuc_replica_core::{DatabaseResource, ActiveSystem};
+use fanuc_replica_execution::{DeviceConnected, DeviceStatus, PrimaryMotion};
 
 // ============================================================================
 // Components
@@ -253,6 +255,17 @@ fn handle_connect_requests(
                 ActiveConfigState::default(),
                 ActiveConfigSyncState::new(),  // Tracks sync status with robot
                 jog_settings,
+            )).insert((
+                // Execution system components for motion command handling
+                // These enable the new orchestrator pattern (MotionCommandEvent -> motion.rs)
+                PrimaryMotion,       // Marker: this is the primary motion device
+                FanucMotionDevice,   // Marker: enables FANUC-specific motion handling
+                DeviceStatus {       // Status for orchestrator feedback
+                    is_connected: false, // Will be set true when connection completes
+                    ready_for_next: true,
+                    completed_count: 0,
+                    error: None,
+                },
             )).id();
 
             // Set the robot as a child of the System entity
@@ -392,6 +405,7 @@ fn handle_connecting_state(
                             entity_mut.insert(RmiExecutionResponseChannel(execution_response_rx));
                             entity_mut.insert(RmiSentInstructionChannel(sent_instruction_rx));
                             entity_mut.insert(RobotConnectionState::Connected);
+                            entity_mut.insert(DeviceConnected); // For execution lifecycle
 
                             // Get the connection_id before modifying conn_state
                             let connection_id = entity_mut.get::<ConnectionState>()
@@ -405,6 +419,13 @@ fn handle_connecting_state(
                                 conn_state.robot_name = robot_name.clone();
                                 conn_state.connection_name = Some(robot_name);
                                 conn_state.tp_initialized = true;
+                            }
+
+                            // Update DeviceStatus for orchestrator
+                            if let Some(mut device_status) = entity_mut.get_mut::<DeviceStatus>() {
+                                device_status.is_connected = true;
+                                device_status.ready_for_next = true;
+                                device_status.error = None;
                             }
 
                             // Add marker to load default configuration
@@ -491,6 +512,7 @@ fn handle_disconnect_requests(
                             entity_mut.remove::<RmiResponseChannel>();
                             entity_mut.remove::<RmiExecutionResponseChannel>();
                             entity_mut.remove::<RmiSentInstructionChannel>();
+                            entity_mut.remove::<DeviceConnected>(); // For execution lifecycle
                             entity_mut.insert(RobotConnectionState::Disconnected);
 
                             if let Some(mut conn_state) = entity_mut.get_mut::<ConnectionState>() {
@@ -498,6 +520,12 @@ fn handle_disconnect_requests(
                                 conn_state.robot_name = String::new();
                                 conn_state.connection_name = None;
                                 conn_state.active_connection_id = None;
+                            }
+
+                            // Update DeviceStatus for orchestrator
+                            if let Some(mut device_status) = entity_mut.get_mut::<DeviceStatus>() {
+                                device_status.is_connected = false;
+                                device_status.ready_for_next = false;
                             }
 
                             info!("🔌 Robot {:?} disconnected and cleaned up", entity);

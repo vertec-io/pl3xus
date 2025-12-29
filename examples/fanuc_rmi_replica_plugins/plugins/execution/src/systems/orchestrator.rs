@@ -102,13 +102,16 @@ pub fn update_buffer_state_system(
 
             BufferState::Executing { completed_count, .. } => {
                 // Transition to Complete when all points are executed
+                // Uses is_execution_complete() which checks: sealed + empty + confirmed
                 let count = *completed_count;
-                if buffer.is_empty() && count >= buffer.expected_total() {
+                if buffer.is_execution_complete(count) {
                     *state = BufferState::Complete {
                         total_executed: count,
                     };
                     info!("Execution: Executing → Complete ({} points)", count);
                 }
+                // Note: AwaitingPoints transition is handled in sync_device_status_to_buffer_state
+                // when buffer is empty but not sealed (streaming mode)
             }
 
             // Other states don't auto-transition

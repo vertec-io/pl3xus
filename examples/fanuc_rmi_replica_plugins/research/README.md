@@ -19,11 +19,34 @@ Refactoring to Pattern 3 (Multi-Crate Plugins) per the pl3xus-project-structure 
 
 ---
 
-### 1. Execution Plugin Architecture
+### 1. Streaming Execution & Sealed Buffer Pattern (NEW)
 **Status:** Design Complete, Ready for Implementation
+**Location:** [`streaming-execution/`](./streaming-execution/)
+
+Extends the execution plugin to support **streaming/realtime execution** alongside static programs.
+
+**Key Documents:**
+- [`README.md`](./streaming-execution/README.md) - Complete architecture
+- [`diagrams.md`](./streaming-execution/diagrams.md) - State machines and flow diagrams
+- [`implementation_spec.md`](./streaming-execution/implementation_spec.md) - Detailed code changes
+- [`current_state.md`](./streaming-execution/current_state.md) - What's done vs pending
+
+**Key Innovation: Sealed Buffer Pattern**
+- Static programs: `sealed=true` from start, known total, progress bar with %
+- Streaming: `sealed=false`, producer calls `seal()` when done
+- Unified completion logic for both modes
+
+**New States:**
+- `BufferState::Stopped` - User-initiated stop (distinct from error/complete)
+- `BufferState::AwaitingPoints` - Buffer empty but expecting more (streaming)
+
+---
+
+### 2. Execution Plugin Architecture
+**Status:** Partially Implemented
 **Location:** [`execution-plugin/`](./execution-plugin/)
 
-The main research project defining the buffer-based toolpath execution system.
+The foundational research project defining the buffer-based toolpath execution system.
 
 **Key Documents:**
 - [`README.md`](./execution-plugin/README.md) - Complete specification with:
@@ -65,15 +88,28 @@ Earlier exploration that led to the Execution Plugin architecture.
 
 ## Implementation Status
 
+### Execution Plugin (from execution-plugin/ research)
+
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 0 | Create execution_plugin crate structure | Not Started |
-| 1 | Database Schema Migration | Not Started |
-| 2 | ToolpathBuffer Component | Not Started |
-| 3 | Import Layer | Not Started |
-| 4 | Orchestrator System | Not Started |
-| 5 | FANUC Driver Integration | Not Started |
-| 6 | End-to-End Testing | Not Started |
+| 0 | Create execution_plugin crate structure | ✅ Done |
+| 1 | Database Schema Migration | ⏸️ Deferred |
+| 2 | ToolpathBuffer Component | ✅ Basic impl done |
+| 3 | Import Layer | ⏸️ Deferred |
+| 4 | Orchestrator System | ✅ Done |
+| 5 | FANUC Driver Integration | ✅ Done |
+| 6 | End-to-End Testing | 🔄 In Progress |
+
+### Streaming Execution (from streaming-execution/ research)
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Add Stopped state & notification | ✅ Done |
+| 2 | Sealed buffer pattern | 🔴 TODO |
+| 3 | AwaitingPoints state | 🔴 TODO |
+| 4 | Update completion logic | 🔴 TODO |
+| 5 | ExecutionProgress type | 🔴 TODO |
+| 6 | UI updates for streaming | 🔴 TODO |
 
 ---
 
@@ -92,8 +128,15 @@ Earlier exploration that led to the Execution Plugin architecture.
 
 ## For New Contributors
 
-1. **Start with:** `execution-plugin/README.md`
-2. **Understand the diagrams:** `execution-plugin/diagrams.md`
-3. **Implementation begins at:** Phase 0 (crate structure)
-4. **Key insight:** The ECS entity hierarchy IS the configuration. We don't hard-code where components live.
+**Current Priority:** Streaming Execution implementation (Phase 1-6)
+
+1. **Start with:** `streaming-execution/README.md` for current work
+2. **Background:** `execution-plugin/README.md` for foundational architecture
+3. **Implementation details:** `streaming-execution/implementation_spec.md`
+4. **What's done:** `streaming-execution/current_state.md`
+
+**Key Insights:**
+- The ECS entity hierarchy IS the configuration
+- "Sealed" buffer pattern enables both static and streaming execution
+- Completion detection uses `is_execution_complete()` not manual checks
 

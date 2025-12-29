@@ -8,7 +8,11 @@ use pl3xus_sync::{ComponentSyncConfig, AppPl3xusSyncExt};
 use pl3xus_websockets::WebSocketProvider;
 
 #[cfg(feature = "server")]
-use crate::motion::fanuc_motion_handler_system;
+use crate::motion::{
+    fanuc_motion_handler_system, fanuc_sent_instruction_system, fanuc_motion_response_system,
+    sync_buffer_state_to_execution_state, sync_device_status_to_buffer_state,
+    FanucInFlightInstructions,
+};
 #[cfg(feature = "server")]
 use crate::connection::RobotConnectionPlugin;
 #[cfg(feature = "server")]
@@ -17,8 +21,6 @@ use crate::sync::RobotSyncPlugin;
 use crate::handlers::RequestHandlerPlugin;
 #[cfg(feature = "server")]
 use crate::polling::RobotPollingPlugin;
-#[cfg(feature = "server")]
-use crate::program::ProgramPlugin;
 #[cfg(feature = "server")]
 use crate::jogging;
 
@@ -108,6 +110,14 @@ impl Plugin for FanucPlugin {
         #[cfg(feature = "server")]
         {
             // =====================================================================
+            // RESOURCES
+            // =====================================================================
+            // In-flight instruction tracking for motion completion feedback
+            // Note: This resource is available for the new orchestrator pattern.
+            // The legacy ProgramPlugin uses ExecutionBuffer instead.
+            app.init_resource::<FanucInFlightInstructions>();
+
+            // =====================================================================
             // SUB-PLUGINS
             // =====================================================================
             app.add_plugins((
@@ -115,12 +125,26 @@ impl Plugin for FanucPlugin {
                 RobotSyncPlugin,        // Driver polling and jogging
                 RequestHandlerPlugin,   // Database request handlers
                 RobotPollingPlugin,     // Periodic position/status polling
-                ProgramPlugin,          // Orchestrator-based program execution
+                // Note: ProgramPlugin removed - execution is now handled by ExecutionPlugin
             ));
 
-            // FANUC motion handler - run after orchestrator
-            // Note: The orchestrator_system is in ExecutionPlugin
-            app.add_systems(Update, fanuc_motion_handler_system);
+            // =====================================================================
+            // MOTION SYSTEMS (New Execution Architecture)
+            // =====================================================================
+            // These systems handle the full motion lifecycle:
+            // 1. orchestrator_system (ExecutionPlugin) emits MotionCommandEvent
+            // 2. fanuc_motion_handler_system converts to driver calls
+            // 3. fanuc_sent_instruction_system maps request_id -> sequence_id
+            // 4. fanuc_motion_response_system updates DeviceStatus on completion
+            // 5. sync_device_status_to_buffer_state updates BufferState
+            // 6. sync_buffer_state_to_execution_state syncs to client
+            app.add_systems(Update, (
+                fanuc_motion_handler_system,
+                fanuc_sent_instruction_system,
+                fanuc_motion_response_system,
+                sync_device_status_to_buffer_state,
+                sync_buffer_state_to_execution_state,
+            ).chain());
 
             info!("🤖 FanucPlugin initialized");
         }

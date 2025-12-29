@@ -8,6 +8,7 @@ members = [
     "plugins/duet",
     "plugins/execution",
     "plugins/fanuc",
+    "plugins/programs",
     "plugins/robotics",
     "server",
 ]
@@ -33,6 +34,7 @@ fanuc_replica_robotics = { path = "plugins/robotics" }
 fanuc_replica_execution = { path = "plugins/execution", default-features = false }
 fanuc_replica_duet = { path = "plugins/duet", default-features = false }
 fanuc_replica_fanuc = { path = "plugins/fanuc", default-features = false }
+fanuc_replica_programs = { path = "plugins/programs", default-features = false }
 
 # Common dependencies
 bevy = { version = "0.17", default-features = false }

@@ -19,8 +19,10 @@ type WS = WebSocketProvider;
 
 use bevy_tokio_tasks::TokioTasksRuntime;
 use crate::connection::{FanucRobot, RmiDriver, RobotConnectionState};
-use crate::program::{Program, ProgramState, ProgramDefaults, ApproachRetreat, ExecutionBuffer, console_entry as program_console_entry};
+use crate::program::{Program, ProgramState, ProgramDefaults, ApproachRetreat, console_entry as program_console_entry, new_notification};
+use crate::motion::{instruction_to_execution_point, approach_retreat_to_execution_point};
 use fanuc_rmi::packets::PacketPriority;
+use fanuc_replica_execution::{BufferState, DeviceStatus, ExecutionCoordinator, PrimaryMotion, ToolpathBuffer};
 
 pub struct RequestHandlerPlugin;
 
@@ -1068,8 +1070,12 @@ fn parse_and_insert_csv(
 ///
 /// Authorization is handled by middleware - no manual control check needed.
 /// This is a targeted request that targets the System entity.
-/// Creates a Program component on the System entity with all instructions.
-/// Updates the server-side ExecutionState so all clients see the loaded program.
+///
+/// NEW EXECUTION ARCHITECTURE:
+/// - Adds ExecutionCoordinator, ToolpathBuffer, BufferState to System entity
+/// - Converts instructions to ExecutionPoints and pushes to buffer
+/// - Keeps Program component for legacy compatibility (will be removed later)
+/// - Updates ExecutionState for client sync
 fn handle_load_program(
     mut commands: Commands,
     mut requests: MessageReader<AuthorizedRequest<LoadProgram>>,
@@ -1131,8 +1137,114 @@ fn handle_load_program(
                     })
                     .collect();
 
-                // Build approach/retreat positions
-                let approach = if program_detail.start_x.is_some() && program_detail.start_y.is_some() && program_detail.start_z.is_some() {
+                // Build program defaults - all required fields come directly from DB
+                let defaults = ProgramDefaults {
+                    w: program_detail.default_w,
+                    p: program_detail.default_p,
+                    r: program_detail.default_r,
+                    speed: program_detail.default_speed.unwrap_or(100.0),
+                    speed_type: program_detail.default_speed_type.clone(),
+                    term_type: program_detail.default_term_type.clone(),
+                    term_value: program_detail.default_term_value,
+                    uframe: program_detail.default_uframe,
+                    utool: program_detail.default_utool,
+                };
+
+                // ================================================================
+                // NEW EXECUTION SYSTEM: Build ToolpathBuffer with ExecutionPoints
+                // Uses sealed buffer pattern for static programs (known total)
+                // ================================================================
+
+                // Check for approach position
+                let has_approach = program_detail.start_x.is_some()
+                    && program_detail.start_y.is_some()
+                    && program_detail.start_z.is_some();
+                let has_retreat = program_detail.end_x.is_some()
+                    && program_detail.end_y.is_some()
+                    && program_detail.end_z.is_some();
+
+                // Calculate total points for is_last detection and buffer creation
+                let total_points = program_detail.instructions.len()
+                    + if has_approach { 1 } else { 0 }
+                    + if has_retreat { 1 } else { 0 };
+
+                // Use new_static() for static programs - buffer is pre-sealed with known total
+                let mut toolpath_buffer = ToolpathBuffer::new_static(total_points as u32);
+                let mut point_index: u32 = 0;
+
+                // Add approach point if defined
+                if has_approach {
+                    let approach_point = approach_retreat_to_execution_point(
+                        program_detail.start_x.unwrap(),
+                        program_detail.start_y.unwrap(),
+                        program_detail.start_z.unwrap(),
+                        program_detail.start_w,
+                        program_detail.start_p,
+                        program_detail.start_r,
+                        &defaults,
+                        point_index,
+                        program_detail.move_speed,
+                        false, // approach is never last
+                    );
+                    toolpath_buffer.push(approach_point);
+                    point_index += 1;
+                    info!("📍 Added approach point to toolpath buffer");
+                }
+
+                // Add all instruction points
+                for (i, instruction) in program_detail.instructions.iter().enumerate() {
+                    let is_last_instruction = !has_retreat && i == program_detail.instructions.len() - 1;
+                    let is_last_point = point_index as usize == total_points - 1;
+                    let execution_point = instruction_to_execution_point(
+                        instruction,
+                        &defaults,
+                        point_index,
+                        is_last_instruction || is_last_point,
+                    );
+                    toolpath_buffer.push(execution_point);
+                    point_index += 1;
+                }
+
+                // Add retreat point if defined
+                if has_retreat {
+                    let retreat_point = approach_retreat_to_execution_point(
+                        program_detail.end_x.unwrap(),
+                        program_detail.end_y.unwrap(),
+                        program_detail.end_z.unwrap(),
+                        program_detail.end_w,
+                        program_detail.end_p,
+                        program_detail.end_r,
+                        &defaults,
+                        point_index,
+                        program_detail.move_speed,
+                        true, // retreat is always last
+                    );
+                    toolpath_buffer.push(retreat_point);
+                    info!("📍 Added retreat point to toolpath buffer");
+                }
+
+                info!(
+                    "📋 Program '{}' loaded: {} points in toolpath buffer",
+                    &program_detail.name,
+                    toolpath_buffer.len()
+                );
+
+                // Add execution components to System entity
+                commands.entity(system_entity).insert((
+                    ExecutionCoordinator::with_name(
+                        format!("program_{}", program_detail.id),
+                        program_detail.name.clone(),
+                    ),
+                    toolpath_buffer,
+                    BufferState::Idle, // Will transition to Ready when start is called
+                ));
+                info!("📦 Added ExecutionCoordinator + ToolpathBuffer to System entity");
+
+                // ================================================================
+                // LEGACY COMPATIBILITY: Keep Program component for now
+                // This allows gradual migration - will be removed in Phase 7
+                // ================================================================
+                let approach = if has_approach {
                     Some(ApproachRetreat {
                         x: program_detail.start_x.unwrap(),
                         y: program_detail.start_y.unwrap(),
@@ -1145,7 +1257,7 @@ fn handle_load_program(
                     None
                 };
 
-                let retreat = if program_detail.end_x.is_some() && program_detail.end_y.is_some() && program_detail.end_z.is_some() {
+                let retreat = if has_retreat {
                     Some(ApproachRetreat {
                         x: program_detail.end_x.unwrap(),
                         y: program_detail.end_y.unwrap(),
@@ -1157,26 +1269,6 @@ fn handle_load_program(
                 } else {
                     None
                 };
-
-                // Build program defaults - all required fields come directly from DB
-                let defaults = ProgramDefaults {
-                    w: program_detail.default_w,
-                    p: program_detail.default_p,
-                    r: program_detail.default_r,
-                    speed: program_detail.default_speed.unwrap_or(100.0),  // default_speed is optional per-instruction override
-                    speed_type: program_detail.default_speed_type.clone(),
-                    term_type: program_detail.default_term_type.clone(),
-                    term_value: program_detail.default_term_value,
-                    uframe: program_detail.default_uframe,
-                    utool: program_detail.default_utool,
-                };
-
-                // Create Program component on System entity
-                info!(
-                    "📋 Program '{}' loaded with move_speed={}",
-                    &program_detail.name,
-                    program_detail.move_speed
-                );
 
                 let program_component = Program {
                     id: program_detail.id,
@@ -1190,15 +1282,7 @@ fn handle_load_program(
                     retreat,
                     move_speed: program_detail.move_speed,
                 };
-
-                // Insert Program component on System entity
                 commands.entity(system_entity).insert(program_component);
-                info!("📦 Created Program component on System entity for '{}'", program_detail.name);
-
-                // Also add ExecutionBuffer to robot entity if not present
-                if let Some(robot_entity) = robot_entity {
-                    commands.entity(robot_entity).insert(ExecutionBuffer::new());
-                }
 
                 // Update ExecutionState component (synced to all clients)
                 if let Some(entity) = robot_entity {
@@ -1210,7 +1294,6 @@ fn handle_load_program(
                         exec_state.total_lines = lines.len();
                         exec_state.program_lines = lines.clone();
                         // Set available actions for Idle state
-                        // can_load is false because a program is now loaded
                         exec_state.can_load = false;
                         exec_state.can_start = true;
                         exec_state.can_pause = false;
@@ -1260,13 +1343,14 @@ fn handle_load_program(
 ///
 /// Authorization is handled by middleware - no manual control check needed.
 /// This is a targeted request that targets the System entity.
+///
+/// NEW ARCHITECTURE: Also removes ExecutionCoordinator, ToolpathBuffer, BufferState
 fn handle_unload_program(
     mut commands: Commands,
     mut requests: MessageReader<AuthorizedRequest<UnloadProgram>>,
     system_query: Query<Entity, With<ActiveSystem>>,
     program_query: Query<&Program, With<ActiveSystem>>,
     mut execution_states: Query<&mut ExecutionState>,
-    mut robots: Query<Option<&mut ExecutionBuffer>, With<FanucRobot>>,
 ) {
     for request in requests.read() {
         let request = request.clone();
@@ -1283,19 +1367,17 @@ fn handle_unload_program(
             continue;
         };
 
-        // Remove Program component from System entity
+        // Remove legacy Program component from System entity
         if program_query.get(system_entity).is_ok() {
             commands.entity(system_entity).remove::<Program>();
             info!("📦 Removed Program component from System entity");
         }
 
-        // Clear ExecutionBuffer on robot entities
-        for buffer_opt in robots.iter_mut() {
-            if let Some(mut buffer) = buffer_opt {
-                buffer.clear();
-                info!("🧹 Cleared ExecutionBuffer");
-            }
-        }
+        // Remove new execution components from System entity
+        commands.entity(system_entity).remove::<ExecutionCoordinator>();
+        commands.entity(system_entity).remove::<ToolpathBuffer>();
+        commands.entity(system_entity).remove::<BufferState>();
+        info!("📦 Removed ExecutionCoordinator, ToolpathBuffer, BufferState from System entity");
 
         // Reset ExecutionState on all robot entities (synced to clients)
         for mut exec_state in execution_states.iter_mut() {
@@ -1335,12 +1417,13 @@ fn handle_unload_program(
 /// Authorization is handled by middleware - no manual control check needed.
 /// This is a targeted request that targets the System entity.
 ///
-/// NEW ARCHITECTURE: This handler just sets the Program state to Running.
-/// The orchestrator system (in program.rs) handles the actual instruction dispatch.
+/// NEW ARCHITECTURE: Sets both legacy ProgramState and new BufferState to Running.
+/// The orchestrator system handles the actual instruction dispatch.
 fn handle_start_program(
     mut requests: MessageReader<AuthorizedRequest<StartProgram>>,
-    mut systems: Query<&mut Program, With<ActiveSystem>>,
+    mut systems: Query<(&mut Program, Option<&mut BufferState>, Option<&mut ToolpathBuffer>), With<ActiveSystem>>,
     robots: Query<&RobotConnectionState, With<FanucRobot>>,
+    mut devices: Query<&mut DeviceStatus, With<PrimaryMotion>>,
     net: Res<Network<WebSocketProvider>>,
 ) {
     for request in requests.read() {
@@ -1349,7 +1432,7 @@ fn handle_start_program(
         info!("📋 Handling StartProgram request from {:?}", client_id);
 
         // Check if a program is loaded (Program component exists on System)
-        let Ok(mut program) = systems.single_mut() else {
+        let Ok((mut program, buffer_state_opt, toolpath_buffer_opt)) = systems.single_mut() else {
             let response = StartProgramResponse {
                 success: false,
                 error: Some("No program loaded. Use LoadProgram first.".to_string()),
@@ -1379,8 +1462,12 @@ fn handle_start_program(
             continue;
         }
 
-        // Check if already running
-        if program.state == ProgramState::Running {
+        // Check if already running (check both legacy state and BufferState)
+        let is_buffer_executing = buffer_state_opt
+            .as_ref()
+            .is_some_and(|s| matches!(**s, BufferState::Executing { .. }));
+
+        if program.state == ProgramState::Running || is_buffer_executing {
             let response = StartProgramResponse {
                 success: false,
                 error: Some("Program is already running".to_string()),
@@ -1389,10 +1476,36 @@ fn handle_start_program(
             continue;
         }
 
-        // Reset execution counters and set state to Running
+        // Reset execution counters and set state to Running (legacy)
         program.current_index = 0;
         program.completed_count = 0;
         program.state = ProgramState::Running;
+
+        // CRITICAL: Reset DeviceStatus.completed_count to 0
+        // This prevents the accumulation bug where completed_count carries over
+        if let Ok(mut device_status) = devices.single_mut() {
+            device_status.completed_count = 0;
+            info!("📦 Reset DeviceStatus.completed_count to 0");
+        }
+
+        // Reset ToolpathBuffer for re-run
+        // This restores all original points to the queue for a fresh execution
+        if let Some(mut toolpath_buffer) = toolpath_buffer_opt {
+            if toolpath_buffer.reset_for_rerun() {
+                info!("📦 ToolpathBuffer reset for re-run ({} points)", toolpath_buffer.len());
+            } else {
+                warn!("⚠️ ToolpathBuffer has no original points - re-run not supported");
+            }
+        }
+
+        // Set BufferState to Executing for new execution system
+        if let Some(mut buffer_state) = buffer_state_opt {
+            *buffer_state = BufferState::Executing {
+                current_index: 0,
+                completed_count: 0,
+            };
+            info!("📦 Set BufferState to Executing");
+        }
 
         let program_name = program.name.clone();
         let total = program.total_instructions();
@@ -1418,10 +1531,12 @@ fn handle_start_program(
 ///
 /// Authorization is handled by middleware - no manual control check needed.
 /// This is a targeted request that targets the System entity.
+///
+/// NEW ARCHITECTURE: Sets both legacy ProgramState and new BufferState to Paused.
 fn handle_pause_program(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<AuthorizedRequest<PauseProgram>>,
-    mut systems: Query<&mut Program, With<ActiveSystem>>,
+    mut systems: Query<(&mut Program, Option<&mut BufferState>), With<ActiveSystem>>,
     robots: Query<(&RmiDriver, &RobotConnectionState), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
@@ -1432,7 +1547,7 @@ fn handle_pause_program(
         let client_id = request.source();
         info!("📋 Handling PauseProgram request from {:?}", client_id);
 
-        let Ok(mut program) = systems.single_mut() else {
+        let Ok((mut program, buffer_state_opt)) = systems.single_mut() else {
             let response = PauseProgramResponse { success: false, error: Some("No program loaded".to_string()) };
             let _ = request.respond(response);
             continue;
@@ -1472,7 +1587,17 @@ fn handle_pause_program(
 
         match pause_result {
             Ok(()) => {
+                let current_idx = program.current_index as u32;
                 program.state = ProgramState::Paused;
+
+                // NEW: Also set BufferState to Paused for new execution system
+                if let Some(mut buffer_state) = buffer_state_opt {
+                    *buffer_state = BufferState::Paused {
+                        paused_at_index: current_idx,
+                    };
+                    info!("📦 Set BufferState to Paused at index {}", current_idx);
+                }
+
                 info!("⏸ Program '{}' paused", program.name);
                 let response = PauseProgramResponse { success: true, error: None };
                 if let Err(e) = request.respond(response) {
@@ -1491,10 +1616,12 @@ fn handle_pause_program(
 ///
 /// Authorization is handled by middleware - no manual control check needed.
 /// This is a targeted request that targets the System entity.
+///
+/// NEW ARCHITECTURE: Sets both legacy ProgramState and new BufferState to Running.
 fn handle_resume_program(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<AuthorizedRequest<ResumeProgram>>,
-    mut systems: Query<&mut Program, With<ActiveSystem>>,
+    mut systems: Query<(&mut Program, Option<&mut BufferState>), With<ActiveSystem>>,
     robots: Query<(&RmiDriver, &RobotConnectionState), With<FanucRobot>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
@@ -1505,7 +1632,7 @@ fn handle_resume_program(
         let client_id = request.source();
         info!("📋 Handling ResumeProgram request from {:?}", client_id);
 
-        let Ok(mut program) = systems.single_mut() else {
+        let Ok((mut program, buffer_state_opt)) = systems.single_mut() else {
             let response = ResumeProgramResponse { success: false, error: Some("No program loaded".to_string()) };
             let _ = request.respond(response);
             continue;
@@ -1545,7 +1672,19 @@ fn handle_resume_program(
 
         match resume_result {
             Ok(()) => {
+                let current_idx = program.current_index as u32;
+                let completed = program.completed_count as u32;
                 program.state = ProgramState::Running;
+
+                // NEW: Also set BufferState to Executing for new execution system
+                if let Some(mut buffer_state) = buffer_state_opt {
+                    *buffer_state = BufferState::Executing {
+                        current_index: current_idx,
+                        completed_count: completed,
+                    };
+                    info!("📦 Set BufferState to Executing at index {}", current_idx);
+                }
+
                 info!("▶ Program '{}' resumed", program.name);
                 let response = ResumeProgramResponse { success: true, error: None };
                 if let Err(e) = request.respond(response) {
@@ -1564,11 +1703,15 @@ fn handle_resume_program(
 ///
 /// Authorization is handled by middleware - no manual control check needed.
 /// This is a targeted request that targets the System entity.
+///
+/// Sets both legacy ProgramState to Idle and new BufferState to Stopped.
+/// Sends a ProgramNotification::Stopped to all clients.
 fn handle_stop_program(
     tokio_runtime: Res<TokioTasksRuntime>,
     mut requests: MessageReader<AuthorizedRequest<StopProgram>>,
-    mut systems: Query<&mut Program, With<ActiveSystem>>,
-    mut robots: Query<(&RmiDriver, &RobotConnectionState, Option<&mut ExecutionBuffer>), With<FanucRobot>>,
+    mut systems: Query<(&mut Program, Option<&mut BufferState>, Option<&mut ToolpathBuffer>), With<ActiveSystem>>,
+    robots: Query<(&RmiDriver, &RobotConnectionState), With<FanucRobot>>,
+    net: Res<Network<WebSocketProvider>>,
 ) {
     // Enter the Tokio runtime context so send_packet can use tokio::spawn
     let _guard = tokio_runtime.runtime().enter();
@@ -1578,7 +1721,7 @@ fn handle_stop_program(
         let client_id = request.source();
         info!("📋 Handling StopProgram request from {:?}", client_id);
 
-        let Ok(mut program) = systems.single_mut() else {
+        let Ok((mut program, buffer_state_opt, toolpath_buffer_opt)) = systems.single_mut() else {
             let response = StopProgramResponse { success: false, error: Some("No program loaded".to_string()) };
             let _ = request.respond(response);
             continue;
@@ -1590,8 +1733,8 @@ fn handle_stop_program(
             continue;
         }
 
-        // Send abort command to robot and clear execution buffer
-        for (driver, state, buffer_opt) in robots.iter_mut() {
+        // Send abort command to robot
+        for (driver, state) in robots.iter() {
             if *state == RobotConnectionState::Connected {
                 // Send FRC_Abort packet (unit variant)
                 let abort_packet = fanuc_rmi::packets::SendPacket::Command(
@@ -1604,21 +1747,51 @@ fn handle_stop_program(
                 } else {
                     info!("✅ FRC_Abort sent successfully");
                 }
-                // Clear execution buffer to remove in-flight packet tracking
-                if let Some(mut buffer) = buffer_opt {
-                    buffer.clear();
-                    info!("🧹 Cleared ExecutionBuffer");
-                }
                 break;
             }
         }
 
         let program_name = program.name.clone();
-        // Reset to Idle state (program stays loaded for re-running)
+        // Capture stop position from legacy state before resetting
+        let stopped_at_index = program.current_index;
+        let completed_before_stop = program.completed_count;
+
+        // Reset legacy ProgramState to Idle (program stays loaded for re-running)
         program.state = ProgramState::Idle;
         program.current_index = 0;
         program.completed_count = 0;
-        info!("⏹ Program '{}' stopped (still loaded)", program_name);
+
+        // Set BufferState to Stopped for new execution system
+        // Note: We don't clear the ToolpathBuffer - the program stays loaded for re-running
+        if let Some(mut buffer_state) = buffer_state_opt {
+            *buffer_state = BufferState::Stopped {
+                at_index: stopped_at_index as u32,
+                completed_count: completed_before_stop as u32,
+            };
+            info!("📦 Set BufferState to Stopped at index {}", stopped_at_index);
+        }
+        // ToolpathBuffer stays intact - just mark unused
+        let _ = toolpath_buffer_opt;
+
+        // Send ProgramNotification::Stopped to all clients
+        let notification = new_notification(ProgramNotificationKind::Stopped {
+            program_name: program_name.clone(),
+            at_line: stopped_at_index as usize,
+        });
+        net.broadcast(notification);
+
+        // Send console log entry
+        let console_msg = program_console_entry(
+            format!(
+                "Program '{}' stopped at line {} ({} completed)",
+                program_name, stopped_at_index, completed_before_stop
+            ),
+            ConsoleDirection::System,
+            ConsoleMsgType::Status,
+        );
+        net.broadcast(console_msg);
+
+        info!("⏹ Program '{}' stopped at line {} (still loaded)", program_name, stopped_at_index);
         let response = StopProgramResponse { success: true, error: None };
         if let Err(e) = request.respond(response) {
             error!("Failed to send response: {:?}", e);

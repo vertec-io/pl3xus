@@ -81,8 +81,9 @@ cfg_if! {
 }
 
 cfg_if! {
-    if #[cfg(feature = "stores")] {
-        // Stores feature: re-export types with Store derives for client-side reactivity
+    if #[cfg(all(feature = "stores", not(feature = "server"), not(feature = "ecs")))] {
+        // Stores feature (standalone): re-export types with Store derives for client-side reactivity
+        // Only when not already exported by server or ecs features
         pub use fanuc_replica_fanuc::*;
         pub use pl3xus_common::{RequestMessage, ErrorResponse};
     }

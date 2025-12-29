@@ -62,7 +62,8 @@ fanuc_rmi = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git" }
 
 # Common dependencies
 bevy = { version = "0.17", default-features = false, features = ["multi_threaded", "bevy_log"] }
-bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_tasks" }
+# bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_tasks" }
+bevy-tokio-tasks = { git = "https://github.com/vertec-io/async_bevy_web.git", package = "bevy-tokio-tasks"}
 bincode = { version = "2.0.1", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.28", features = ["full"] }

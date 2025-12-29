@@ -547,14 +547,6 @@ dependencies = [
 [[package]]
 name = "bevy-tokio-tasks"
 version = "0.17.0"
-dependencies = [
- "bevy",
- "tokio",
-]
-
-[[package]]
-name = "bevy-tokio-tasks"
-version = "0.17.0"
 source = "git+https://github.com/vertec-io/async_bevy_web.git#a380e9d4633442ca0003b07dfc2873aa71fe4be7"
 dependencies = [
  "bevy",
@@ -2893,7 +2885,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bevy",
- "bevy-tokio-tasks 0.17.0",
+ "bevy-tokio-tasks",
  "bincode 2.0.1",
  "fanuc_replica_types",
  "fanuc_rmi",
@@ -2948,7 +2940,7 @@ name = "fanuc_server"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy-tokio-tasks 0.17.0 (git+https://github.com/vertec-io/async_bevy_web.git)",
+ "bevy-tokio-tasks",
  "bincode 2.0.1",
  "fanuc_real_types",
  "fanuc_rmi",

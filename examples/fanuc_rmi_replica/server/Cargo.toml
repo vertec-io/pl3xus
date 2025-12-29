@@ -19,7 +19,8 @@ pl3xus_sync = { path = "../../../crates/pl3xus_sync", features = ["runtime"] }
 pl3xus_websockets = { path = "../../../crates/pl3xus_websockets" }
 
 # Async runtime for driver
-bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_tasks" }
+# bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_tasks" }
+bevy-tokio-tasks = { git = "https://github.com/vertec-io/async_bevy_web.git", package = "bevy-tokio-tasks"}
 
 # Shared types
 fanuc_replica_types = { path = "../../shared/fanuc_replica_types", features = ["server"] }

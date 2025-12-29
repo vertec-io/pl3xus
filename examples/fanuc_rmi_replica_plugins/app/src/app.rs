@@ -8,6 +8,7 @@ use leptos_router::components::Router;
 use pl3xus_client::{ClientTypeRegistry, SyncProvider, EntityControl, ControlResponse, ServerNotification};
 #[cfg(feature = "devtools")]
 use pl3xus_client::{DevTools, DevToolsMode, use_sync_context};
+use fanuc_replica_core::ConsoleLogEntry;
 use fanuc_replica_plugins::*;
 
 use crate::components::ToastProvider;
@@ -26,6 +27,7 @@ fn build_registry() -> Arc<ClientTypeRegistry> {
         .register::<IoStatus>()
         .register::<IoConfigState>()
         .register::<ExecutionState>()
+        .register::<BufferDisplayData>()
         .register::<ConnectionState>()
         .register::<ActiveConfigState>()
         .register::<JogSettingsState>()

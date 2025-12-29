@@ -13,11 +13,12 @@ ecs = [
     "dep:pl3xus_sync",
     "dep:pl3xus_macros",
     "dep:pl3xus",
-    "dep:pl3xus_common",
     "dep:fanuc_replica_core",
     "dep:fanuc_replica_fanuc",
     "fanuc_replica_core/ecs",
     "fanuc_replica_fanuc/ecs",
+    "fanuc_replica_execution/ecs",
+    "fanuc_replica_programs/ecs",
 ]
 
 # Server feature - enables server-only functionality (driver, database, tokio)
@@ -30,10 +31,10 @@ server = [
     "dep:anyhow",
     "dep:pl3xus_websockets",
     "dep:bevy-tokio-tasks",
-    "dep:fanuc_replica_execution",
     "fanuc_replica_core/server",
     "fanuc_replica_fanuc/server",
     "fanuc_replica_execution/server",
+    "fanuc_replica_programs/server",
 ]
 
 # Duet feature - enables Duet extruder support
@@ -46,9 +47,12 @@ duet = [
 # Stores feature - enables reactive stores for client-side fine-grained reactivity
 stores = [
     "dep:reactive_stores",
-    "dep:pl3xus_common",
+    "dep:fanuc_replica_core",
     "dep:fanuc_replica_fanuc",
+    "fanuc_replica_core/stores",
     "fanuc_replica_fanuc/stores",
+    "fanuc_replica_execution/stores",
+    "fanuc_replica_programs/stores",
 ]
 
 [dependencies]
@@ -63,10 +67,14 @@ fanuc_rmi = { workspace = true, features = ["DTO"], default-features = false }
 # Robot-agnostic coordinate types
 fanuc_replica_robotics.workspace = true
 
+# Always-available types (pure data types, no ECS/server deps)
+pl3xus_common.workspace = true
+fanuc_replica_execution = { workspace = true, default-features = false }
+fanuc_replica_programs = { workspace = true, default-features = false }
+
 # ECS feature dependencies
 bevy = { workspace = true, features = ["multi_threaded", "bevy_log"], optional = true }
 pl3xus = { workspace = true, optional = true }
-pl3xus_common = { workspace = true, optional = true }
 pl3xus_sync = { workspace = true, features = ["runtime"], optional = true }
 pl3xus_macros = { workspace = true, optional = true }
 
@@ -81,7 +89,6 @@ bevy-tokio-tasks = { workspace = true, optional = true }
 fanuc_replica_core = { workspace = true, optional = true, default-features = false }
 fanuc_replica_fanuc = { workspace = true, optional = true, default-features = false }
 fanuc_replica_duet = { workspace = true, optional = true, default-features = false }
-fanuc_replica_execution = { workspace = true, optional = true, default-features = false }
 
 # Stores feature dependencies (client-side)
 reactive_stores = { workspace = true, optional = true }

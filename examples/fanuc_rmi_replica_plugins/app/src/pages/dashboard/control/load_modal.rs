@@ -1,6 +1,6 @@
 //! Load Program Modal - Select and load a program for execution.
 //!
-//! This modal sends a LoadProgram targeted mutation to the server. The server
+//! This modal sends a Load targeted mutation to the server. The server
 //! updates the ExecutionState component which is automatically synced to all clients.
 //! No client-side state updates are needed - the UI reads directly from the
 //! synced ExecutionState.
@@ -13,7 +13,7 @@ use crate::pages::dashboard::use_system_entity;
 
 /// Load Program Modal - Select and load a program for execution.
 ///
-/// Sends LoadProgram targeted mutation to server. Server updates ExecutionState which
+/// Sends Load targeted mutation to server. Server updates ExecutionState which
 /// is automatically synced to all clients. No client-side state updates needed.
 #[component]
 pub fn LoadProgramModal<F>(
@@ -31,8 +31,8 @@ where
     let (selected_id, set_selected_id) = signal::<Option<i64>>(None);
     let on_close_load = on_close.clone();
 
-    // LoadProgram targeted mutation - shows toasts and closes modal on success
-    let load = use_mutation_targeted::<LoadProgram>(move |result| {
+    // Load targeted mutation - shows toasts and closes modal on success
+    let load = use_mutation_targeted::<Load>(move |result| {
         match result {
             Ok(r) if r.success => {
                 if let Some(program) = &r.program {
@@ -62,7 +62,7 @@ where
     // Note: TargetedMutationHandle is Copy, so it can be used directly in closures
     let load_click = move |_| {
         if let (Some(program_id), Some(entity_id)) = (selected_id.get(), system_entity_id.get()) {
-            load.send(entity_id, LoadProgram { program_id });
+            load.send(entity_id, Load { program_id });
         }
     };
 
@@ -105,7 +105,7 @@ where
                                 let id = program.id;
                                 let name = program.name.clone();
                                 let description = program.description.clone();
-                                let line_count = program.lines.len();
+                                let line_count = program.instruction_count as usize;
                                 let has_description = description.is_some();
                                 let description_text = description.unwrap_or_default();
                                 let is_selected = move || selected_id.get() == Some(id);

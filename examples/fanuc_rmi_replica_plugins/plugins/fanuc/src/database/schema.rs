@@ -12,65 +12,8 @@ impl DatabaseInit for FanucDatabaseInit {
     }
 
     fn init_schema(&self, conn: &Connection) -> anyhow::Result<()> {
-        // Programs table
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS programs (
-                id INTEGER PRIMARY KEY,
-                name TEXT NOT NULL UNIQUE,
-                description TEXT,
-                default_w REAL NOT NULL DEFAULT 0.0,
-                default_p REAL NOT NULL DEFAULT 0.0,
-                default_r REAL NOT NULL DEFAULT 0.0,
-                default_speed REAL,
-                default_speed_type TEXT NOT NULL DEFAULT 'mmSec',
-                default_term_type TEXT NOT NULL DEFAULT 'CNT',
-                default_term_value INTEGER NOT NULL DEFAULT 100,
-                default_uframe INTEGER,
-                default_utool INTEGER,
-                start_x REAL,
-                start_y REAL,
-                start_z REAL,
-                start_w REAL,
-                start_p REAL,
-                start_r REAL,
-                end_x REAL,
-                end_y REAL,
-                end_z REAL,
-                end_w REAL,
-                end_p REAL,
-                end_r REAL,
-                move_speed REAL NOT NULL DEFAULT 100.0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )",
-            [],
-        )?;
-
-        // Program instructions table
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS program_instructions (
-                id INTEGER PRIMARY KEY,
-                program_id INTEGER NOT NULL,
-                line_number INTEGER NOT NULL,
-                x REAL NOT NULL,
-                y REAL NOT NULL,
-                z REAL NOT NULL,
-                w REAL,
-                p REAL,
-                r REAL,
-                ext1 REAL,
-                ext2 REAL,
-                ext3 REAL,
-                speed REAL,
-                speed_type TEXT,
-                term_type TEXT,
-                term_value INTEGER,
-                uframe INTEGER,
-                utool INTEGER,
-                FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE
-            )",
-            [],
-        )?;
+        // Note: Program tables (programs, program_instructions) have been moved to
+        // the programs crate. See fanuc_replica_programs::database::schema.
 
         // Robot connections table
         conn.execute(
@@ -152,21 +95,9 @@ impl DatabaseInit for FanucDatabaseInit {
         Ok(())
     }
 
-    fn run_migrations(&self, conn: &Connection) -> anyhow::Result<()> {
-        // Migration: Add default_speed_type column to programs table if missing
-        let has_speed_type: bool = conn.query_row(
-            "SELECT COUNT(*) > 0 FROM pragma_table_info('programs') WHERE name = 'default_speed_type'",
-            [],
-            |row| row.get(0),
-        )?;
-
-        if !has_speed_type {
-            conn.execute(
-                "ALTER TABLE programs ADD COLUMN default_speed_type TEXT DEFAULT 'mmSec'",
-                [],
-            )?;
-        }
-
+    fn run_migrations(&self, _conn: &Connection) -> anyhow::Result<()> {
+        // Note: Program table migrations have been moved to the programs crate.
+        // No fanuc-specific migrations needed at this time.
         Ok(())
     }
 

@@ -134,7 +134,7 @@ pub fn NewProgramModal(
 /// Open Program Modal - Select a program to open
 #[component]
 pub fn OpenProgramModal(
-    programs: Memo<Vec<fanuc_replica_plugins::ProgramWithLines>>,
+    programs: Memo<Vec<fanuc_replica_plugins::ProgramInfo>>,
     on_close: impl Fn() + 'static + Clone + Send,
     on_selected: impl Fn(ProgramDetail) + 'static + Clone + Send,
 ) -> impl IntoView {
@@ -208,7 +208,7 @@ pub fn OpenProgramModal(
                             Either::Right(progs.into_iter().map(|prog| {
                                 let prog_id = prog.id;
                                 let prog_name = prog.name.clone();
-                                let lines_str = format!("{} lines", prog.lines.len());
+                                let lines_str = format!("{} lines", prog.instruction_count);
                                 let is_selected = move || selected_id.get() == Some(prog_id);
                                 view! {
                                     <button
@@ -468,7 +468,7 @@ pub fn CSVUploadModal(
                                 upload_csv.send(UploadCsv {
                                     program_id,
                                     csv_content: content,
-                                    start_position: None,
+                                    sequence_type: None,
                                 });
                             }
                         }

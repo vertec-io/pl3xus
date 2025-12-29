@@ -36,29 +36,41 @@
 //! └── DuetExtruder [AuxiliaryDevice impl, ExecutionTarget]
 //! ```
 
+use cfg_if::cfg_if;
+
+// Always available modules
 pub mod components;
-pub mod devices;
 pub mod traits;
+pub mod types;
 
-#[cfg(feature = "server")]
-pub mod systems;
-
-// Re-export main types
+// Always available exports
 pub use components::{
-    BufferState, ExecutionCoordinator, ExecutionPoint, ExecutionTarget,
-    MotionCommand, MotionType, PointMetadata, PrimaryMotion, ToolpathBuffer,
+    BufferDisplayData, BufferLineDisplay, BufferState, ExecutionCoordinator, ExecutionPoint,
+    ExecutionState, ExecutionTarget, MotionCommand, MotionType, PointMetadata, PrimaryMotion,
+    SourceType, SubsystemEntry, SubsystemReadiness, Subsystems, SystemState, ToolpathBuffer,
+    UiActions, SUBSYSTEM_DUET, SUBSYSTEM_EXECUTION, SUBSYSTEM_FANUC, SUBSYSTEM_PROGRAMS,
+    VALIDATION_TIMEOUT,
 };
-
 pub use traits::{AuxiliaryCommand, AuxiliaryDevice, DeviceError, MotionDevice};
+pub use types::{Pause, PauseResponse, Resume, ResumeResponse, Start, StartResponse, Stop, StopResponse};
 
-#[cfg(feature = "server")]
-pub use systems::{
-    AuxiliaryCommandEvent, DeviceConnected, DeviceStatus, DeviceType, MotionCommandEvent,
-};
+cfg_if! {
+    if #[cfg(feature = "server")] {
+        pub mod handlers;
+        pub mod systems;
 
-#[cfg(feature = "ecs")]
-pub mod plugin;
+        pub use handlers::{handle_pause, handle_resume, handle_start, handle_stop};
+        pub use systems::{
+            AuxiliaryCommandEvent, DeviceConnected, DeviceStatus, DeviceType, MotionCommandEvent,
+        };
+    }
+}
 
-#[cfg(feature = "ecs")]
-pub use plugin::ExecutionPlugin;
+cfg_if! {
+    if #[cfg(feature = "ecs")] {
+        pub mod plugin;
+
+        pub use plugin::{ExecutionPlugin, SubsystemValidation};
+    }
+}
 

@@ -15,8 +15,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 /// Configuration for a Duet-based extruder device.
-#[derive(Component, Debug, Clone, Serialize, Deserialize, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Debug, Clone, Serialize, Deserialize)]
 pub struct DuetExtruderConfig {
     /// IP address or hostname of the Duet controller
     pub host: String,
@@ -43,8 +42,7 @@ impl Default for DuetExtruderConfig {
 }
 
 /// Connection state for a Duet extruder.
-#[derive(Component, Debug, Clone, Default, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Debug, Clone, Default)]
 pub struct DuetConnectionState {
     /// Whether we're connected to the Duet
     pub connected: bool,
@@ -55,8 +53,7 @@ pub struct DuetConnectionState {
 }
 
 /// Current position state for the Duet extruder.
-#[derive(Component, Debug, Clone, Default, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Debug, Clone, Default)]
 pub struct DuetPositionState {
     /// Current Y-axis position (piston position in mm)
     pub position: f32,
@@ -65,8 +62,7 @@ pub struct DuetPositionState {
 }
 
 /// Marker component for Duet extruder entities.
-#[derive(Component, Debug, Clone, Default, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Debug, Clone, Default)]
 pub struct DuetExtruder;
 
 /// HTTP client resource for Duet communication.

@@ -11,33 +11,26 @@
 //! - `ecs` - Enables Bevy ECS integration
 //! - `server` - Enables database and handler functionality
 
+use cfg_if::cfg_if;
+
+// Always available
 mod types;
-
-#[cfg(feature = "server")]
-mod database;
-
-#[cfg(feature = "server")]
-mod csv_parser;
-
-#[cfg(feature = "server")]
-mod handlers;
-
-#[cfg(feature = "server")]
-mod plugin;
-
-// Re-export types (always available)
 pub use types::*;
 
-// Re-export server functionality
-#[cfg(feature = "server")]
-pub use database::{ProgramsDatabaseInit, queries};
+cfg_if! {
+    if #[cfg(feature = "server")] {
+        mod database;
+        mod csv_parser;
+        mod handlers;
+        mod notifications;
+        mod plugin;
+        mod validation;
 
-#[cfg(feature = "server")]
-pub use csv_parser::{parse_csv, ParseResult, ParseError, ParseWarning};
-
-#[cfg(feature = "server")]
-pub use handlers::ProgramHandlerPlugin;
-
-#[cfg(feature = "server")]
-pub use plugin::ProgramsPlugin;
+        pub use database::{ProgramsDatabaseInit, queries};
+        pub use csv_parser::{parse_csv, ParseResult, ParseError, ParseWarning};
+        pub use handlers::ProgramHandlerPlugin;
+        pub use notifications::ProgramNotificationsPlugin;
+        pub use plugin::ProgramsPlugin;
+    }
+}
 

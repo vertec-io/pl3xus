@@ -57,10 +57,11 @@ pub fn ProgramDetails(
         leptos::logging::log!("[ProgramDetails] Effect running, checking current_program");
         if let Some(prog) = current_program.get() {
             let id_changed = current_prog_id.get() != Some(prog.id);
-            let inst_count_changed = current_inst_count.get() != prog.instructions.len();
+            let inst_count = prog.main_sequence.instructions.len();
+            let inst_count_changed = current_inst_count.get() != inst_count;
             leptos::logging::log!(
                 "[ProgramDetails] Program: {} (id={}), instructions: {}, id_changed: {}, inst_count_changed: {}",
-                prog.name, prog.id, prog.instructions.len(), id_changed, inst_count_changed
+                prog.name, prog.id, inst_count, id_changed, inst_count_changed
             );
 
             // Update when ID changes OR when instruction count changes (i.e. after CSV upload)
@@ -68,23 +69,44 @@ pub fn ProgramDetails(
             if id_changed || (inst_count_changed && !settings_modified.get()) {
                 leptos::logging::log!("[ProgramDetails] Updating local signals");
                 set_current_prog_id.set(Some(prog.id));
-                set_current_inst_count.set(prog.instructions.len());
-                set_start_x.set(prog.start_x.map(|v| format!("{:.2}", v)).unwrap_or_default());
-                set_start_y.set(prog.start_y.map(|v| format!("{:.2}", v)).unwrap_or_default());
-                set_start_z.set(prog.start_z.map(|v| format!("{:.2}", v)).unwrap_or_default());
-                set_start_w.set(prog.start_w.map(|v| format!("{:.2}", v)).unwrap_or_default());
-                set_start_p.set(prog.start_p.map(|v| format!("{:.2}", v)).unwrap_or_default());
-                set_start_r.set(prog.start_r.map(|v| format!("{:.2}", v)).unwrap_or_default());
-                set_end_x.set(prog.end_x.map(|v| format!("{:.2}", v)).unwrap_or_default());
-                set_end_y.set(prog.end_y.map(|v| format!("{:.2}", v)).unwrap_or_default());
-                set_end_z.set(prog.end_z.map(|v| format!("{:.2}", v)).unwrap_or_default());
-                set_end_w.set(prog.end_w.map(|v| format!("{:.2}", v)).unwrap_or_default());
-                set_end_p.set(prog.end_p.map(|v| format!("{:.2}", v)).unwrap_or_default());
-                set_end_r.set(prog.end_r.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                set_current_inst_count.set(inst_count);
+
+                // Compute start/end positions from first/last instruction in main sequence
+                let instructions = &prog.main_sequence.instructions;
+                if let Some(first) = instructions.first() {
+                    set_start_x.set(format!("{:.2}", first.x));
+                    set_start_y.set(format!("{:.2}", first.y));
+                    set_start_z.set(format!("{:.2}", first.z));
+                    set_start_w.set(first.w.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                    set_start_p.set(first.p.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                    set_start_r.set(first.r.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                } else {
+                    set_start_x.set(String::new());
+                    set_start_y.set(String::new());
+                    set_start_z.set(String::new());
+                    set_start_w.set(String::new());
+                    set_start_p.set(String::new());
+                    set_start_r.set(String::new());
+                }
+                if let Some(last) = instructions.last() {
+                    set_end_x.set(format!("{:.2}", last.x));
+                    set_end_y.set(format!("{:.2}", last.y));
+                    set_end_z.set(format!("{:.2}", last.z));
+                    set_end_w.set(last.w.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                    set_end_p.set(last.p.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                    set_end_r.set(last.r.map(|v| format!("{:.2}", v)).unwrap_or_default());
+                } else {
+                    set_end_x.set(String::new());
+                    set_end_y.set(String::new());
+                    set_end_z.set(String::new());
+                    set_end_w.set(String::new());
+                    set_end_p.set(String::new());
+                    set_end_r.set(String::new());
+                }
                 // Required fields come directly from DB - no fallbacks, values are always present
                 set_move_speed.set(format!("{:.0}", prog.move_speed));
-                set_term_type.set(prog.default_term_type.clone());
-                set_term_value.set(prog.default_term_value.to_string());
+                set_term_type.set(prog.default_term_type.clone().unwrap_or_default());
+                set_term_value.set(prog.default_term_value.map(|v| v.to_string()).unwrap_or_default());
                 set_settings_modified.set(false);
             }
         } else {
@@ -99,8 +121,8 @@ pub fn ProgramDetails(
                     let prog_id = prog.id;
                     let prog_name = prog.name.clone();
                     let prog_desc = prog.description.clone().unwrap_or_default();
-                    let line_count = prog.instructions.len();
-                    let instructions_for_table = prog.instructions.clone();
+                    let line_count = prog.main_sequence.instructions.len();
+                    let instructions_for_table = prog.main_sequence.instructions.clone();
 
                     Either::Left(view! {
                         <div class="h-full flex flex-col">
@@ -247,18 +269,9 @@ pub fn ProgramDetails(
 
                                             update_settings.send(UpdateProgramSettings {
                                                 program_id: prog_id,
-                                                start_x: start_x.get().parse().ok(),
-                                                start_y: start_y.get().parse().ok(),
-                                                start_z: start_z.get().parse().ok(),
-                                                start_w: start_w.get().parse().ok(),
-                                                start_p: start_p.get().parse().ok(),
-                                                start_r: start_r.get().parse().ok(),
-                                                end_x: end_x.get().parse().ok(),
-                                                end_y: end_y.get().parse().ok(),
-                                                end_z: end_z.get().parse().ok(),
-                                                end_w: end_w.get().parse().ok(),
-                                                end_p: end_p.get().parse().ok(),
-                                                end_r: end_r.get().parse().ok(),
+                                                name: None, // Only update settings, not name
+                                                description: None,
+                                                default_speed: None, // Could be added if needed
                                                 move_speed: parsed_move_speed,
                                                 default_term_type: Some(term_type_val),
                                                 default_term_value: parsed_term_value,
@@ -377,8 +390,6 @@ fn InstructionsTable(instructions: Vec<fanuc_replica_plugins::Instruction>) -> i
                             <th class="px-2 py-1.5 font-medium">"R"</th>
                             <th class="px-2 py-1.5 font-medium">"Speed"</th>
                             <th class="px-2 py-1.5 font-medium">"Term"</th>
-                            <th class="px-2 py-1.5 font-medium">"UFrame"</th>
-                            <th class="px-2 py-1.5 font-medium">"UTool"</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -388,8 +399,6 @@ fn InstructionsTable(instructions: Vec<fanuc_replica_plugins::Instruction>) -> i
                             let r_str = instr.r.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "-".to_string());
                             let speed_str = instr.speed.map(|v| format!("{:.0}", v)).unwrap_or_else(|| "-".to_string());
                             let term_str = instr.term_type.clone().unwrap_or_else(|| "-".to_string());
-                            let uframe_str = instr.uframe.map(|v| v.to_string()).unwrap_or_else(|| "-".to_string());
-                            let utool_str = instr.utool.map(|v| v.to_string()).unwrap_or_else(|| "-".to_string());
                             view! {
                                 <tr class="border-t border-border/8 hover:bg-[#ffffff05]">
                                     <td class="px-2 py-1 text-primary">{instr.line_number}</td>
@@ -401,8 +410,6 @@ fn InstructionsTable(instructions: Vec<fanuc_replica_plugins::Instruction>) -> i
                                     <td class="px-2 py-1 text-muted-foreground">{r_str}</td>
                                     <td class="px-2 py-1 text-success">{speed_str}</td>
                                     <td class="px-2 py-1 text-muted-foreground">{term_str}</td>
-                                    <td class="px-2 py-1 text-muted-foreground">{uframe_str}</td>
-                                    <td class="px-2 py-1 text-muted-foreground">{utool_str}</td>
                                 </tr>
                             }
                         }).collect_view()}

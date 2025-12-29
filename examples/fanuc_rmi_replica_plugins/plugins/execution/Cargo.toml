@@ -11,25 +11,45 @@ default = ["ecs", "server"]
 # ECS feature - enables Bevy Component derives and ECS systems
 ecs = [
     "dep:bevy",
+    "fanuc_replica_core/ecs",
 ]
 
 # Server feature - enables server-only functionality
 server = [
     "ecs",
     "dep:tokio",
+    "dep:pl3xus",
+    "dep:pl3xus_sync",
+    "dep:pl3xus_websockets",
+    "fanuc_replica_core/server",
+]
+
+# Stores feature - enables reactive stores for client-side fine-grained reactivity
+stores = [
+    "dep:reactive_stores",
 ]
 
 [dependencies]
 # Always available
+cfg-if = "1.0"
 serde.workspace = true
 thiserror = "2"
 
 # Robot-agnostic coordinate types
 fanuc_replica_robotics.workspace = true
 
+# Core plugin for ActiveSystem marker
+fanuc_replica_core = { workspace = true, default-features = false }
+
 # ECS feature dependencies
 bevy = { workspace = true, features = ["multi_threaded", "bevy_log"], optional = true }
 
 # Server feature dependencies
 tokio = { workspace = true, optional = true }
+pl3xus = { workspace = true, optional = true }
+pl3xus_sync = { workspace = true, optional = true }
+pl3xus_websockets = { workspace = true, optional = true }
+pl3xus_common = { workspace = true }
 
+# Stores feature dependencies (client-side)
+reactive_stores = { workspace = true, optional = true }

@@ -3,6 +3,10 @@
 use super::ExecutionPoint;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::time::Duration;
+
+/// Validation timeout - 30 seconds
+pub const VALIDATION_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[cfg(feature = "ecs")]
 use bevy::prelude::*;
@@ -274,6 +278,16 @@ pub enum BufferState {
     /// Minimum buffer reached, ready to start execution
     Ready,
 
+    /// Validating subsystems before execution starts.
+    ///
+    /// When user clicks "Start", we enter this state and wait for all
+    /// subsystems to report Ready. If all ready, transition to Executing.
+    /// If any error or timeout, transition to Error.
+    ///
+    /// Note: started_at is only available on server (uses Instant).
+    /// For serialization, we don't include the timestamp.
+    Validating,
+
     /// Actively sending points to devices
     Executing {
         /// Index of the current point being executed
@@ -382,6 +396,11 @@ impl BufferState {
         matches!(self, BufferState::Stopped { .. })
     }
 
+    /// Check if currently validating subsystems.
+    pub fn is_validating(&self) -> bool {
+        matches!(self, BufferState::Validating)
+    }
+
     /// Check if execution is in a terminal state (Complete, Error, or Stopped).
     pub fn is_terminal(&self) -> bool {
         matches!(
@@ -400,6 +419,105 @@ impl BufferState {
             _ => None,
         }
     }
+
+    /// Convert to SystemState for the ExecutionState component.
+    ///
+    /// Maps internal buffer states to the SystemState enum used by
+    /// the ExecutionState component that is synced to clients.
+    pub fn to_system_state(&self) -> super::SystemState {
+        use super::SystemState;
+        match self {
+            BufferState::Idle => SystemState::NoSource,
+            BufferState::Buffering { .. } => SystemState::Ready,
+            BufferState::Ready => SystemState::Ready,
+            BufferState::Validating => SystemState::Validating,
+            BufferState::Executing { .. } => SystemState::Running,
+            BufferState::Paused { .. } => SystemState::Paused,
+            BufferState::AwaitingPoints { .. } => SystemState::AwaitingPoints,
+            BufferState::WaitingForFeedback { .. } => SystemState::Running,
+            BufferState::Complete { .. } => SystemState::Completed,
+            BufferState::Error { .. } => SystemState::Error,
+            BufferState::Stopped { .. } => SystemState::Stopped,
+        }
+    }
+
+    /// Compute available UI actions based on current state.
+    ///
+    /// Returns flags for what actions are available in the current state.
+    /// Note: can_load is always false from BufferState because that depends on
+    /// whether a program is loaded, which BufferState doesn't track.
+    pub fn available_actions(&self) -> UiActions {
+        use super::SystemState;
+        match self.to_system_state() {
+            SystemState::NoSource => UiActions {
+                can_load: true,
+                can_start: false,
+                can_pause: false,
+                can_resume: false,
+                can_stop: false,
+                can_unload: false,
+            },
+            SystemState::Ready => UiActions {
+                can_load: false,
+                can_start: true,
+                can_pause: false,
+                can_resume: false,
+                can_stop: false,
+                can_unload: true,
+            },
+            SystemState::Validating => UiActions {
+                can_load: false,
+                can_start: false,
+                can_pause: false,
+                can_resume: false,
+                can_stop: true, // Can cancel validation
+                can_unload: false,
+            },
+            SystemState::Running | SystemState::AwaitingPoints => UiActions {
+                can_load: false,
+                can_start: false,
+                can_pause: true,
+                can_resume: false,
+                can_stop: true,
+                can_unload: false,
+            },
+            SystemState::Paused => UiActions {
+                can_load: false,
+                can_start: false,
+                can_pause: false,
+                can_resume: true,
+                can_stop: true,
+                can_unload: false,
+            },
+            SystemState::Completed | SystemState::Stopped => UiActions {
+                can_load: false,
+                can_start: true, // Can restart
+                can_pause: false,
+                can_resume: false,
+                can_stop: false,
+                can_unload: true,
+            },
+            SystemState::Error => UiActions {
+                can_load: false,
+                can_start: true,
+                can_pause: false,
+                can_resume: false,
+                can_stop: false,
+                can_unload: true,
+            },
+        }
+    }
+}
+
+/// Available UI actions based on execution state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct UiActions {
+    pub can_load: bool,
+    pub can_start: bool,
+    pub can_pause: bool,
+    pub can_resume: bool,
+    pub can_stop: bool,
+    pub can_unload: bool,
 }
 
 #[cfg(test)]

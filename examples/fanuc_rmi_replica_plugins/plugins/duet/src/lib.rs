@@ -13,24 +13,29 @@
 //! - `G1 Y{position} F{feedrate}` - Move Y axis (piston) to position
 //! - `M220 S{percent}` - Set speed override
 
-mod device;
-#[cfg(feature = "server")]
-mod handler;
-#[cfg(feature = "ecs")]
-mod plugin;
+use cfg_if::cfg_if;
 
-// Re-export device types
+// Always available
+mod device;
 pub use device::{
     DuetCommandEvent, DuetConnectionState, DuetExtruder, DuetExtruderBundle,
     DuetExtruderConfig, DuetHttpClient, DuetPositionState,
     format_extrusion_gcode, piston_travel_to_volume, volume_to_piston_travel,
 };
 
-// Re-export handler systems
-#[cfg(feature = "server")]
-pub use handler::{duet_command_handler_system, duet_http_sender_system};
+cfg_if! {
+    if #[cfg(feature = "server")] {
+        mod handler;
 
-// Re-export plugin
-#[cfg(feature = "ecs")]
-pub use plugin::DuetPlugin;
+        pub use handler::{duet_command_handler_system, duet_http_sender_system};
+    }
+}
+
+cfg_if! {
+    if #[cfg(feature = "ecs")] {
+        mod plugin;
+
+        pub use plugin::DuetPlugin;
+    }
+}
 

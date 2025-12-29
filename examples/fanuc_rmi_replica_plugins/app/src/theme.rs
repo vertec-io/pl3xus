@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Theme {
     // Original themes
-    #[default]
     Industrial,    // Default cyan industrial theme
     Indigo,        // Deep navy with electric indigo glow
     Coffee,        // Warm carbon with brown undertones
@@ -25,6 +24,8 @@ pub enum Theme {
     Claymorphism,
     CleanSlate,
     CosmicNight,
+    #[default]
+    CosmicRaven,
     Darkmatter,
     Doom64,
     Graphite,
@@ -60,6 +61,7 @@ impl Theme {
             Theme::Claymorphism => "theme-claymorphism",
             Theme::CleanSlate => "theme-clean-slate",
             Theme::CosmicNight => "theme-cosmic-night",
+            Theme::CosmicRaven => "theme-cosmic-raven",
             Theme::Darkmatter => "theme-darkmatter",
             Theme::Doom64 => "theme-doom-64",
             Theme::Graphite => "theme-graphite",
@@ -95,6 +97,7 @@ impl Theme {
             Theme::Claymorphism => "Claymorphism",
             Theme::CleanSlate => "Clean Slate",
             Theme::CosmicNight => "Cosmic Night",
+            Theme::CosmicRaven => "Cosmic Raven",
             Theme::Darkmatter => "Dark Matter",
             Theme::Doom64 => "Doom 64",
             Theme::Graphite => "Graphite",
@@ -130,6 +133,7 @@ impl Theme {
             Theme::Claymorphism => "#808bf7",
             Theme::CleanSlate => "#808bf7",
             Theme::CosmicNight => "#a48ffe",
+            Theme::CosmicRaven => "#5659e6",
             Theme::Darkmatter => "#e78952",
             Theme::Doom64 => "#e53834",
             Theme::Graphite => "#b3b3b3",
@@ -165,6 +169,7 @@ impl Theme {
             Theme::Claymorphism,
             Theme::CleanSlate,
             Theme::CosmicNight,
+            Theme::CosmicRaven,
             Theme::Darkmatter,
             Theme::Doom64,
             Theme::Graphite,

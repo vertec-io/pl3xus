@@ -30,13 +30,7 @@ pub use queries::{
     delete_configuration,
     set_default_configuration,
     save_current_configuration,
-    // Programs
-    list_programs,
-    get_program,
-    create_program,
-    delete_program,
-    update_program_settings,
-    insert_instructions,
+    // Note: Program CRUD (list_programs, get_program, etc.) has been moved to fanuc_replica_programs
     // Settings
     get_settings,
     update_settings,

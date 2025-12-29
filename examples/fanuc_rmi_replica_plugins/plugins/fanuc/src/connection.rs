@@ -235,6 +235,7 @@ fn handle_connect_requests(
 
             // Spawn the robot entity as a child of the System entity
             // Note: Bevy tuples have a 15-component limit, so we split into spawn + insert
+            // ExecutionState is now on the System entity, not the robot entity
             let robot_entity = commands.spawn((
                 Name::new("FANUC_Robot"),
                 FanucRobot,
@@ -248,7 +249,6 @@ fn handle_connect_requests(
                 IoStatus::default(),
                 io_config_state,  // Loaded from database for saved connections
                 FrameToolDataState::default(),
-                ExecutionState::default(),
                 initial_conn_state,
             )).insert((
                 // Additional synced components (split due to tuple limit)

@@ -1,61 +1,34 @@
-//! Shared types for FANUC RMI Replica
+//! FANUC-specific types for the replica system.
 //!
-//! # Philosophy
-//! - **Synced Components**: Wrapped `fanuc_rmi::dto` types (Newtype pattern) to implement `Component`.
-//! - **Network Messages**: Direct usages of `fanuc_rmi::dto` types where possible, custom types for App logic.
-//! - **DTOs**: Data transfer objects for API communication.
-//! - **Request/Response**: Use pl3xus_common::RequestMessage for correlated request/response patterns.
+//! This module contains FANUC-specific types including:
+//! - Synced components (wrapped `fanuc_rmi::dto` types)
+//! - Network messages and DTOs
+//! - I/O status types
 //!
-//! # Automatic Query Invalidation
-//!
-//! Mutation request types use the `#[derive(Invalidates)]` macro (server feature only)
-//! to declare which queries should be invalidated on success. This enables automatic
-//! cache invalidation without manual broadcasting in handlers.
+//! Import types from their canonical sources:
+//! - `fanuc_rmi::dto` for raw FANUC DTO types
+//! - `fanuc_replica_execution` for execution state types
+//! - `fanuc_replica_programs` for program types
+//! - `fanuc_replica_robotics` for robotics types
+//! - `pl3xus_common` for common traits
 
+use fanuc_rmi::dto;
+use pl3xus_common::{ErrorResponse, RequestMessage};
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 
 #[cfg(feature = "ecs")]
 use bevy::prelude::*;
 
-#[cfg(feature = "stores")]
-use reactive_stores::Store;
-
-// Re-export FANUC DTO types for easy access
-// All features use the same fanuc_rmi crate with different feature flags
-pub use fanuc_rmi::dto;
-
-// Re-export RequestMessage and ErrorResponse traits for implementing request types
-pub use pl3xus_common::{RequestMessage, ErrorResponse};
-
 // Server-only: automatic query invalidation support
-// Only export the derive macros - they generate `impl pl3xus_sync::Invalidates for T`
-// and `impl pl3xus_common::HasSuccess for T` respectively
 #[cfg(feature = "server")]
-pub use pl3xus_macros::Invalidates;
-
-// Re-export HasSuccess derive macro for response types with success: bool field
-// This enables the respond_and_invalidate() auto-invalidation pattern
-// Server-only because it's only used in server handlers
-#[cfg(feature = "server")]
-pub use pl3xus_macros::HasSuccess;
+use pl3xus_macros::{HasSuccess, Invalidates};
 
 // ============================================================================
 //                          SYNCED COMPONENTS (Wrapped DTOs)
 // ============================================================================
 
-/// Marker component for the active/current System entity.
-///
-/// This entity is the control root - clients request control of this entity
-/// to gain control over the entire apparatus including all child robots, sensors, controllers, etc.
-///
-/// On the server, query with `With<ActiveSystem>` to find the system entity.
-/// On the client, use `use_components::<ActiveSystem>()` to get the system entity ID.
-///
-/// When multiple systems exist, this marker can be moved to whichever is currently active.
-#[cfg_attr(feature = "ecs", derive(Component))]
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct ActiveSystem;
+// ActiveSystem is defined in fanuc_replica_core
 
 /// Marker component for the active/current robot entity.
 ///
@@ -151,95 +124,6 @@ impl Default for RobotStatus {
     }
 }
 
-/// Execution state for program running (Synced 1-way: Server -> Client)
-/// Program execution state - server-authoritative state machine.
-/// The server determines the current state and what actions are available.
-/// The client simply reflects this state and enables/disables actions accordingly.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum ProgramExecutionState {
-    /// No program loaded.
-    #[default]
-    NoProgram,
-    /// Program is loaded but not running (ready to start).
-    Idle,
-    /// Program is actively executing.
-    Running,
-    /// Program execution is paused (can resume or stop).
-    Paused,
-    /// Program completed successfully.
-    Completed,
-    /// Program encountered an error.
-    Error,
-}
-
-/// Execution state (Synced 1-way: Server -> Client).
-///
-/// This component follows the **server-driven UI state pattern**:
-/// - The server determines the current `state` and what actions are available via `can_*` flags
-/// - The client simply reflects these values without any client-side state machine logic
-/// - Button visibility is driven directly by the `can_*` flags
-///
-/// # Example (client)
-/// ```rust,ignore
-/// let exec = use_sync_component_store::<ExecutionState>();
-/// // Access fields with fine-grained reactivity:
-/// let can_start = move || exec.can_start().get();
-/// let state = move || exec.state().get();
-/// ```
-#[cfg_attr(feature = "ecs", derive(Component))]
-#[cfg_attr(feature = "stores", derive(Store))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct ExecutionState {
-    pub loaded_program_id: Option<i64>,
-    pub loaded_program_name: Option<String>,
-    /// Current execution state (server-authoritative state machine)
-    pub state: ProgramExecutionState,
-    /// Current line being executed (1-based, 0 = not started)
-    pub current_line: usize,
-    /// Total lines in the program
-    pub total_lines: usize,
-    /// The program lines for the loaded program (synced to all clients)
-    pub program_lines: Vec<ProgramLineInfo>,
-
-    // === Available Actions (server-driven) ===
-    // The server determines what actions are valid based on the current state.
-    // The client simply enables/disables buttons based on these flags.
-
-    /// Can load a new program (only when no program is loaded or idle)
-    pub can_load: bool,
-    /// Can start/run the program
-    pub can_start: bool,
-    /// Can pause the running program
-    pub can_pause: bool,
-    /// Can resume a paused program
-    pub can_resume: bool,
-    /// Can stop the running/paused program
-    pub can_stop: bool,
-    /// Can unload the current program
-    pub can_unload: bool,
-}
-
-impl Default for ExecutionState {
-    fn default() -> Self {
-        // Default state is NoProgram - only load action is available
-        Self {
-            loaded_program_id: None,
-            loaded_program_name: None,
-            state: ProgramExecutionState::NoProgram,
-            current_line: 0,
-            total_lines: 0,
-            program_lines: Vec::new(),
-            // In NoProgram state, only loading is available
-            can_load: true,
-            can_start: false,
-            can_pause: false,
-            can_resume: false,
-            can_stop: false,
-            can_unload: false,
-        }
-    }
-}
-
 /// Connection state (Synced 1-way: Server -> Client)
 #[cfg_attr(feature = "ecs", derive(Component))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -262,7 +146,7 @@ pub struct ConnectionState {
     pub tp_initialized: bool,
 }
 
-/// A single change entry in the active config changelog.
+/// A single change ProgramEntry in the active config changelog.
 /// Tracks field-level changes made since the configuration was loaded.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ConfigChangeEntry {
@@ -367,71 +251,6 @@ impl Default for JogSettingsState {
             rotation_jog_step: 1.0,    // degrees
         }
     }
-}
-
-/// Console log entry (broadcast message for console display)
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-pub struct ConsoleLogEntry {
-    pub timestamp: String,
-    pub timestamp_ms: u64,
-    pub direction: ConsoleDirection,
-    pub msg_type: ConsoleMsgType,
-    pub content: String,
-    pub sequence_id: Option<u32>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
-pub enum ConsoleDirection {
-    #[default]
-    Sent,
-    Received,
-    System,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
-pub enum ConsoleMsgType {
-    #[default]
-    Command,
-    Response,
-    Error,
-    Status,
-    Config,
-}
-
-/// Program notification (broadcast message from server to all clients).
-///
-/// Used for server-initiated notifications about program events like
-/// completion, errors, or other state changes. All connected clients
-/// receive this message and can display appropriate UI feedback.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-pub struct ProgramNotification {
-    /// Unique sequence number to distinguish identical notifications
-    pub sequence: u64,
-    /// The type of notification
-    pub kind: ProgramNotificationKind,
-}
-
-/// Kind of program notification
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
-pub enum ProgramNotificationKind {
-    #[default]
-    None,
-    /// Program completed successfully
-    Completed {
-        program_name: String,
-        total_instructions: usize,
-    },
-    /// Program was stopped by user
-    Stopped {
-        program_name: String,
-        at_line: usize,
-    },
-    /// Program encountered an error
-    Error {
-        program_name: String,
-        at_line: usize,
-        error_message: String,
-    },
 }
 
 /// I/O Status - contains all I/O types
@@ -589,68 +408,10 @@ pub struct StartPosition {
     pub z: f64,
 }
 
-/// Program summary info for listing.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProgramInfo {
-    pub id: i64,
-    pub name: String,
-    pub description: Option<String>,
-    pub instruction_count: i64,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-/// Full program detail including instructions.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProgramDetail {
-    pub id: i64,
-    pub name: String,
-    pub description: Option<String>,
-    pub instructions: Vec<Instruction>,
-    // Program defaults for motion - these are required, non-optional fields
-    pub default_w: f64,
-    pub default_p: f64,
-    pub default_r: f64,
-    pub default_speed: Option<f64>,
-    pub default_speed_type: String,        // Required: "mmSec" or "percent"
-    pub default_term_type: String,         // Required: "CNT" or "FINE"
-    pub default_term_value: u8,            // Required: 0-100 for CNT, 0 for FINE
-    pub default_uframe: Option<i32>,
-    pub default_utool: Option<i32>,
-    // Approach/retreat positions (optional - not all programs have approach/retreat)
-    pub start_x: Option<f64>,
-    pub start_y: Option<f64>,
-    pub start_z: Option<f64>,
-    pub start_w: Option<f64>,
-    pub start_p: Option<f64>,
-    pub start_r: Option<f64>,
-    pub end_x: Option<f64>,
-    pub end_y: Option<f64>,
-    pub end_z: Option<f64>,
-    pub end_w: Option<f64>,
-    pub end_p: Option<f64>,
-    pub end_r: Option<f64>,
-    pub move_speed: f64,                   // Required: speed for approach/retreat moves
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-/// Program instruction (motion command).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Instruction {
-    pub line_number: i32,
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-    pub w: Option<f64>,
-    pub p: Option<f64>,
-    pub r: Option<f64>,
-    pub speed: Option<f64>,
-    pub term_type: Option<String>,
-    pub term_value: Option<u8>,
-    pub uframe: Option<i32>,
-    pub utool: Option<i32>,
-}
+// Note: Program types (ProgramInfo, ProgramDetail, Instruction) have been moved
+// to the fanuc_replica_programs crate which uses a sequence-based architecture.
+// See fanuc_replica_programs for the canonical program types.
+// All program-specific types should be reviewed then removed from this crate.
 
 /// Robot default settings.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -729,193 +490,6 @@ pub enum JogDirection { Positive, Negative }
 pub struct JogCommand {
     pub axis: JogAxis,
     pub direction: JogDirection,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct ListPrograms;
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ListProgramsResponse {
-    pub programs: Vec<ProgramWithLines>,
-}
-
-/// Program with lines for loading into the program display
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct ProgramWithLines {
-    pub id: i64,
-    pub name: String,
-    pub description: Option<String>,
-    pub lines: Vec<ProgramLineInfo>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct ProgramLineInfo {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-    pub w: f64,
-    pub p: f64,
-    pub r: f64,
-    pub speed: f64,
-    pub term_type: String,
-    pub uframe: Option<i32>,
-    pub utool: Option<i32>,
-}
-
-impl RequestMessage for ListPrograms {
-    type ResponseMessage = ListProgramsResponse;
-}
-
-/// Request to get a single program with all its instructions.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct GetProgram {
-    pub program_id: i64,
-}
-
-/// Response for getting a single program.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct GetProgramResponse {
-    pub program: Option<ProgramDetail>,
-}
-
-impl RequestMessage for GetProgram {
-    type ResponseMessage = GetProgramResponse;
-}
-
-/// Request to create a new program.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(feature = "server", derive(Invalidates))]
-#[cfg_attr(feature = "server", invalidates("ListPrograms"))]
-pub struct CreateProgram {
-    pub name: String,
-    pub description: Option<String>,
-}
-
-/// Response for creating a program.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(feature = "server", derive(HasSuccess))]
-pub struct CreateProgramResponse {
-    pub success: bool,
-    pub program_id: Option<i64>,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for CreateProgram {
-    type ResponseMessage = CreateProgramResponse;
-}
-
-/// Request to delete a program.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(feature = "server", derive(Invalidates))]
-#[cfg_attr(feature = "server", invalidates("ListPrograms", "GetProgram"))]
-pub struct DeleteProgram {
-    pub program_id: i64,
-}
-
-/// Response for deleting a program.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(feature = "server", derive(HasSuccess))]
-pub struct DeleteProgramResponse {
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for DeleteProgram {
-    type ResponseMessage = DeleteProgramResponse;
-}
-
-/// Request to update program settings (start/end positions, speed, termination).
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(feature = "server", derive(Invalidates))]
-#[cfg_attr(feature = "server", invalidates("GetProgram"))]
-pub struct UpdateProgramSettings {
-    pub program_id: i64,
-    // Start position (approach move before toolpath)
-    pub start_x: Option<f64>,
-    pub start_y: Option<f64>,
-    pub start_z: Option<f64>,
-    pub start_w: Option<f64>,
-    pub start_p: Option<f64>,
-    pub start_r: Option<f64>,
-    // End position (retreat move after toolpath)
-    pub end_x: Option<f64>,
-    pub end_y: Option<f64>,
-    pub end_z: Option<f64>,
-    pub end_w: Option<f64>,
-    pub end_p: Option<f64>,
-    pub end_r: Option<f64>,
-    // Motion defaults
-    pub move_speed: Option<f64>,
-    pub default_term_type: Option<String>,
-    pub default_term_value: Option<u8>,
-}
-
-/// Response for updating program settings.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(feature = "server", derive(HasSuccess))]
-pub struct UpdateProgramSettingsResponse {
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for UpdateProgramSettings {
-    type ResponseMessage = UpdateProgramSettingsResponse;
-}
-
-/// Request to upload CSV content to a program.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(feature = "server", derive(Invalidates))]
-#[cfg_attr(feature = "server", invalidates("GetProgram"))]
-pub struct UploadCsv {
-    pub program_id: i64,
-    pub csv_content: String,
-    /// Optional start position to prepend before CSV points
-    pub start_position: Option<CsvStartPosition>,
-}
-
-/// Start position for CSV upload.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CsvStartPosition {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-    pub w: f64,
-    pub p: f64,
-    pub r: f64,
-}
-
-/// Response for uploading CSV.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(feature = "server", derive(HasSuccess))]
-pub struct UploadCsvResponse {
-    pub success: bool,
-    pub lines_imported: Option<i32>,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for UploadCsv {
-    type ResponseMessage = UploadCsvResponse;
-}
-
-/// Request to unload the currently loaded program.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct UnloadProgram;
-
-/// Response for unloading a program.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct UnloadProgramResponse {
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for UnloadProgram {
-    type ResponseMessage = UnloadProgramResponse;
-}
-
-impl ErrorResponse for UnloadProgram {
-    fn error_response(error: String) -> Self::ResponseMessage {
-        UnloadProgramResponse { success: false, error: Some(error) }
-    }
 }
 
 /// Request to list all saved robot connections from the database.
@@ -1001,6 +575,18 @@ pub struct UpdateJogSettings {
     pub rotation_jog_speed: f64,
     pub rotation_jog_step: f64,
 }
+
+// UpdateJogSettings is used to persist default jog settings to database for a given robot.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateJogSettingsResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for UpdateJogSettings {
+    type ResponseMessage = UpdateJogSettingsResponse;
+}
+
 
 // ============================================================================
 //                    ADDITIONAL NETWORK MESSAGES (Complete API)
@@ -1223,108 +809,6 @@ pub struct MoveRelative {
     pub dp: f32,
     pub dr: f32,
     pub speed: f32,
-}
-
-// Program Execution (defined with RequestMessage impls above for CRUD types)
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct LoadProgram {
-    pub program_id: i64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct LoadProgramResponse {
-    pub success: bool,
-    /// The loaded program info (if successful)
-    pub program: Option<ProgramWithLines>,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for LoadProgram {
-    type ResponseMessage = LoadProgramResponse;
-}
-
-impl ErrorResponse for LoadProgram {
-    fn error_response(error: String) -> Self::ResponseMessage {
-        LoadProgramResponse { success: false, program: None, error: Some(error) }
-    }
-}
-
-/// Start executing the currently loaded program.
-/// A program must be loaded first via LoadProgram.
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct StartProgram;
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct StartProgramResponse {
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for StartProgram {
-    type ResponseMessage = StartProgramResponse;
-}
-
-impl ErrorResponse for StartProgram {
-    fn error_response(error: String) -> Self::ResponseMessage {
-        StartProgramResponse { success: false, error: Some(error) }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct PauseProgram;
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct PauseProgramResponse {
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for PauseProgram {
-    type ResponseMessage = PauseProgramResponse;
-}
-
-impl ErrorResponse for PauseProgram {
-    fn error_response(error: String) -> Self::ResponseMessage {
-        PauseProgramResponse { success: false, error: Some(error) }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ResumeProgram;
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ResumeProgramResponse {
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for ResumeProgram {
-    type ResponseMessage = ResumeProgramResponse;
-}
-
-impl ErrorResponse for ResumeProgram {
-    fn error_response(error: String) -> Self::ResponseMessage {
-        ResumeProgramResponse { success: false, error: Some(error) }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct StopProgram;
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct StopProgramResponse {
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for StopProgram {
-    type ResponseMessage = StopProgramResponse;
-}
-
-impl ErrorResponse for StopProgram {
-    fn error_response(error: String) -> Self::ResponseMessage {
-        StopProgramResponse { success: false, error: Some(error) }
-    }
 }
 
 // Frame/Tool Management
@@ -1655,22 +1139,6 @@ pub struct UpdateActiveConfig {
 }
 
 // Response Messages (from server to client)
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ApiResponse {
-    pub success: bool,
-    pub message: String,
-    pub request_type: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ProgramListResponse {
-    pub programs: Vec<ProgramInfo>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ProgramDetailResponse {
-    pub program: ProgramDetail,
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RobotConnectionsResponse {
@@ -1914,7 +1382,6 @@ impl RequestMessage for UpdateIoConfig {
 // Settings Messages
 // ============================================================================
 
-// Note: RobotSettings is already defined above
 
 /// Get current settings.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -1951,19 +1418,7 @@ impl RequestMessage for UpdateSettings {
     type ResponseMessage = UpdateSettingsResponse;
 }
 
-/// Reset the database.
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ResetDatabase;
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ResetDatabaseResponse {
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for ResetDatabase {
-    type ResponseMessage = ResetDatabaseResponse;
-}
+// ResetDatabase is defined in fanuc_replica_core
 
 /// Get connection status.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -1981,62 +1436,10 @@ impl RequestMessage for GetConnectionStatus {
     type ResponseMessage = ConnectionStatusResponse;
 }
 
-/// Get execution state.
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct GetExecutionState;
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ExecutionStateResponse {
-    pub status: String,
-    pub current_line: Option<usize>,
-    pub total_lines: Option<usize>,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for GetExecutionState {
-    type ResponseMessage = ExecutionStateResponse;
-}
-
-// Note: GetActiveJogSettings was removed - use JogSettingsState synced component instead.
-// UpdateJogSettings is used to persist settings to database.
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct UpdateJogSettingsResponse {
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-impl RequestMessage for UpdateJogSettings {
-    type ResponseMessage = UpdateJogSettingsResponse;
-}
 
 // ============================================================================
 //                          COORDINATE CONVERSION UTILITIES
 // ============================================================================
-
-/// Re-export robot-agnostic coordinate types for toolpath integration.
-///
-/// These types use `Isometry3<f64>` (SE3) internally for singularity-free
-/// rotation representation. Use these for:
-/// - Toolpath generation and storage
-/// - Motion planning and interpolation
-/// - Frame transformations
-///
-/// The existing `Instruction` and `RobotPosition` types remain for:
-/// - Database storage (Euler angles are human-readable)
-/// - UI display (users expect W/P/R)
-/// - Robot feedback (vendor-specific format)
-pub mod robotics {
-    pub use fanuc_replica_robotics::{
-        RobotPose, ToolpathPoint, TerminationType, FrameId,
-        quaternion_to_euler_zyx, euler_zyx_to_quaternion,
-    };
-
-    #[cfg(feature = "server")]
-    pub use crate::{
-        FanucConversion, isometry_to_position, position_to_isometry,
-    };
-}
 
 /// Extension trait for converting RobotPosition to/from RobotPose.
 impl RobotPosition {
@@ -2047,8 +1450,8 @@ impl RobotPosition {
     /// - Frame transformations
     /// - Toolpath integration
     #[cfg(feature = "server")]
-    pub fn to_robot_pose(&self, frame_id: robotics::FrameId) -> robotics::RobotPose {
-        robotics::RobotPose::from_xyz_wpr(
+    pub fn to_robot_pose(&self, frame_id: fanuc_replica_robotics::FrameId) -> fanuc_replica_robotics::RobotPose {
+        fanuc_replica_robotics::RobotPose::from_xyz_wpr(
             self.0.x, self.0.y, self.0.z,
             self.0.w, self.0.p, self.0.r,
             frame_id,
@@ -2059,25 +1462,8 @@ impl RobotPosition {
     ///
     /// This extracts Euler angles from the quaternion for FANUC compatibility.
     #[cfg(feature = "server")]
-    pub fn from_robot_pose(pose: &robotics::RobotPose) -> Self {
-        use robotics::FanucConversion;
+    pub fn from_robot_pose(pose: &fanuc_replica_robotics::RobotPose) -> Self {
+        use crate::FanucConversion;
         Self(pose.to_fanuc_position().into())
-    }
-}
-
-/// Extension trait for converting Instruction to RobotPose.
-impl Instruction {
-    /// Convert to a robot-agnostic RobotPose.
-    ///
-    /// Uses default rotation (0,0,0) if W/P/R are not specified.
-    #[cfg(feature = "server")]
-    pub fn to_robot_pose(&self, frame_id: robotics::FrameId) -> robotics::RobotPose {
-        robotics::RobotPose::from_xyz_wpr(
-            self.x, self.y, self.z,
-            self.w.unwrap_or(0.0),
-            self.p.unwrap_or(0.0),
-            self.r.unwrap_or(0.0),
-            frame_id,
-        )
     }
 }

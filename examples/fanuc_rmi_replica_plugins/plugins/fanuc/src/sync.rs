@@ -70,20 +70,6 @@ impl Plugin for RobotSyncPlugin {
             .with_default_entity_policy()
             .with_error_response();
 
-        // Program execution commands - need response for UI feedback
-        // Note: These target the system entity (ActiveSystem), not the robot
-        app.requests::<(
-            LoadProgram,
-            StartProgram,
-            PauseProgram,
-            ResumeProgram,
-            StopProgram,
-            UnloadProgram,
-        ), WebSocketProvider>()
-            .targeted()
-            .with_default_entity_policy()
-            .with_error_response();
-
         // =====================================================================
         // TARGETED QUERIES (no authorization, just targeting for multi-robot)
         // =====================================================================
@@ -100,7 +86,6 @@ impl Plugin for RobotSyncPlugin {
             ReadAin,
             ReadGin,
             GetConnectionStatus,
-            GetExecutionState,
         ), WebSocketProvider>()
             .targeted()
             .register();
@@ -142,7 +127,6 @@ impl Plugin for RobotSyncPlugin {
             super::handlers::handle_read_ain,
             super::handlers::handle_read_gin,
             super::handlers::handle_get_connection_status,
-            super::handlers::handle_get_execution_state,
         ));
     }
 }

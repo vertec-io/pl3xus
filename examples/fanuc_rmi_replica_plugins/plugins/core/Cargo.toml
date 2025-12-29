@@ -12,7 +12,6 @@ default = ["ecs", "server"]
 ecs = [
     "dep:bevy",
     "dep:pl3xus",
-    "dep:pl3xus_common",
     "dep:pl3xus_sync",
 ]
 
@@ -29,17 +28,19 @@ server = [
 # Stores feature - enables reactive stores for client-side
 stores = [
     "dep:reactive_stores",
-    "dep:pl3xus_common",
 ]
 
 [dependencies]
 # Always available
+cfg-if = "1.0"
 serde.workspace = true
+
+# pl3xus_common is always available for RequestMessage trait
+pl3xus_common.workspace = true
 
 # ECS feature dependencies
 bevy = { workspace = true, features = ["multi_threaded", "bevy_log"], optional = true }
 pl3xus = { workspace = true, optional = true }
-pl3xus_common = { workspace = true, optional = true }
 pl3xus_sync = { workspace = true, features = ["runtime"], optional = true }
 
 # Server feature dependencies

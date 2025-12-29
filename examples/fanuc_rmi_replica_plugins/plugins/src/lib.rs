@@ -2,7 +2,8 @@
 //!
 //! This crate re-exports types and plugins from the modular plugin crates:
 //! - `fanuc_replica_core`: Networking, database, ActiveSystem (control root)
-//! - `fanuc_replica_fanuc`: FANUC robot state, connections, programs, I/O, motion
+//! - `fanuc_replica_fanuc`: FANUC robot state, connections, I/O, motion
+//! - `fanuc_replica_programs`: Device-agnostic program management
 //! - `fanuc_replica_execution`: Toolpath execution orchestration
 //! - `fanuc_replica_duet`: Duet extruder support (optional)
 //!
@@ -32,10 +33,46 @@ pub use fanuc_rmi as fanuc_rmi_types;
 pub use fanuc_rmi::dto;
 pub use fanuc_rmi::{SpeedType, TermType};
 
-// Feature-gated re-exports using cfg_if for cleaner organization
+// =============================================================================
+// Always-available types (no feature flags required)
+// These are pure data types with Serialize/Deserialize - no ECS/server deps
+// =============================================================================
+
+// Execution control types - Start/Pause/Resume/Stop
+pub use fanuc_replica_execution::{
+    Start, StartResponse, Pause, PauseResponse,
+    Resume, ResumeResponse, Stop, StopResponse,
+    // Execution state types for UI
+    ExecutionState, SystemState, SourceType,
+    BufferDisplayData, BufferLineDisplay,
+    UiActions,
+};
+
+// Program load/unload types
+pub use fanuc_replica_programs::{
+    Load, LoadResponse, Unload, UnloadResponse,
+    // Core program types
+    Instruction, SequenceType, InstructionSequence,
+    ProgramInfo, ProgramDetail, ProgramWithLines, ProgramLineInfo,
+    ProgramNotification, ProgramNotificationKind,
+    // CRUD request/response types
+    ListPrograms, ListProgramsResponse,
+    GetProgram, GetProgramResponse,
+    CreateProgram, CreateProgramResponse,
+    DeleteProgram, DeleteProgramResponse,
+    UpdateProgramSettings, UpdateProgramSettingsResponse,
+    UploadCsv, UploadCsvResponse,
+    AddSequence, AddSequenceResponse,
+    RemoveSequence, RemoveSequenceResponse,
+};
+
+// Common types
+pub use pl3xus_common::{RequestMessage, ErrorResponse};
+
+// Feature-gated re-exports - only for types that require feature-specific derives/deps
 cfg_if! {
     if #[cfg(feature = "server")] {
-        // Server feature includes everything from ECS plus server-specific types
+        // Server feature: plugins, ECS components, database, systems
 
         // Core plugin exports
         pub use fanuc_replica_core::{
@@ -46,16 +83,16 @@ cfg_if! {
         // FANUC plugin exports (all types + plugin)
         pub use fanuc_replica_fanuc::*;
 
-        // Execution plugin exports
+        // Programs plugin (server-only)
+        pub use fanuc_replica_programs::ProgramsPlugin;
+
+        // Execution plugin exports (ECS components, traits, systems)
         pub use fanuc_replica_execution::{
             ExecutionPlugin, ExecutionCoordinator, ExecutionTarget, ExecutionPoint,
             ToolpathBuffer, BufferState, MotionCommand, MotionType, PointMetadata,
             PrimaryMotion, MotionDevice, AuxiliaryDevice, AuxiliaryCommand, DeviceError,
             MotionCommandEvent, AuxiliaryCommandEvent, DeviceStatus, DeviceType,
         };
-
-        // Common types
-        pub use pl3xus_common::{RequestMessage, ErrorResponse};
 
         // Server-only: automatic query invalidation macros
         pub use pl3xus_macros::{Invalidates, HasSuccess};
@@ -67,9 +104,6 @@ cfg_if! {
 
         // FANUC types
         pub use fanuc_replica_fanuc::*;
-
-        // Common types
-        pub use pl3xus_common::{RequestMessage, ErrorResponse};
     }
 }
 
@@ -82,10 +116,17 @@ cfg_if! {
 
 cfg_if! {
     if #[cfg(all(feature = "stores", not(feature = "server"), not(feature = "ecs")))] {
-        // Stores feature (standalone): re-export types with Store derives for client-side reactivity
-        // Only when not already exported by server or ecs features
+        // Stores feature (standalone): types with Store derives for client-side reactivity
+        // Base types are already exported above - this adds Store-derived component types
+
+        // Core types with Store derives
+        pub use fanuc_replica_core::{
+            ActiveSystem,
+            ConsoleLogEntry, ConsoleDirection, ConsoleMsgType, console_entry,
+        };
+
+        // FANUC types with Store derives
         pub use fanuc_replica_fanuc::*;
-        pub use pl3xus_common::{RequestMessage, ErrorResponse};
     }
 }
 
@@ -105,6 +146,7 @@ pub fn build() -> bevy::app::App {
     use bevy::prelude::*;
     use fanuc_replica_core::CorePlugin;
     use fanuc_replica_fanuc::FanucPlugin;
+    use fanuc_replica_programs::ProgramsPlugin;
     use fanuc_replica_execution::ExecutionPlugin;
 
     let mut app = App::new();
@@ -115,7 +157,10 @@ pub fn build() -> bevy::app::App {
     // Execution plugin: toolpath orchestration (must come before FanucPlugin)
     app.add_plugins(ExecutionPlugin);
 
-    // FANUC plugin: robot state, connections, programs, I/O, motion
+    // Programs plugin: device-agnostic program storage and CRUD
+    app.add_plugins(ProgramsPlugin);
+
+    // FANUC plugin: robot state, connections, I/O, motion
     app.add_plugins(FanucPlugin);
 
     // Duet plugin: extruder support (optional)

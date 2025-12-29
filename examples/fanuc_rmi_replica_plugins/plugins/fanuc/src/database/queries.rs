@@ -4,7 +4,7 @@
 //! Each function takes a rusqlite Connection, making them easy to test
 //! and use from any context.
 
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::Connection;
 use crate::types::*;
 
 // ==================== Robot Connections ====================
@@ -397,212 +397,8 @@ pub fn save_current_configuration(
     }
 }
 
-// ==================== Programs ====================
-
-pub fn list_programs(conn: &Connection) -> anyhow::Result<Vec<ProgramInfo>> {
-    let mut stmt = conn.prepare(
-        "SELECT p.id, p.name, p.description,
-                (SELECT COUNT(*) FROM program_instructions WHERE program_id = p.id) as instruction_count,
-                COALESCE(p.created_at, datetime('now')) as created_at,
-                COALESCE(p.updated_at, datetime('now')) as updated_at
-         FROM programs p ORDER BY p.name"
-    )?;
-
-    let programs = stmt.query_map([], |row| {
-        Ok(ProgramInfo {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            description: row.get(2)?,
-            instruction_count: row.get(3)?,
-            created_at: row.get(4)?,
-            updated_at: row.get(5)?,
-        })
-    })?.collect::<Result<Vec<_>, _>>()?;
-
-    Ok(programs)
-}
-
-pub fn get_program(conn: &Connection, id: i64) -> anyhow::Result<Option<ProgramDetail>> {
-    let program: Option<ProgramDetail> = conn.query_row(
-        "SELECT id, name, description,
-                COALESCE(default_w, 0.0), COALESCE(default_p, 0.0), COALESCE(default_r, 0.0),
-                default_speed, COALESCE(default_speed_type, 'mmSec'),
-                COALESCE(default_term_type, 'CNT'), COALESCE(default_term_value, 100),
-                default_uframe, default_utool,
-                start_x, start_y, start_z, start_w, start_p, start_r,
-                end_x, end_y, end_z, end_w, end_p, end_r,
-                COALESCE(move_speed, 100.0),
-                COALESCE(created_at, datetime('now')), COALESCE(updated_at, datetime('now'))
-         FROM programs WHERE id = ?",
-        [id],
-        |row| {
-            Ok(ProgramDetail {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                description: row.get(2)?,
-                default_w: row.get(3)?,
-                default_p: row.get(4)?,
-                default_r: row.get(5)?,
-                default_speed: row.get(6)?,
-                default_speed_type: row.get(7)?,
-                default_term_type: row.get(8)?,
-                default_term_value: row.get(9)?,
-                default_uframe: row.get(10)?,
-                default_utool: row.get(11)?,
-                start_x: row.get(12)?,
-                start_y: row.get(13)?,
-                start_z: row.get(14)?,
-                start_w: row.get(15)?,
-                start_p: row.get(16)?,
-                start_r: row.get(17)?,
-                end_x: row.get(18)?,
-                end_y: row.get(19)?,
-                end_z: row.get(20)?,
-                end_w: row.get(21)?,
-                end_p: row.get(22)?,
-                end_r: row.get(23)?,
-                move_speed: row.get(24)?,
-                created_at: row.get(25)?,
-                updated_at: row.get(26)?,
-                instructions: vec![],
-            })
-        },
-    ).optional()?;
-
-    if let Some(mut prog) = program {
-        // Get instructions
-        let mut stmt = conn.prepare(
-            "SELECT line_number, x, y, z, w, p, r,
-                    speed, term_type, term_value, uframe, utool
-             FROM program_instructions WHERE program_id = ? ORDER BY line_number"
-        )?;
-
-        prog.instructions = stmt.query_map([id], |row| {
-            Ok(Instruction {
-                line_number: row.get(0)?,
-                x: row.get(1)?,
-                y: row.get(2)?,
-                z: row.get(3)?,
-                w: row.get(4)?,
-                p: row.get(5)?,
-                r: row.get(6)?,
-                speed: row.get(7)?,
-                term_type: row.get(8)?,
-                term_value: row.get(9)?,
-                uframe: row.get(10)?,
-                utool: row.get(11)?,
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
-
-        Ok(Some(prog))
-    } else {
-        Ok(None)
-    }
-}
-
-pub fn create_program(conn: &Connection, name: &str, description: Option<&str>) -> anyhow::Result<i64> {
-    conn.execute(
-        "INSERT INTO programs (name, description) VALUES (?, ?)",
-        rusqlite::params![name, description],
-    )?;
-    Ok(conn.last_insert_rowid())
-}
-
-pub fn delete_program(conn: &Connection, id: i64) -> anyhow::Result<()> {
-    conn.execute("DELETE FROM program_instructions WHERE program_id = ?", [id])?;
-    conn.execute("DELETE FROM programs WHERE id = ?", [id])?;
-    Ok(())
-}
-
-pub fn update_program_settings(
-    conn: &Connection,
-    program_id: i64,
-    start_x: Option<f64>,
-    start_y: Option<f64>,
-    start_z: Option<f64>,
-    start_w: Option<f64>,
-    start_p: Option<f64>,
-    start_r: Option<f64>,
-    end_x: Option<f64>,
-    end_y: Option<f64>,
-    end_z: Option<f64>,
-    end_w: Option<f64>,
-    end_p: Option<f64>,
-    end_r: Option<f64>,
-    move_speed: Option<f64>,
-    default_term_type: Option<String>,
-    default_term_value: Option<u8>,
-) -> anyhow::Result<()> {
-    let mut updates = Vec::new();
-    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
-
-    macro_rules! add_update {
-        ($field:expr, $value:expr) => {
-            if let Some(v) = $value {
-                updates.push(concat!($field, " = ?"));
-                params.push(Box::new(v));
-            }
-        };
-    }
-
-    add_update!("start_x", start_x);
-    add_update!("start_y", start_y);
-    add_update!("start_z", start_z);
-    add_update!("start_w", start_w);
-    add_update!("start_p", start_p);
-    add_update!("start_r", start_r);
-    add_update!("end_x", end_x);
-    add_update!("end_y", end_y);
-    add_update!("end_z", end_z);
-    add_update!("end_w", end_w);
-    add_update!("end_p", end_p);
-    add_update!("end_r", end_r);
-    add_update!("move_speed", move_speed);
-    add_update!("default_term_type", default_term_type);
-    add_update!("default_term_value", default_term_value);
-
-    if updates.is_empty() {
-        return Ok(());
-    }
-
-    let sql = format!("UPDATE programs SET {} WHERE id = ?", updates.join(", "));
-    params.push(Box::new(program_id));
-
-    let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    conn.execute(&sql, params_refs.as_slice())?;
-    Ok(())
-}
-
-pub fn insert_instructions(conn: &Connection, program_id: i64, instructions: &[Instruction]) -> anyhow::Result<()> {
-    // Clear existing instructions
-    conn.execute("DELETE FROM program_instructions WHERE program_id = ?", [program_id])?;
-
-    // Insert new instructions
-    for instr in instructions {
-        conn.execute(
-            "INSERT INTO program_instructions
-             (program_id, line_number, x, y, z, w, p, r,
-              speed, term_type, term_value, uframe, utool)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            rusqlite::params![
-                program_id,
-                instr.line_number,
-                instr.x,
-                instr.y,
-                instr.z,
-                instr.w,
-                instr.p,
-                instr.r,
-                instr.speed,
-                instr.term_type,
-                instr.term_value,
-                instr.uframe,
-                instr.utool,
-            ],
-        )?;
-    }
-    Ok(())
-}
+// Note: Program CRUD operations have been moved to the programs crate.
+// See fanuc_replica_programs::queries for list_programs, get_program, create_program, etc.
 
 // ==================== Settings ====================
 
@@ -663,9 +459,8 @@ pub fn update_settings(conn: &Connection, settings: &RobotSettings) -> anyhow::R
 }
 
 pub fn reset_database(conn: &Connection) -> anyhow::Result<()> {
-    // Delete all data from tables
-    conn.execute("DELETE FROM program_instructions", [])?;
-    conn.execute("DELETE FROM programs", [])?;
+    // Delete all data from fanuc-specific tables
+    // Note: Program data is managed by the programs crate database
     conn.execute("DELETE FROM robot_configurations", [])?;
     conn.execute("DELETE FROM robot_connections", [])?;
     conn.execute("DELETE FROM io_display_config", [])?;

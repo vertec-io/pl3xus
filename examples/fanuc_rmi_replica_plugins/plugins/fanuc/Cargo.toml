@@ -16,6 +16,7 @@ ecs = [
     "dep:pl3xus_macros",
     "fanuc_replica_core/ecs",
     "fanuc_replica_execution/ecs",
+    "fanuc_replica_programs/ecs",
     "fanuc_rmi/DTO",
 ]
 
@@ -33,6 +34,7 @@ server = [
     "fanuc_rmi/logging",
     "fanuc_replica_core/server",
     "fanuc_replica_execution/server",
+    "fanuc_replica_programs/server",
 ]
 
 # Stores feature - enables reactive stores for client-side fine-grained reactivity
@@ -44,6 +46,7 @@ stores = [
 
 [dependencies]
 # Always available
+cfg-if = "1.0"
 serde.workspace = true
 nalgebra = { version = "0.33", features = ["serde-serialize"] }
 
@@ -60,6 +63,10 @@ fanuc_replica_execution = { workspace = true, default-features = false }
 # Core infrastructure
 # IMPORTANT: default-features = false to avoid pulling tokio into WASM builds
 fanuc_replica_core = { workspace = true, default-features = false }
+
+# Programs plugin for program types and database
+# IMPORTANT: default-features = false to avoid pulling tokio into WASM builds
+fanuc_replica_programs = { workspace = true, default-features = false }
 
 # ECS feature dependencies
 bevy = { workspace = true, features = ["multi_threaded", "bevy_log"], optional = true }

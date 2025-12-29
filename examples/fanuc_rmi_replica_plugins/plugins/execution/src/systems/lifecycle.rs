@@ -11,8 +11,7 @@ use crate::components::{BufferState, ExecutionCoordinator, ToolpathBuffer};
 ///
 /// This is used by the lifecycle systems to detect disconnection.
 /// Device plugins should add this component when connected and remove when disconnected.
-#[derive(Component, Debug, Clone, Default, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Debug, Clone, Default)]
 pub struct DeviceConnected;
 
 /// System that resets execution state when devices disconnect.

@@ -132,7 +132,9 @@ fn parse_row(
             .and_then(|&idx| values.get(idx))
             .and_then(|v| v.parse().ok())
     };
-    
+
+    // Note: get_opt_i32 was removed - uframe/utool are now handled at execution time
+
     let get_opt_string = |name: &str| -> Option<String> {
         column_map.get(name)
             .and_then(|&idx| values.get(idx))
@@ -159,6 +161,8 @@ fn parse_row(
         speed: get_opt_f64("speed"),
         term_type: get_opt_string("termtype").or_else(|| get_opt_string("term_type")),
         term_value: get_opt_u8("termvalue").or_else(|| get_opt_u8("term_value")),
+        // Note: uframe/utool removed - programs are device-agnostic
+        // Frame selection happens at execution time using device's active config
     })
 }
 

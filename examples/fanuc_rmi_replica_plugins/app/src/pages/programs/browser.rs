@@ -2,13 +2,13 @@
 
 use leptos::prelude::*;
 use leptos::either::Either;
-use fanuc_replica_plugins::ProgramWithLines;
+use fanuc_replica_plugins::ProgramInfo;
 use crate::layout::LayoutContext;
 
 /// Program browser sidebar
 #[component]
 pub fn ProgramBrowser(
-    programs: Memo<Vec<ProgramWithLines>>,
+    programs: Memo<Vec<ProgramInfo>>,
     #[prop(into)] selected_program_id: Signal<Option<i64>>,
     on_select: impl Fn(Option<i64>) + 'static + Clone + Send,
 ) -> impl IntoView {
@@ -47,7 +47,7 @@ pub fn ProgramBrowser(
                             let is_selected = move || selected_program_id.get() == Some(prog.id);
                             let prog_id = prog.id;
                             let prog_name = prog.name.clone();
-                            let lines_str = format!("{} lines", prog.lines.len());
+                            let lines_str = format!("{} lines", prog.instruction_count);
                             view! {
                                 <button
                                     class={move || format!(

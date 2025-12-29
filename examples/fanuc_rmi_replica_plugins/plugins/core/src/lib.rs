@@ -30,28 +30,27 @@
 //! );
 //! ```
 
-#[cfg(feature = "server")]
-mod database;
+use cfg_if::cfg_if;
+
 mod types;
 
-#[cfg(feature = "server")]
-mod plugin;
+// Types always available
+pub use types::{
+    ActiveSystem, ConsoleLogEntry, ConsoleDirection, ConsoleMsgType, console_entry,
+    ResetDatabase, ResetDatabaseResponse,
+};
 
-#[cfg(feature = "server")]
-mod plugin_schedule;
+cfg_if! {
+    if #[cfg(feature = "server")] {
+        mod database;
+        mod handlers;
+        mod plugin;
+        mod plugin_schedule;
 
-// Re-export types
-pub use types::ActiveSystem;
-
-#[cfg(feature = "server")]
-pub use database::{DatabaseResource, DatabaseInit, DatabaseInitRegistry};
-
-#[cfg(feature = "server")]
-pub use plugin::CorePlugin;
-
-#[cfg(feature = "server")]
-pub use plugin::init_database;
-
-#[cfg(feature = "server")]
-pub use plugin_schedule::PluginSchedule;
+        pub use database::{DatabaseResource, DatabaseInit, DatabaseInitRegistry};
+        pub use handlers::handle_reset_database;
+        pub use plugin::{CorePlugin, init_database};
+        pub use plugin_schedule::PluginSchedule;
+    }
+}
 

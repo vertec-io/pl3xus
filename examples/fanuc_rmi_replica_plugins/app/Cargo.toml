@@ -24,6 +24,7 @@ bincode = "1.3"
 
 # Plugins with stores feature only (no ecs/server features)
 fanuc_replica_plugins = { path = "../plugins", default-features = false, features = ["stores"] }
+fanuc_replica_core = { path = "../plugins/core", default-features = false }
 
 # Fanuc RMI types (DTO only, no driver) - uses same workspace dep as plugins
 fanuc_rmi = { workspace = true, default-features = false, features = ["DTO"] }

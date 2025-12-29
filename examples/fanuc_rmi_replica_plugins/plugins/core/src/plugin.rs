@@ -6,13 +6,16 @@ use bevy::tasks::TaskPoolBuilder;
 use std::time::Duration;
 
 use pl3xus::Pl3xusRuntime;
+use pl3xus_sync::AppRequestRegistrationExt;
 use pl3xus_sync::{Pl3xusSyncPlugin, ComponentSyncConfig, AppPl3xusSyncExt};
 use pl3xus_sync::control::{ExclusiveControlPlugin, EntityControl};
 use pl3xus_websockets::{NetworkSettings, WebSocketProvider};
 
 use crate::database::{DatabaseResource, DatabaseInitRegistry};
+use crate::handlers::handle_reset_database;
+use crate::plugin_schedule::PluginSchedule;
 use crate::plugin_schedule::configure_plugin_schedule;
-use crate::types::ActiveSystem;
+use crate::types::{ActiveSystem, ResetDatabase};
 
 /// Core plugin providing foundational infrastructure.
 ///
@@ -68,6 +71,13 @@ impl Plugin for CorePlugin {
 
         // Server startup (bind to port)
         app.add_systems(Startup, setup_server.after(spawn_active_system));
+
+        // Register request handlers
+        app.request::<ResetDatabase, WebSocketProvider>().register();
+        app.add_systems(
+            Update,
+            handle_reset_database.in_set(PluginSchedule::ClientRequests),
+        );
     }
 }
 

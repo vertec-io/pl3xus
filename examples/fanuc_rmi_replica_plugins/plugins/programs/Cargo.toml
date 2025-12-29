@@ -12,10 +12,10 @@ default = ["ecs", "server"]
 ecs = [
     "dep:bevy",
     "dep:pl3xus",
-    "dep:pl3xus_common",
     "dep:pl3xus_sync",
     "dep:pl3xus_websockets",
     "dep:pl3xus_macros",
+    "fanuc_replica_execution/ecs",
 ]
 
 # Server feature - enables server-only functionality (database, handlers)
@@ -26,20 +26,33 @@ server = [
     "dep:csv",
     "dep:tracing",
     "fanuc_replica_core/server",
+    "fanuc_replica_execution/server",
 ]
+
+# Stores feature - enables reactive stores for client-side fine-grained reactivity
+stores = []
 
 [dependencies]
 # Always available
+cfg-if = "1.0"
 serde.workspace = true
 thiserror = "2"
 
 # Core plugin for database infrastructure
 fanuc_replica_core = { workspace = true, default-features = false }
 
+# Execution plugin for ToolpathBuffer, ExecutionState, etc.
+fanuc_replica_execution = { workspace = true, default-features = false }
+
+# Robotics plugin for RobotPose
+fanuc_replica_robotics = { workspace = true, default-features = false }
+
+# pl3xus_common is always available for RequestMessage trait
+pl3xus_common.workspace = true
+
 # ECS feature dependencies
 bevy = { workspace = true, features = ["multi_threaded", "bevy_log"], optional = true }
 pl3xus = { workspace = true, optional = true }
-pl3xus_common = { workspace = true, optional = true }
 pl3xus_sync = { workspace = true, features = ["runtime"], optional = true }
 pl3xus_websockets = { workspace = true, optional = true }
 pl3xus_macros = { workspace = true, optional = true }

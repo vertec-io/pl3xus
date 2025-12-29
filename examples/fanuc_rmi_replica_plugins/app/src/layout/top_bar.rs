@@ -1032,16 +1032,22 @@ pub fn ProgramNotificationHandler() -> impl IntoView {
 
         match &notif.kind {
             ProgramNotificationKind::None => {}
+            ProgramNotificationKind::Started { program_name, total_instructions } => {
+                toast.info(format!(
+                    "▶️ Program '{}' started ({} instructions)",
+                    program_name, total_instructions
+                ));
+            }
             ProgramNotificationKind::Completed { program_name, total_instructions } => {
                 toast.success(format!(
                     "✅ Program '{}' completed ({} instructions)",
                     program_name, total_instructions
                 ));
             }
-            ProgramNotificationKind::Stopped { program_name, at_line } => {
+            ProgramNotificationKind::Stopped { program_name, at_line, completed } => {
                 toast.info(format!(
-                    "⏹️ Program '{}' stopped at line {}",
-                    program_name, at_line
+                    "⏹️ Program '{}' stopped at line {} ({} completed)",
+                    program_name, at_line, completed
                 ));
             }
             ProgramNotificationKind::Error { program_name, at_line, error_message } => {
@@ -1063,7 +1069,7 @@ pub fn ProgramNotificationHandler() -> impl IntoView {
 /// these messages simultaneously.
 #[component]
 pub fn ConsoleLogHandler() -> impl IntoView {
-    use fanuc_replica_plugins::{ConsoleLogEntry, ConsoleDirection, ConsoleMsgType};
+    use fanuc_replica_core::{ConsoleLogEntry, ConsoleDirection, ConsoleMsgType};
     use crate::pages::dashboard::context::{WorkspaceContext, MessageDirection, MessageType, ConsoleMessage};
 
     let ctx = use_context::<WorkspaceContext>();

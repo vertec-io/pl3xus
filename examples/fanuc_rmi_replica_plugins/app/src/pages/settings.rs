@@ -9,6 +9,7 @@ use leptos::web_sys;
 
 use pl3xus_client::{use_mutation, use_query, use_query_keyed};
 use crate::components::use_toast;
+use fanuc_replica_core::ResetDatabase;
 use fanuc_replica_plugins::*;
 use crate::components::RobotCreationWizard;
 

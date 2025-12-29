@@ -9,9 +9,8 @@ use pl3xus_websockets::WebSocketProvider;
 
 #[cfg(feature = "server")]
 use crate::motion::{
-    fanuc_motion_handler_system, fanuc_sent_instruction_system, fanuc_motion_response_system,
-    sync_buffer_state_to_execution_state, sync_device_status_to_buffer_state,
-    FanucInFlightInstructions,
+    fanuc_motion_handler_system, fanuc_motion_response_system, fanuc_sent_instruction_system,
+    react_to_buffer_state_changes, FanucInFlightInstructions, LastBufferStateCategory,
 };
 #[cfg(feature = "server")]
 use crate::connection::RobotConnectionPlugin;
@@ -23,6 +22,12 @@ use crate::handlers::RequestHandlerPlugin;
 use crate::polling::RobotPollingPlugin;
 #[cfg(feature = "server")]
 use crate::jogging;
+#[cfg(feature = "server")]
+use crate::database::FanucDatabaseInit;
+#[cfg(feature = "server")]
+use crate::validation::FanucValidationPlugin;
+#[cfg(feature = "server")]
+use fanuc_replica_core::DatabaseInitRegistry;
 
 use crate::types::*;
 
@@ -74,9 +79,8 @@ impl Plugin for FanucPlugin {
         app.sync_component::<IoStatus>(Some(ComponentSyncConfig::read_only_with_message(
             "IoStatus is read-only. Use SetDigitalOutput command to control outputs."
         )));
-        app.sync_component::<ExecutionState>(Some(ComponentSyncConfig::read_only_with_message(
-            "ExecutionState is read-only. Use program execution commands (Start, Stop, Pause, etc)."
-        )));
+        // Note: ExecutionState is now registered by ExecutionPlugin on System entity
+        // The old robot-entity ExecutionState is deprecated
         app.sync_component::<ConnectionState>(Some(ComponentSyncConfig::read_only_with_message(
             "ConnectionState is read-only. Use ConnectToRobot/DisconnectFromRobot commands."
         )));
@@ -110,6 +114,14 @@ impl Plugin for FanucPlugin {
         #[cfg(feature = "server")]
         {
             // =====================================================================
+            // DATABASE INITIALIZATION
+            // =====================================================================
+            // Register the FANUC database schema initializer
+            if let Some(mut registry) = app.world_mut().get_resource_mut::<DatabaseInitRegistry>() {
+                registry.register(FanucDatabaseInit);
+            }
+
+            // =====================================================================
             // RESOURCES
             // =====================================================================
             // In-flight instruction tracking for motion completion feedback
@@ -121,11 +133,11 @@ impl Plugin for FanucPlugin {
             // SUB-PLUGINS
             // =====================================================================
             app.add_plugins((
-                RobotConnectionPlugin,  // Connection state machine
-                RobotSyncPlugin,        // Driver polling and jogging
-                RequestHandlerPlugin,   // Database request handlers
-                RobotPollingPlugin,     // Periodic position/status polling
-                // Note: ProgramPlugin removed - execution is now handled by ExecutionPlugin
+                RobotConnectionPlugin,    // Connection state machine
+                RobotSyncPlugin,          // Driver polling and jogging
+                RequestHandlerPlugin,     // Database request handlers
+                RobotPollingPlugin,       // Periodic position/status polling
+                FanucValidationPlugin,    // Subsystem validation for execution
             ));
 
             // =====================================================================
@@ -137,14 +149,24 @@ impl Plugin for FanucPlugin {
             // 3. fanuc_sent_instruction_system maps request_id -> sequence_id
             // 4. fanuc_motion_response_system updates DeviceStatus on completion
             // 5. sync_device_status_to_buffer_state updates BufferState
-            // 6. sync_buffer_state_to_execution_state syncs to client
-            app.add_systems(Update, (
-                fanuc_motion_handler_system,
-                fanuc_sent_instruction_system,
-                fanuc_motion_response_system,
-                sync_device_status_to_buffer_state,
-                sync_buffer_state_to_execution_state,
-            ).chain());
+            // 6. react_to_buffer_state_changes sends FRC commands on state transitions
+            //
+            // Note: sync_device_status_to_buffer_state and sync_buffer_state_to_execution_state
+            // are now in the execution plugin (not fanuc-specific).
+
+            // Resource for tracking last buffer state category
+            app.init_resource::<LastBufferStateCategory>();
+
+            app.add_systems(
+                Update,
+                (
+                    fanuc_motion_handler_system,
+                    fanuc_sent_instruction_system,
+                    fanuc_motion_response_system,
+                    react_to_buffer_state_changes,
+                )
+                    .chain(),
+            );
 
             info!("🤖 FanucPlugin initialized");
         }

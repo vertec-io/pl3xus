@@ -7,10 +7,12 @@
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "ecs")]
+// Server-only: derive macros for automatic query invalidation
+#[cfg(feature = "server")]
 use pl3xus_macros::{HasSuccess, Invalidates};
-#[cfg(feature = "ecs")]
-use pl3xus::RequestMessage;
+
+// RequestMessage trait is available on all platforms (from pl3xus_common)
+use pl3xus_common::RequestMessage;
 
 // ============================================================================
 // Core Instruction Type
@@ -39,7 +41,7 @@ pub struct Instruction {
     pub ext1: Option<f64>,
     pub ext2: Option<f64>,
     pub ext3: Option<f64>,
-    
+
     // Motion parameters
     pub speed: Option<f64>,
     pub term_type: Option<String>,   // e.g., "FINE", "CNT"
@@ -83,7 +85,7 @@ pub struct InstructionSequence {
 // ============================================================================
 
 /// Program summary for listing.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProgramInfo {
     pub id: i64,
     pub name: String,
@@ -118,13 +120,16 @@ pub struct ProgramDetail {
 }
 
 /// Program with simple line info for display.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProgramWithLines {
     pub id: i64,
     pub name: String,
     pub description: Option<String>,
+    /// Main program lines
     pub lines: Vec<ProgramLineInfo>,
+    /// Approach sequence lines (optional)
     pub approach_lines: Vec<ProgramLineInfo>,
+    /// Retreat sequence lines (optional)
     pub retreat_lines: Vec<ProgramLineInfo>,
 }
 
@@ -137,7 +142,8 @@ pub struct ProgramLineInfo {
     pub w: f64,
     pub p: f64,
     pub r: f64,
-    pub speed: Option<f64>,
+    pub speed: f64,
+    pub term_type: String,
 }
 
 // ============================================================================
@@ -153,7 +159,6 @@ pub struct ListProgramsResponse {
     pub programs: Vec<ProgramInfo>,
 }
 
-#[cfg(feature = "ecs")]
 impl RequestMessage for ListPrograms {
     type ResponseMessage = ListProgramsResponse;
 }
@@ -169,57 +174,54 @@ pub struct GetProgramResponse {
     pub program: Option<ProgramDetail>,
 }
 
-#[cfg(feature = "ecs")]
 impl RequestMessage for GetProgram {
     type ResponseMessage = GetProgramResponse;
 }
 
 /// Create a new program.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ecs", derive(Invalidates))]
-#[cfg_attr(feature = "ecs", invalidates("ListPrograms"))]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("ListPrograms"))]
 pub struct CreateProgram {
     pub name: String,
     pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ecs", derive(HasSuccess))]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct CreateProgramResponse {
     pub success: bool,
     pub program_id: Option<i64>,
     pub error: Option<String>,
 }
 
-#[cfg(feature = "ecs")]
 impl RequestMessage for CreateProgram {
     type ResponseMessage = CreateProgramResponse;
 }
 
 /// Delete a program.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ecs", derive(Invalidates))]
-#[cfg_attr(feature = "ecs", invalidates("ListPrograms", "GetProgram"))]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("ListPrograms", "GetProgram"))]
 pub struct DeleteProgram {
     pub program_id: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ecs", derive(HasSuccess))]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct DeleteProgramResponse {
     pub success: bool,
     pub error: Option<String>,
 }
 
-#[cfg(feature = "ecs")]
 impl RequestMessage for DeleteProgram {
     type ResponseMessage = DeleteProgramResponse;
 }
 
 /// Update program settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ecs", derive(Invalidates))]
-#[cfg_attr(feature = "ecs", invalidates("GetProgram"))]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetProgram"))]
 pub struct UpdateProgramSettings {
     pub program_id: i64,
     pub name: Option<String>,
@@ -231,21 +233,20 @@ pub struct UpdateProgramSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ecs", derive(HasSuccess))]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct UpdateProgramSettingsResponse {
     pub success: bool,
     pub error: Option<String>,
 }
 
-#[cfg(feature = "ecs")]
 impl RequestMessage for UpdateProgramSettings {
     type ResponseMessage = UpdateProgramSettingsResponse;
 }
 
 /// Upload CSV data to a program.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ecs", derive(Invalidates))]
-#[cfg_attr(feature = "ecs", invalidates("GetProgram", "ListPrograms"))]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetProgram", "ListPrograms"))]
 pub struct UploadCsv {
     pub program_id: i64,
     pub csv_content: String,
@@ -254,7 +255,7 @@ pub struct UploadCsv {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ecs", derive(HasSuccess))]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct UploadCsvResponse {
     pub success: bool,
     pub lines_imported: Option<i32>,
@@ -262,15 +263,14 @@ pub struct UploadCsvResponse {
     pub error: Option<String>,
 }
 
-#[cfg(feature = "ecs")]
 impl RequestMessage for UploadCsv {
     type ResponseMessage = UploadCsvResponse;
 }
 
 /// Add an approach/retreat sequence to a program.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ecs", derive(Invalidates))]
-#[cfg_attr(feature = "ecs", invalidates("GetProgram"))]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetProgram"))]
 pub struct AddSequence {
     pub program_id: i64,
     pub sequence_type: SequenceType,
@@ -279,35 +279,191 @@ pub struct AddSequence {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ecs", derive(HasSuccess))]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct AddSequenceResponse {
     pub success: bool,
     pub sequence_id: Option<i64>,
     pub error: Option<String>,
 }
 
-#[cfg(feature = "ecs")]
 impl RequestMessage for AddSequence {
     type ResponseMessage = AddSequenceResponse;
 }
 
 /// Remove a sequence from a program.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ecs", derive(Invalidates))]
-#[cfg_attr(feature = "ecs", invalidates("GetProgram"))]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetProgram"))]
 pub struct RemoveSequence {
     pub sequence_id: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ecs", derive(HasSuccess))]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
 pub struct RemoveSequenceResponse {
     pub success: bool,
     pub error: Option<String>,
 }
 
-#[cfg(feature = "ecs")]
 impl RequestMessage for RemoveSequence {
     type ResponseMessage = RemoveSequenceResponse;
 }
 
+// ============================================================================
+// Load/Unload Types
+// ============================================================================
+
+use pl3xus_common::ErrorResponse;
+
+/// Load a program into the execution buffer.
+///
+/// This fetches the program from the database and populates:
+/// - ToolpathBuffer with ExecutionPoints
+/// - BufferDisplayData for UI display
+/// - ExecutionState with source info
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Load {
+    pub program_id: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoadResponse {
+    pub success: bool,
+    pub program: Option<ProgramWithLines>,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for Load {
+    type ResponseMessage = LoadResponse;
+}
+
+impl ErrorResponse for Load {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        LoadResponse {
+            success: false,
+            program: None,
+            error: Some(error),
+        }
+    }
+}
+
+/// Unload the currently loaded program.
+///
+/// Clears the execution buffer and resets state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Unload;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnloadResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for Unload {
+    type ResponseMessage = UnloadResponse;
+}
+
+impl ErrorResponse for Unload {
+    fn error_response(error: String) -> Self::ResponseMessage {
+        UnloadResponse {
+            success: false,
+            error: Some(error),
+        }
+    }
+}
+
+// ============================================================================
+// Program Notifications
+// ============================================================================
+
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Global sequence counter for program notifications.
+static NOTIFICATION_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+/// Program notification (broadcast message from server to all clients).
+///
+/// This is sent to notify clients about program execution events like
+/// completion, errors, or other state changes. All connected clients
+/// receive this message and can display appropriate UI feedback.
+#[cfg_attr(feature = "ecs", derive(bevy::prelude::Message))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct ProgramNotification {
+    /// Unique sequence number to distinguish identical notifications
+    pub sequence: u64,
+    /// The type of notification
+    pub kind: ProgramNotificationKind,
+}
+
+impl ProgramNotification {
+    /// Create a new ProgramNotification with a unique sequence number.
+    pub fn new(kind: ProgramNotificationKind) -> Self {
+        Self {
+            sequence: NOTIFICATION_SEQUENCE.fetch_add(1, Ordering::Relaxed),
+            kind,
+        }
+    }
+
+    /// Create a "started" notification.
+    pub fn started(program_name: impl Into<String>, total_instructions: usize) -> Self {
+        Self::new(ProgramNotificationKind::Started {
+            program_name: program_name.into(),
+            total_instructions,
+        })
+    }
+
+    /// Create a "completed" notification.
+    pub fn completed(program_name: impl Into<String>, total_instructions: usize) -> Self {
+        Self::new(ProgramNotificationKind::Completed {
+            program_name: program_name.into(),
+            total_instructions,
+        })
+    }
+
+    /// Create a "stopped" notification.
+    pub fn stopped(program_name: impl Into<String>, at_line: usize, completed: usize) -> Self {
+        Self::new(ProgramNotificationKind::Stopped {
+            program_name: program_name.into(),
+            at_line,
+            completed,
+        })
+    }
+
+    /// Create an "error" notification.
+    pub fn error(program_name: impl Into<String>, at_line: usize, error_message: impl Into<String>) -> Self {
+        Self::new(ProgramNotificationKind::Error {
+            program_name: program_name.into(),
+            at_line,
+            error_message: error_message.into(),
+        })
+    }
+}
+
+/// Kind of program notification.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+pub enum ProgramNotificationKind {
+    #[default]
+    None,
+    /// Program execution started.
+    Started {
+        program_name: String,
+        total_instructions: usize,
+    },
+    /// Program completed successfully.
+    Completed {
+        program_name: String,
+        total_instructions: usize,
+    },
+    /// Program was stopped by user.
+    Stopped {
+        program_name: String,
+        at_line: usize,
+        completed: usize,
+    },
+    /// Program encountered an error.
+    Error {
+        program_name: String,
+        at_line: usize,
+        error_message: String,
+    },
+}

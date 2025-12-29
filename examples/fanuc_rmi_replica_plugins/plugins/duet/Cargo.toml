@@ -23,6 +23,7 @@ server = [
 
 [dependencies]
 # Always available
+cfg-if = "1.0"
 serde.workspace = true
 
 # Execution plugin for shared types

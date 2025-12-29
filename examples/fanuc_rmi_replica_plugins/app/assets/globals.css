@@ -536,6 +536,41 @@
   --surface-2: 240 27% 4%;
 }
 
+/* Cosmic Raven - Deep space with electric indigo */
+.theme-cosmic-raven {
+  --background: 240 27% 8%;
+  --foreground: 240 49% 92%;
+  --card: 240 28% 14%;
+  --card-foreground: 240 49% 92%;
+  --popover: 240 28% 14%;
+  --popover-foreground: 240 49% 92%;
+  --primary: 239 74% 62%;
+  --primary-foreground: 240 27% 8%;
+  --secondary: 243 33% 25%;
+  --secondary-foreground: 242 100% 88%;
+  --muted: 240 33% 20%;
+  --muted-foreground: 240 20% 69%;
+  --accent: 240 33% 28%;
+  --accent-foreground: 240 49% 92%;
+  --destructive: 350 80% 65%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 180 60% 55%;
+  --success-foreground: 240 27% 8%;
+  --warning: 45 80% 65%;
+  --warning-foreground: 240 27% 8%;
+  --border: 240 26% 25%;
+  --input: 240 26% 25%;
+  --ring: 239 74% 62%;
+  --radius: 0.5rem;
+  --shadow: 0 2px 8px -2px rgb(0 0 0 / 0.4);
+  --blur: 0px;
+  --border-opacity: 1;
+  --glow: 0 0 15px -5px rgba(86, 89, 230, 0.2);
+  --header-bg: 240 27% 6%;
+  --surface-1: 240 27% 5%;
+  --surface-2: 240 27% 4%;
+}
+
 /* Dark Matter - Orange/teal complementary */
 .theme-darkmatter {
   --background: 270 6% 7%;

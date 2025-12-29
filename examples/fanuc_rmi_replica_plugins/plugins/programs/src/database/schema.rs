@@ -56,32 +56,35 @@ impl DatabaseInit for ProgramsDatabaseInit {
         )?;
 
         // Program instructions table - device-agnostic instructions
+        // Note: Frame references (uframe/utool) are intentionally NOT stored here.
+        // Programs are device-agnostic; frame selection happens at execution time
+        // using the device's active configuration.
         conn.execute(
             "CREATE TABLE IF NOT EXISTS program_instructions (
                 id INTEGER PRIMARY KEY,
                 sequence_id INTEGER NOT NULL,
                 line_number INTEGER NOT NULL,
-                
+
                 -- Required position
                 x REAL NOT NULL,
                 y REAL NOT NULL,
                 z REAL NOT NULL,
-                
+
                 -- Optional rotations
                 w REAL,
                 p REAL,
                 r REAL,
-                
+
                 -- Optional extra axes
                 ext1 REAL,
                 ext2 REAL,
                 ext3 REAL,
-                
+
                 -- Motion parameters
                 speed REAL,
                 term_type TEXT,
                 term_value INTEGER,
-                
+
                 FOREIGN KEY (sequence_id) REFERENCES program_sequences(id) ON DELETE CASCADE
             )",
             [],
@@ -98,7 +101,8 @@ impl DatabaseInit for ProgramsDatabaseInit {
     }
 
     fn run_migrations(&self, _conn: &Connection) -> anyhow::Result<()> {
-        // No migrations needed for new schema
+        // No migrations needed - uframe/utool removed as part of device-agnostic design
+        // Frame selection happens at execution time using device's active configuration
         Ok(())
     }
 

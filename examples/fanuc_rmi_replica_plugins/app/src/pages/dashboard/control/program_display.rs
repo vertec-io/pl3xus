@@ -44,8 +44,11 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
 
     // === Server-Driven State ===
     //
-    // Subscribe to entity-specific components for the active robot/system.
-    let (exec_state, _) = use_entity_component::<ExecutionState, _>(move || system_ctx.robot_entity_id.get());
+    // Subscribe to entity-specific components for the active system.
+    // ExecutionState: state machine, progress, available actions
+    // BufferDisplayData: the actual lines to show in the table
+    let (exec_state, _) = use_entity_component::<ExecutionState, _>(move || system_ctx.system_entity_id.get());
+    let (buffer_display, _) = use_entity_component::<BufferDisplayData, _>(move || system_ctx.system_entity_id.get());
     let (control_state, _) = use_entity_component::<EntityControl, _>(move || system_ctx.system_entity_id.get());
 
     let (show_load_modal, set_show_load_modal) = signal(false);
@@ -55,20 +58,23 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
     // Authorization is handled in the server request handlers.
     let has_control = move || {
         let my_id = ctx.my_connection_id.get();
-        Some(control_state.get().client_id) == my_id
+        let control = control_state.get();
+        let result = Some(control.client_id) == my_id;
+        leptos::logging::log!("[ProgramDisplay] has_control check: my_id={:?}, control.client_id={:?}, result={}", my_id, control.client_id, result);
+        result
     };
 
     // Helper to get the ExecutionState
     let get_exec = move || exec_state.get();
 
     // === Derived State ===
-    let loaded_name = move || get_exec().loaded_program_name;
+    let loaded_name = move || get_exec().source_name;
     let exec_state = move || get_exec().state;
-    let is_paused = move || exec_state() == ProgramExecutionState::Paused;
-    let is_active = move || matches!(exec_state(), ProgramExecutionState::Running | ProgramExecutionState::Paused);
-    let executing = move || get_exec().current_line as i32;
-    let lines = move || get_exec().program_lines;
-    let total_lines = move || get_exec().total_lines;
+    let is_paused = move || exec_state() == SystemState::Paused;
+    let is_active = move || matches!(exec_state(), SystemState::Running | SystemState::Paused | SystemState::AwaitingPoints);
+    let executing = move || get_exec().current_index as i32;
+    let lines = move || buffer_display.get().lines;
+    let total_lines = move || get_exec().total_points.unwrap_or(0);
 
     // === Available Actions (server-driven + control check) ===
     // The server tells us what actions are valid, but we also require control.
@@ -104,7 +110,8 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
     // - Error cases: show error toast with reason
     // =========================================================================
 
-    let start = use_mutation_targeted::<StartProgram>(move |result| {
+    // Use new simple verb names from execution/programs plugins
+    let start = use_mutation_targeted::<Start>(move |result| {
         match result {
             Ok(r) if r.success => { /* Success: no toast, UI updates via ExecutionState sync */ }
             Ok(r) => toast.error(format!("Start denied: {}", r.error.as_deref().unwrap_or("No control"))),
@@ -112,7 +119,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
         }
     });
 
-    let pause = use_mutation_targeted::<PauseProgram>(move |result| {
+    let pause = use_mutation_targeted::<Pause>(move |result| {
         match result {
             Ok(r) if r.success => { /* Success: no toast */ }
             Ok(r) => toast.error(format!("Pause denied: {}", r.error.as_deref().unwrap_or("No control"))),
@@ -120,7 +127,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
         }
     });
 
-    let resume = use_mutation_targeted::<ResumeProgram>(move |result| {
+    let resume = use_mutation_targeted::<Resume>(move |result| {
         match result {
             Ok(r) if r.success => { /* Success: no toast */ }
             Ok(r) => toast.error(format!("Resume denied: {}", r.error.as_deref().unwrap_or("No control"))),
@@ -128,7 +135,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
         }
     });
 
-    let stop = use_mutation_targeted::<StopProgram>(move |result| {
+    let stop = use_mutation_targeted::<Stop>(move |result| {
         match result {
             Ok(r) if r.success => { /* Success: no toast */ }
             Ok(r) => toast.error(format!("Stop denied: {}", r.error.as_deref().unwrap_or("No control"))),
@@ -136,7 +143,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
         }
     });
 
-    let unload = use_mutation_targeted::<UnloadProgram>(move |result| {
+    let unload = use_mutation_targeted::<Unload>(move |result| {
         match result {
             Ok(r) if r.success => { /* Success: no toast */ }
             Ok(r) => toast.error(format!("Unload denied: {}", r.error.as_deref().unwrap_or("No control"))),
@@ -222,7 +229,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             class="bg-[#22c55e20] border border-[#22c55e40] text-success text-[8px] px-2 py-0.5 rounded hover:bg-success/20"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
-                                    start.send(entity_id, StartProgram);
+                                    start.send(entity_id, Start);
                                 }
                             }
                         >
@@ -235,7 +242,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             class="bg-[#f59e0b20] border border-[#f59e0b40] text-warning text-[8px] px-2 py-0.5 rounded hover:bg-warning/20"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
-                                    pause.send(entity_id, PauseProgram);
+                                    pause.send(entity_id, Pause);
                                 }
                             }
                         >
@@ -248,7 +255,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             class="bg-[#22c55e20] border border-[#22c55e40] text-success text-[8px] px-2 py-0.5 rounded hover:bg-success/20"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
-                                    resume.send(entity_id, ResumeProgram);
+                                    resume.send(entity_id, Resume);
                                 }
                             }
                         >
@@ -261,7 +268,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             class="bg-destructive/15 border border-destructive/25 text-destructive text-[8px] px-2 py-0.5 rounded hover:bg-destructive/20"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
-                                    stop.send(entity_id, StopProgram);
+                                    stop.send(entity_id, Stop);
                                 }
                             }
                         >
@@ -274,7 +281,7 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
                             class="bg-destructive/15 border border-destructive/25 text-destructive text-[8px] px-2 py-0.5 rounded hover:bg-destructive/20 flex items-center gap-1"
                             on:click=move |_| {
                                 if let Some(entity_id) = system_entity_id.get() {
-                                    unload.send(entity_id, UnloadProgram);
+                                    unload.send(entity_id, Unload);
                                 }
                             }
                             title="Unload program"
@@ -312,13 +319,13 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
     }
 }
 
-/// Program table component showing the program lines
+/// Program table component showing the execution buffer lines
 ///
-/// Uses ProgramLineInfo from the shared types crate. Line numbers are derived
-/// from the index in the vector (1-based).
+/// Uses BufferLineDisplay from the execution plugin. Line numbers come from
+/// the index field in each line.
 #[component]
 fn ProgramTable(
-    lines: Signal<Vec<ProgramLineInfo>>,
+    lines: Signal<Vec<BufferLineDisplay>>,
     executing: Signal<i32>,
 ) -> impl IntoView {
 
@@ -348,18 +355,17 @@ fn ProgramTable(
                     </thead>
                     <tbody>
                         <For
-                            each=move || lines.get().into_iter().enumerate()
-                            key=|(i, _)| *i
-                            children=move |(i, line)| {
-                                // Line numbers are 1-based
-                                let line_num = i + 1;
+                            each=move || lines.get().into_iter()
+                            key=|line| line.index
+                            children=move |line| {
+                                let line_idx = line.index;
                                 let term = line.term_type.clone();
                                 view! {
                                     <tr class=move || format!(
                                         "border-b border-[#ffffff05] {}",
-                                        if executing.get() == line_num as i32 { "bg-[#00d9ff20] text-primary" } else { "text-foreground" }
+                                        if executing.get() == line_idx as i32 { "bg-[#00d9ff20] text-primary" } else { "text-foreground" }
                                     )>
-                                        <td class="px-1.5 py-0.5 text-muted-foreground font-mono">{line_num}</td>
+                                        <td class="px-1.5 py-0.5 text-muted-foreground font-mono">{line_idx}</td>
                                         <td class="px-1.5 py-0.5 text-right font-mono tabular-nums">{format!("{:.2}", line.x)}</td>
                                         <td class="px-1.5 py-0.5 text-right font-mono tabular-nums">{format!("{:.2}", line.y)}</td>
                                         <td class="px-1.5 py-0.5 text-right font-mono tabular-nums">{format!("{:.2}", line.z)}</td>

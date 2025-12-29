@@ -38,7 +38,8 @@ fanuc_replica_programs = { path = "plugins/programs", default-features = false }
 
 # Common dependencies
 bevy = { version = "0.17", default-features = false }
-bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_tasks" }
+# bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_tasks" }
+bevy-tokio-tasks = { git = "https://github.com/vertec-io/async_bevy_web.git", package = "bevy-tokio-tasks"}
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.28", features = ["full"] }
 

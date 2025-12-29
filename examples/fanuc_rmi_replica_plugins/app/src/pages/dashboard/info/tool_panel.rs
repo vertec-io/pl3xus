@@ -157,6 +157,7 @@ pub fn ToolManagementPanel() -> impl IntoView {
                                     on:click=move |_| {
                                         if let (Some(tool), Some(entity_bits)) = (pending_tool.get(), robot_entity_bits()) {
                                             let frame = active_frame.get();
+                                            log::debug!("🖱️ ToolPanel Apply: frame={}, tool={}", frame, tool);
                                             // Send targeted request to server - server updates FrameToolDataState
                                             // which syncs back to all clients. Don't clear pending - let Effect do it.
                                             set_frame_tool.send(entity_bits, SetActiveFrameTool {

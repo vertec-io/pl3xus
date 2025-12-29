@@ -142,8 +142,12 @@ fn process_poll_responses(
                     }
 
                     // Update active frame/tool numbers in RobotStatus
+                    // NOTE: Check the raw byte values from response
                     let robot_uframe = status_resp.number_uframe as i32;
                     let robot_utool = status_resp.number_utool as i32;
+                    debug!("📊 FrcGetStatus response: number_uframe={} (raw: {:?}), number_utool={} (raw: {:?})", 
+                        robot_uframe, status_resp.number_uframe, robot_utool, status_resp.number_utool);
+                    
                     status.active_uframe = robot_uframe as u8;
                     status.active_utool = robot_utool as u8;
 
@@ -153,9 +157,11 @@ fn process_poll_responses(
                     frame_tool_state.active_frame = robot_uframe;
                     frame_tool_state.active_tool = robot_utool;
                     
-                    // Log if frame/tool changed
-                    if prev_frame != robot_uframe || prev_tool != robot_utool {
-                        trace!("🔄 FrameToolDataState updated: ({},{}) -> ({},{})", prev_frame, prev_tool, robot_uframe, robot_utool);
+                    // ALWAYS log on first update (when prev was 0,0) or on any change
+                    if prev_frame == 0 && prev_tool == 0 {
+                        info!("✅ First FrcGetStatus response: Setting FrameToolDataState to ({},{})", robot_uframe, robot_utool);
+                    } else if prev_frame != robot_uframe || prev_tool != robot_utool {
+                        info!("🔄 FrameToolDataState updated: ({},{}) -> ({},{})", prev_frame, prev_tool, robot_uframe, robot_utool);
                     }
 
                     // Check for mismatch between robot and ActiveConfigState

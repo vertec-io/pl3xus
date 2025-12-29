@@ -6,3 +6,8 @@
 **/node_modules
 /research
 /logs
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3

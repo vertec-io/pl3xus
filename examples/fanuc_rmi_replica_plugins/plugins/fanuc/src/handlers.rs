@@ -746,7 +746,7 @@ pub fn handle_set_active_frame_tool(
 
     for request in requests.read() {
         let inner = request.get_request();
-        info!("📋 Handling SetActiveFrameTool: uframe={}, utool={}", inner.uframe, inner.utool);
+        info!("📋 Handling SetActiveFrameTool REQUEST: uframe={}, utool={}", inner.uframe, inner.utool);
 
         // Find connected robot with driver
         let Some((ft_state, mut active_config, _, driver)) = robots.iter_mut()
@@ -765,11 +765,24 @@ pub fn handle_set_active_frame_tool(
         let old_tool = ft_state.active_tool;
 
         // Send FrcSetUFrameUTool command to robot
+        // IMPORTANT: Verify the values being sent match the request
+        let uframe_to_send = inner.uframe as u8;
+        let utool_to_send = inner.utool as u8;
+        
+        info!("📤 Before FrcSetUFrameUTool construction: uframe_to_send={}, utool_to_send={}", uframe_to_send, utool_to_send);
+        
         let command = raw_dto::Command::FrcSetUFrameUTool(raw_dto::FrcSetUFrameUTool {
             group: 1,
-            u_frame_number: inner.uframe as u8,
-            u_tool_number: inner.utool as u8,
+            u_frame_number: uframe_to_send,
+            u_tool_number: utool_to_send,
         });
+        
+        // Log the command after construction
+        if let raw_dto::Command::FrcSetUFrameUTool(ref frc_cmd) = command {
+            info!("📤 After FrcSetUFrameUTool construction: u_frame_number={}, u_tool_number={}", 
+                frc_cmd.u_frame_number, frc_cmd.u_tool_number);
+        }
+        
         let send_packet: fanuc_rmi::packets::SendPacket = raw_dto::SendPacket::Command(command).into();
 
         info!("📤 SetActiveFrameTool: Sending FrcSetUFrameUTool with UFrame={}, UTool={}", inner.uframe, inner.utool);

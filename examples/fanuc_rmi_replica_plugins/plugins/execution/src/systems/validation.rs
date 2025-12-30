@@ -1,8 +1,11 @@
 //! Validation coordination system.
 //!
-//! This system coordinates the validation phase before execution starts.
-//! When BufferState is Validating, it checks all registered subsystems
-//! and transitions to Executing when all are ready, or Error if any fail.
+//! This system coordinates the validation phase before execution starts or resumes.
+//! When BufferState is Validating or ValidatingForResume, it checks all registered
+//! subsystems and transitions to Executing when all are ready, or Error if any fail.
+//!
+//! - Validating: Used for initial Start command, starts from index 0
+//! - ValidatingForResume: Used for Resume command, continues from paused index
 //!
 //! Includes timeout functionality to prevent stalled validations.
 
@@ -43,11 +46,11 @@ impl ValidationStartTime {
 /// Coordinate validation of all subsystems before execution.
 ///
 /// This system:
-/// 1. Only runs when BufferState::Validating
+/// 1. Only runs when BufferState::Validating or BufferState::ValidatingForResume
 /// 2. Checks for timeout first
 /// 3. Checks for any subsystem errors
-/// 4. Transitions to Executing if all ready
-/// 5. Stays in Validating if still waiting
+/// 4. Transitions to Executing if all ready (from index 0 or resume index)
+/// 5. Stays in Validating/ValidatingForResume if still waiting
 ///
 /// Subsystem plugins (programs, fanuc, duet) should have their own
 /// `validate_*_subsystem` systems that run BEFORE this one and set
@@ -69,20 +72,29 @@ pub fn coordinate_validation(
         return;
     };
 
-    // Only process when in Validating state
-    if !matches!(*buffer_state, BufferState::Validating) {
+    // Extract resume index if validating for resume, or None for initial start
+    let resume_from_index = match *buffer_state {
+        BufferState::Validating => Some(0), // Initial start from index 0
+        BufferState::ValidatingForResume { resume_from_index } => Some(resume_from_index),
+        _ => None,
+    };
+
+    // Only process when in a validating state
+    let Some(start_index) = resume_from_index else {
         // Clean up validation start time if we're not validating
         if validation_start.is_some() {
             commands.remove_resource::<ValidationStartTime>();
         }
         return;
-    }
+    };
+
+    let is_resume = start_index > 0;
 
     // Ensure validation start time exists
     let start_time = match validation_start {
         Some(start) => start,
         None => {
-            // This shouldn't happen if handle_start inserted it, but handle gracefully
+            // This shouldn't happen if handle_start/handle_resume inserted it, but handle gracefully
             commands.insert_resource(ValidationStartTime::default());
             warn!("ValidationStartTime was missing, created new one");
             return; // Wait for next frame
@@ -137,21 +149,30 @@ pub fn coordinate_validation(
     // Check if all subsystems are ready
     if subsystems.all_ready() {
         *buffer_state = BufferState::Executing {
-            current_index: 0,
-            completed_count: 0,
+            current_index: start_index,
+            completed_count: start_index, // For resume, assume all before pause point are complete
         };
         if let Some(mut exec) = exec_state {
             exec.state = SystemState::Running;
-            exec.current_index = 0;
-            exec.points_executed = 0;
+            exec.current_index = start_index as usize;
+            exec.points_executed = start_index as usize;
             exec.update_available_actions();
         }
         commands.remove_resource::<ValidationStartTime>();
-        info!(
-            "✅ Validation succeeded for '{}' in {:?}, starting execution",
-            coordinator.name,
-            start_time.elapsed()
-        );
+        if is_resume {
+            info!(
+                "✅ Resume validation succeeded for '{}' in {:?}, resuming from index {}",
+                coordinator.name,
+                start_time.elapsed(),
+                start_index
+            );
+        } else {
+            info!(
+                "✅ Validation succeeded for '{}' in {:?}, starting execution",
+                coordinator.name,
+                start_time.elapsed()
+            );
+        }
         return;
     }
 
@@ -160,9 +181,10 @@ pub fn coordinate_validation(
     if elapsed.as_secs() % 5 == 0 && elapsed.subsec_millis() < 100 {
         let not_ready = subsystems.not_ready();
         if !not_ready.is_empty() {
+            let action = if is_resume { "resume" } else { "start" };
             info!(
-                "⏳ Validation waiting ({:?}/{:?}) for subsystems: {:?}",
-                elapsed, VALIDATION_TIMEOUT, not_ready
+                "⏳ Validation for {} waiting ({:?}/{:?}) for subsystems: {:?}",
+                action, elapsed, VALIDATION_TIMEOUT, not_ready
             );
         }
     }

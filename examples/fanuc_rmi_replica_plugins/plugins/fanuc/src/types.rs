@@ -161,7 +161,7 @@ pub struct ConfigChangeEntry {
 /// When `changes_count > 0`, the UI shows a warning and Save/Revert buttons.
 /// The `change_log` stores detailed changes for display in the save modal.
 #[cfg_attr(feature = "ecs", derive(Component))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ActiveConfigState {
     /// ID of the configuration this was loaded from (None if new/unsaved)
     pub loaded_from_id: Option<i64>,
@@ -181,6 +181,30 @@ pub struct ActiveConfigState {
     pub turn4: i32,
     pub turn5: i32,
     pub turn6: i32,
+}
+
+impl Default for ActiveConfigState {
+    fn default() -> Self {
+        Self {
+            loaded_from_id: None,
+            loaded_from_name: None,
+            changes_count: 0,
+            change_log: Vec::new(),
+            // FANUC sensible defaults:
+            // UFrame 0 = World Frame (valid, common default)
+            // UTool 1 = First tool (Tool 0 is invalid on FANUC)
+            // Arm config: Front=1, Up=1, Left=0 (Right), Flip=0 (NoFlip)
+            u_frame_number: 0,
+            u_tool_number: 1,
+            front: 1,
+            up: 0,
+            left: 0,
+            flip: 0,
+            turn4: 0,
+            turn5: 0,
+            turn6: 0,
+        }
+    }
 }
 
 /// Tracks synchronization state between ActiveConfigState and the actual robot.
@@ -503,7 +527,7 @@ impl RequestMessage for ListRobotConnections {
 /// Request to create a new robot connection with configurations.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(feature = "server", derive(Invalidates))]
-#[cfg_attr(feature = "server", invalidates("ListRobotConnections"))]
+#[cfg_attr(feature = "server", invalidates("ListRobotConnections", "GetRobotConfigurations"))]
 pub struct CreateRobotConnection {
     // Connection details
     pub name: String,

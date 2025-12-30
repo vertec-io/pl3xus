@@ -278,15 +278,28 @@ pub enum BufferState {
     /// Minimum buffer reached, ready to start execution
     Ready,
 
-    /// Validating subsystems before execution starts.
+    /// Validating subsystems before execution starts (from Start command).
     ///
     /// When user clicks "Start", we enter this state and wait for all
     /// subsystems to report Ready. If all ready, transition to Executing.
     /// If any error or timeout, transition to Error.
     ///
-    /// Note: started_at is only available on server (uses Instant).
-    /// For serialization, we don't include the timestamp.
+    /// Note: started_at is tracked in ValidationStartTime resource (Instant can't serialize).
     Validating,
+
+    /// Validating subsystems before resuming execution (from Resume command).
+    ///
+    /// Similar to Validating, but preserves the resume_from_index so that
+    /// after validation succeeds, execution continues from where it was paused.
+    ///
+    /// This re-validation ensures:
+    /// - Robot is still connected
+    /// - No emergency stop was triggered during pause
+    /// - All safety conditions are still met
+    ValidatingForResume {
+        /// The index to resume from after validation succeeds
+        resume_from_index: u32,
+    },
 
     /// Actively sending points to devices
     Executing {
@@ -396,9 +409,12 @@ impl BufferState {
         matches!(self, BufferState::Stopped { .. })
     }
 
-    /// Check if currently validating subsystems.
+    /// Check if currently validating subsystems (either for start or resume).
     pub fn is_validating(&self) -> bool {
-        matches!(self, BufferState::Validating)
+        matches!(
+            self,
+            BufferState::Validating | BufferState::ValidatingForResume { .. }
+        )
     }
 
     /// Check if execution is in a terminal state (Complete, Error, or Stopped).
@@ -431,6 +447,7 @@ impl BufferState {
             BufferState::Buffering { .. } => SystemState::Ready,
             BufferState::Ready => SystemState::Ready,
             BufferState::Validating => SystemState::Validating,
+            BufferState::ValidatingForResume { .. } => SystemState::Validating,
             BufferState::Executing { .. } => SystemState::Running,
             BufferState::Paused { .. } => SystemState::Paused,
             BufferState::AwaitingPoints { .. } => SystemState::AwaitingPoints,

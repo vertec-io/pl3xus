@@ -70,10 +70,27 @@ during Validating state).
 - **Trigger**: `PauseProgram` handler (execution plugin)
 - **Action**: Set `BufferState::Paused { paused_at_index }`
 
-### Paused → Validating
+### Paused → Validating (Resume Validation)
 - **Trigger**: `ResumeProgram` handler (execution plugin)
-- **Action**: Set `BufferState::Validating`
-- **Note**: Re-validates all subsystems before resuming
+- **Action**: Set `BufferState::Validating` (preserve current index)
+- **Rationale**: Re-validates all subsystems before resuming to ensure:
+  - Robot is still connected
+  - Emergency stop hasn't been triggered
+  - No errors occurred during pause
+  - All safety conditions are still met
+- **Index Preservation**: The `paused_at_index` is stored and used when
+  transitioning from Validating → Executing after resume
+
+**Why not Paused → Executing directly?**
+
+While pause was active, conditions may have changed:
+1. Robot may have been disconnected
+2. Estop may have been triggered
+3. Program source may have been modified
+4. Safety zones may have changed
+
+Re-validating before resuming ensures we don't send motion commands
+to a system that's no longer ready to receive them.
 
 ### Executing → Completed
 - **Trigger**: Motion feedback indicates all points executed
@@ -92,6 +109,93 @@ during Validating state).
 - **Action**: 
   - Remove `LoadedProgram` component
   - Set `BufferState::Idle` (or NoProgram state)
+
+## Resume Validation Index Preservation
+
+When resuming from pause, we need to preserve the execution index while
+going through validation. This requires storing the resume index separately:
+
+### Option 1: Validating Variant with Resume Index
+
+```rust
+pub enum BufferState {
+    // ...
+    Validating,
+    ValidatingForResume { resume_from_index: u32 },
+    // ...
+}
+```
+
+The validation coordinator checks which variant we're in:
+- `Validating` → on success, start from index 0
+- `ValidatingForResume { resume_from_index }` → on success, start from `resume_from_index`
+
+### Option 2: Separate Resource
+
+```rust
+#[derive(Resource, Default)]
+pub struct ResumeContext {
+    /// If Some, we're resuming from this index after validation
+    pub resume_from_index: Option<u32>,
+}
+```
+
+The resume handler sets this resource, and the validation coordinator
+reads it when transitioning to Executing.
+
+### Recommended: Option 1
+
+Option 1 is cleaner because:
+- The state is self-contained
+- No separate resource to manage
+- Easier to reason about state transitions
+
+### Implementation in Handler
+
+```rust
+pub fn handle_resume(
+    mut buffer_state: Query<&mut BufferState, With<ActiveSystem>>,
+    mut subsystems: Query<&mut Subsystems, With<ActiveSystem>>,
+    // ...
+) {
+    let paused_at = match *buffer_state {
+        BufferState::Paused { paused_at_index } => paused_at_index,
+        _ => return, // Not paused
+    };
+
+    // Reset subsystems for re-validation
+    subsystems.reset_all();
+
+    // Transition to ValidatingForResume, preserving the index
+    *buffer_state = BufferState::ValidatingForResume {
+        resume_from_index: paused_at
+    };
+}
+```
+
+### Validation Coordinator Update
+
+```rust
+fn coordinate_validation(
+    mut buffer_state: Query<&mut BufferState, With<ActiveSystem>>,
+    subsystems: Query<&Subsystems, With<ActiveSystem>>,
+) {
+    // ...
+
+    if subs.all_ready() {
+        let start_index = match *state {
+            BufferState::Validating => 0,
+            BufferState::ValidatingForResume { resume_from_index } => resume_from_index,
+            _ => return,
+        };
+
+        *state = BufferState::Executing {
+            current_index: start_index,
+            completed_count: start_index, // Points before resume are "complete"
+        };
+    }
+}
+```
 
 ## Subsystem Validation Behaviors
 

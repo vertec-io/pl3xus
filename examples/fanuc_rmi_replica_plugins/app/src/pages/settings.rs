@@ -305,10 +305,11 @@ fn RobotSettingsPanel(
     let (editing_config_id, set_editing_config_id) = signal::<Option<i64>>(None);
 
     // Configuration form fields
+    // Note: FANUC uses 0-9 for UFrame (0 = World Frame), 1-10 for UTool (Tool 0 is invalid)
     let (config_name, set_config_name) = signal(String::new());
     let (config_uframe, set_config_uframe) = signal("0".to_string());
-    let (config_utool, set_config_utool) = signal("0".to_string());
-    let (config_front, set_config_front) = signal("0".to_string());
+    let (config_utool, set_config_utool) = signal("1".to_string());
+    let (config_front, set_config_front) = signal("1".to_string());
     let (config_up, set_config_up) = signal("0".to_string());
     let (config_left, set_config_left) = signal("0".to_string());
     let (config_flip, set_config_flip) = signal("0".to_string());
@@ -380,8 +381,11 @@ fn RobotSettingsPanel(
                 set_config_to_delete.set(None);
                 // No manual refetch needed - server broadcasts QueryInvalidation
             }
-            Ok(_) | Err(_) => {
-                // Error handling could be added here
+            Ok(r) => {
+                toast.error(format!("Delete failed: {}", r.error.as_deref().unwrap_or("Failed to delete configuration")));
+            },
+            Err(e) => {
+                toast.error(format!("Delete failed: {e}"));
             }
         }
     });
@@ -429,20 +433,34 @@ fn RobotSettingsPanel(
         }
     });
 
-    // Track last loaded robot ID to avoid re-setting form fields
+    // Track last successfully loaded robot ID to detect when data becomes available
     let (last_loaded_robot_id, set_last_loaded_robot_id) = signal::<Option<i64>>(None);
 
-    // Load robot form data when selection changes
+    // Load robot form data when selection changes OR when robot data becomes available
+    // This handles the case where:
+    // 1. ID changes but query data hasn't arrived yet
+    // 2. Query data arrives later with the selected robot
     Effect::new(move |_| {
-        // Only track selected_robot_id changes, not the full robot data
         let current_id = selected_robot_id.get();
+        let robot = selected_robot.with_value(|f| f());
         let last_id = last_loaded_robot_id.get_untracked();
 
-        // Only proceed if the ID actually changed
-        if current_id != last_id {
-            set_last_loaded_robot_id.set(current_id);
+        // Load form if:
+        // - ID changed to a new value, OR
+        // - ID is set but we haven't successfully loaded it yet (robot just became available)
+        let should_load = match (current_id, robot.as_ref(), last_id) {
+            // ID changed to Some - always try to load
+            (Some(id), _, Some(last)) if id != last => true,
+            // ID is Some but last_id is None (new selection, not loaded yet)
+            (Some(_), Some(_), None) => true,
+            // ID changed from Some to None - clear form
+            (None, _, Some(_)) => true,
+            _ => false,
+        };
 
-            if let Some(robot) = selected_robot.with_value(|f| f()) {
+        if should_load {
+            if let Some(robot) = robot {
+                set_last_loaded_robot_id.set(Some(robot.id));
                 set_edit_name.set(robot.name.clone());
                 set_edit_desc.set(robot.description.clone().unwrap_or_default());
                 set_edit_ip.set(robot.ip_address.clone());
@@ -461,7 +479,9 @@ fn RobotSettingsPanel(
                 set_edit_joint_step.set(robot.default_joint_jog_step.to_string());
                 set_has_changes.set(false);
                 set_save_status.set(None);
-                // No manual fetch needed - use_query_keyed auto-fetches when selected_robot_id changes
+            } else if current_id.is_none() {
+                // Clear form when no robot selected
+                set_last_loaded_robot_id.set(None);
             }
         }
     });
@@ -473,9 +493,6 @@ fn RobotSettingsPanel(
             set_configurations.set(response.configurations.clone());
         }
     });
-
-    // Note: Configuration CRUD response handling is now done in the mutation handlers above.
-    // No Effects needed - handlers are called exactly once per response.
 
     view! {
         <div class="flex-1 bg-background rounded border border-border/8 flex flex-col min-h-0">
@@ -779,9 +796,11 @@ fn RobotSettingsPanel(
                                         on:click=move |_| {
                                             set_editing_config_id.set(None);
                                             set_config_name.set(String::new());
+                                            // Sensible defaults for FANUC: UFrame 0 (World), UTool 1 (Tool 0 invalid)
+                                            // Arm config: Front=1, Up=1, Left=0 (Right), Flip=0 (NoFlip)
                                             set_config_uframe.set("0".to_string());
-                                            set_config_utool.set("0".to_string());
-                                            set_config_front.set("0".to_string());
+                                            set_config_utool.set("1".to_string());
+                                            set_config_front.set("1".to_string());
                                             set_config_up.set("0".to_string());
                                             set_config_left.set("0".to_string());
                                             set_config_flip.set("0".to_string());
@@ -1230,9 +1249,10 @@ fn RobotSettingsPanel(
                                     set_show_config_form.set(false);
                                     set_editing_config_id.set(None);
                                     set_config_name.set(String::new());
+                                    // Reset to sensible defaults for FANUC
                                     set_config_uframe.set("0".to_string());
-                                    set_config_utool.set("0".to_string());
-                                    set_config_front.set("0".to_string());
+                                    set_config_utool.set("1".to_string());
+                                    set_config_front.set("1".to_string());
                                     set_config_up.set("0".to_string());
                                     set_config_left.set("0".to_string());
                                     set_config_flip.set("0".to_string());

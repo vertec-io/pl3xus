@@ -84,3 +84,39 @@ Subsystems don't coordinate during execution - that's a different system.
 
 If all subsystems report Ready within 100ms, user sees nearly instant transition.
 
+### 10. How should Resume handle re-validation?
+**RESOLVED**: Resume goes through Validating state to re-check subsystems
+
+When resuming from pause, the system should validate all subsystems before
+continuing execution. This ensures:
+- Robot is still connected
+- No emergency stop was triggered
+- All safety conditions are still met
+
+The paused-at index is preserved using a `ValidatingForResume { resume_from_index }`
+variant of BufferState. See `state-machine.md` for implementation details.
+
+### 11. How to handle multiple in-flight motion commands for continuous motion?
+**RESOLVED**: Use capacity-based in-flight queue instead of boolean ready_for_next
+
+FANUC continuous motion (CNT) requires multiple points in the controller's queue
+for smooth motion blending. The orchestrator should fill the queue up to a
+configured capacity (typically 5-10 points for CNT motion).
+
+```rust
+pub struct DeviceStatus {
+    pub in_flight_capacity: u32,  // Max commands in-flight (e.g., 8)
+    pub in_flight_count: u32,     // Current in-flight count
+    // ...
+}
+
+impl DeviceStatus {
+    pub fn ready_for_next(&self) -> bool {
+        self.in_flight_count < self.in_flight_capacity
+    }
+}
+```
+
+The orchestrator loops while `ready_for_next()` is true, sending multiple points
+per tick. See `in-flight-queue.md` for full implementation details.
+

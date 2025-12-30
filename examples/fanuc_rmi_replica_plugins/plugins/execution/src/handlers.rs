@@ -3,13 +3,15 @@
 //! These handlers manage execution state transitions:
 //! - Start: Ready/Completed/Stopped → Validating → Executing
 //! - Pause: Running → Paused
-//! - Resume: Paused → Running
+//! - Resume: Paused → ValidatingForResume → Executing (re-validates before resuming)
 //! - Stop: Running/Paused/Validating → Stopped
 
 use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
-use fanuc_replica_core::ActiveSystem;
+use fanuc_replica_core::{console_entry, ActiveSystem, ConsoleDirection, ConsoleMsgType};
+use pl3xus::Network;
 use pl3xus_sync::AuthorizedRequest;
+use pl3xus_websockets::WebSocketProvider;
 
 use crate::components::{
     BufferState, ExecutionCoordinator, ExecutionState, Subsystems, SystemState, ToolpathBuffer,
@@ -71,10 +73,10 @@ pub fn handle_start(
             toolpath_buffer.reset_for_rerun();
         }
 
-        // Reset device status
+        // Reset device status for new execution
         for mut device_status in devices.iter_mut() {
             device_status.completed_count = 0;
-            device_status.ready_for_next = true;
+            device_status.reset_in_flight();
         }
 
         // Reset subsystems for validation
@@ -110,6 +112,7 @@ pub fn handle_pause(
         (&ExecutionCoordinator, &mut BufferState, Option<&mut ExecutionState>),
         With<ActiveSystem>,
     >,
+    net: Res<Network<WebSocketProvider>>,
 ) {
     for request in requests.read() {
         let request = request.clone();
@@ -149,6 +152,14 @@ pub fn handle_pause(
             exec.update_available_actions();
         }
 
+        // Broadcast console entry
+        let console_msg = console_entry(
+            format!("Execution paused at point {}", current_idx),
+            ConsoleDirection::System,
+            ConsoleMsgType::Status,
+        );
+        net.broadcast(console_msg);
+
         let response = PauseResponse {
             success: true,
             error: None,
@@ -159,21 +170,35 @@ pub fn handle_pause(
     }
 }
 
-/// Handle Resume request - resumes paused execution.
+/// Handle Resume request - resumes paused execution after re-validation.
 ///
-/// Transitions: Paused → Running
+/// Transitions: Paused → ValidatingForResume → (after validation) → Executing
+///
+/// Re-validation ensures:
+/// - Robot is still connected
+/// - No emergency stop was triggered during pause
+/// - All safety conditions are still met
 pub fn handle_resume(
+    mut commands: Commands,
     mut requests: MessageReader<AuthorizedRequest<Resume>>,
     mut systems: Query<
-        (&ExecutionCoordinator, &mut BufferState, Option<&mut ExecutionState>),
+        (
+            &ExecutionCoordinator,
+            &mut BufferState,
+            &mut Subsystems,
+            Option<&mut ExecutionState>,
+        ),
         With<ActiveSystem>,
     >,
+    net: Res<Network<WebSocketProvider>>,
 ) {
     for request in requests.read() {
         let request = request.clone();
         info!("📋 Handling Resume request");
 
-        let Ok((coordinator, mut buffer_state, exec_state)) = systems.single_mut() else {
+        let Ok((coordinator, mut buffer_state, mut subsystems, exec_state)) =
+            systems.single_mut()
+        else {
             let response = ResumeResponse {
                 success: false,
                 error: Some("No source loaded".into()),
@@ -195,18 +220,32 @@ pub fn handle_resume(
             }
         };
 
-        // Transition back to Executing
-        *buffer_state = BufferState::Executing {
-            current_index: paused_at,
-            completed_count: paused_at, // Assume all before pause point are complete
-        };
-        info!("▶ Resumed '{}' from index {}", coordinator.name, paused_at);
+        // Reset subsystems for re-validation before resume
+        subsystems.reset_all();
 
-        // Update ExecutionState if present
+        // Transition to ValidatingForResume - preserves the resume index
+        *buffer_state = BufferState::ValidatingForResume {
+            resume_from_index: paused_at,
+        };
+        commands.insert_resource(ValidationStartTime::default());
+        info!(
+            "🔄 Resume requested for '{}' - validating before resuming from index {}",
+            coordinator.name, paused_at
+        );
+
+        // Update ExecutionState if present - show Validating state
         if let Some(mut exec) = exec_state {
-            exec.state = SystemState::Running;
+            exec.state = SystemState::Validating;
             exec.update_available_actions();
         }
+
+        // Broadcast console entry
+        let console_msg = console_entry(
+            format!("Resuming execution from point {}", paused_at),
+            ConsoleDirection::System,
+            ConsoleMsgType::Status,
+        );
+        net.broadcast(console_msg);
 
         let response = ResumeResponse {
             success: true,
@@ -220,7 +259,7 @@ pub fn handle_resume(
 
 /// Handle Stop request - stops execution.
 ///
-/// Transitions: Running/Paused/Validating → Stopped
+/// Transitions: Running/Paused/Validating/ValidatingForResume → Stopped
 pub fn handle_stop(
     mut requests: MessageReader<AuthorizedRequest<Stop>>,
     mut systems: Query<
@@ -232,6 +271,7 @@ pub fn handle_stop(
         With<ActiveSystem>,
     >,
     devices: Query<&DeviceStatus>,
+    net: Res<Network<WebSocketProvider>>,
 ) {
     for request in requests.read() {
         let request = request.clone();
@@ -257,6 +297,10 @@ pub fn handle_stop(
                 (paused_at_index, completed)
             }
             BufferState::Validating => (0, 0),
+            BufferState::ValidatingForResume { resume_from_index } => {
+                // Stopping during resume validation - use the resume index
+                (resume_from_index, resume_from_index)
+            }
             _ => {
                 let response = StopResponse {
                     success: false,
@@ -283,6 +327,14 @@ pub fn handle_stop(
             exec.points_executed = completed_before_stop as usize;
             exec.update_available_actions();
         }
+
+        // Broadcast console entry
+        let console_msg = console_entry(
+            format!("Execution stopped at point {} ({} completed)", stopped_at_index, completed_before_stop),
+            ConsoleDirection::System,
+            ConsoleMsgType::Status,
+        );
+        net.broadcast(console_msg);
 
         let response = StopResponse {
             success: true,

@@ -177,6 +177,11 @@ The programs plugin is the first producer type; future streaming/generator plugi
 ### Execution Plugin Research (`../execution-plugin/`)
 Original execution architecture with BufferState, ToolpathBuffer, orchestrator systems.
 
+### In-Flight Queue Design (`in-flight-queue.md`)
+For FANUC continuous motion (CNT), we need multiple points queued in the controller
+for smooth blending. This document describes the capacity-based in-flight queue
+that replaces the simple boolean `ready_for_next` pattern.
+
 ---
 
 ## Handoff Information
@@ -191,6 +196,8 @@ Original execution architecture with BufferState, ToolpathBuffer, orchestrator s
 3. Read `types.md` for exact component definitions
 4. Read `handler-ownership.md` for handler implementations
 5. Reference `program-execution-relationship.md` for design rationale
+6. Read `state-machine.md` for state transitions including resume validation
+7. Read `in-flight-queue.md` for continuous motion queue design
 
 **Key Files to Create/Modify**:
 

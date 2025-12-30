@@ -263,7 +263,7 @@ pub struct ConnectionState {
 
 /// Active configuration state (Synced 1-way: Server -> Client)
 #[cfg_attr(feature = "server", derive(Component))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ActiveConfigState {
     pub loaded_from_id: Option<i64>,
     pub loaded_from_name: Option<String>,
@@ -277,6 +277,29 @@ pub struct ActiveConfigState {
     pub turn4: i32,
     pub turn5: i32,
     pub turn6: i32,
+}
+
+impl Default for ActiveConfigState {
+    fn default() -> Self {
+        Self {
+            loaded_from_id: None,
+            loaded_from_name: None,
+            changes_count: 0,
+            // FANUC sensible defaults:
+            // UFrame 0 = World Frame (valid, common default)
+            // UTool 1 = First tool (Tool 0 is invalid on FANUC)
+            // Arm config: Front=1, Up=1, Left=0 (Right), Flip=0 (NoFlip)
+            u_frame_number: 0,
+            u_tool_number: 1,
+            front: 1,
+            up: 1,
+            left: 0,
+            flip: 0,
+            turn4: 0,
+            turn5: 0,
+            turn6: 0,
+        }
+    }
 }
 
 /// Active jog settings state (Synced 1-way: Server -> Client)

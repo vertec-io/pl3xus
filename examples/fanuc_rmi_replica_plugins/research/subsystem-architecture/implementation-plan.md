@@ -85,8 +85,13 @@ Key decisions made (see open-questions.md and program-execution-relationship.md)
 ### 2.2 Implement Handlers
 - [ ] Implement `handle_start` (→ Validating)
 - [ ] Implement `handle_pause` (→ Paused)
-- [ ] Implement `handle_resume` (→ Validating)
+- [ ] Implement `handle_resume` (→ ValidatingForResume, preserves index)
 - [ ] Implement `handle_stop` (→ Stopped, clear motion buffer)
+
+### 2.3 Update BufferState for Resume Validation
+- [ ] Add `ValidatingForResume { resume_from_index: u32 }` variant to BufferState
+- [ ] Update validation coordinator to handle both Validating and ValidatingForResume
+- [ ] When ValidatingForResume succeeds, start execution from `resume_from_index`
 
 ### 2.3 Register Handlers
 - [ ] Add handler registration in ExecutionPlugin
@@ -147,6 +152,31 @@ Key decisions made (see open-questions.md and program-execution-relationship.md)
 ### 4.3 Update Motion System
 - [ ] Update `fanuc_motion_dispatch_system` to check BufferState
 - [ ] Only dispatch motion when `BufferState::Executing`
+
+### 4.4 Implement In-Flight Queue for Continuous Motion
+See `in-flight-queue.md` for detailed design.
+
+**DeviceStatus Changes:**
+- [ ] Add `in_flight_capacity: u32` field (default 8 for FANUC CNT motion)
+- [ ] Add `in_flight_count: u32` field
+- [ ] Add `ready_for_next()` method checking `in_flight_count < in_flight_capacity`
+- [ ] Remove boolean `ready_for_next` field
+- [ ] Update all DeviceStatus creation sites
+
+**Orchestrator Changes:**
+- [ ] Change single-point dispatch to loop while `ready_for_next()`
+- [ ] Add per-tick burst limit (e.g., max 5 points per tick)
+
+**FANUC Motion Handler Changes:**
+- [ ] Increment `in_flight_count` on send
+- [ ] Decrement `in_flight_count` on response
+- [ ] Remove `ready_for_next = false` after send
+- [ ] Remove `ready_for_next = in_flight.is_empty()` on response
+
+**Edge Case Handling:**
+- [ ] On Stop, clear in_flight tracking and reset in_flight_count to 0
+- [ ] On Pause, track in_flight_count at pause time for potential rollback
+- [ ] On Error response, set error and potentially abort remaining in-flight
 
 ## Phase 5: Update UI Types and Sync
 

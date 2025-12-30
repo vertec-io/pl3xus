@@ -106,7 +106,7 @@ impl ToolpathPoint {
     pub fn new(pose: RobotPose) -> Self {
         Self {
             pose,
-            speed: 100.0, // Default 100 mm/sec
+            speed: 10.0, // Default 10 mm/sec
             termination: TerminationType::Fine,
             external_axes: None,
         }

@@ -220,12 +220,13 @@ pub fn fanuc_motion_handler_system(
                 in_flight.record_sent(request_id, event.device, event.point.index as usize);
 
                 info!(
-                    "📤 FANUC motion sent: Linear to ({:.2}, {:.2}, {:.2}) WPR({:.2}, {:.2}, {:.2}) @ {:.1} mm/s (point {}, request_id {})",
-                    x, y, z, w, p, r, event.motion.speed, event.point.index, request_id
+                    "📤 FANUC motion sent: Linear to ({:.2}, {:.2}, {:.2}) WPR({:.2}, {:.2}, {:.2}) @ {:.1} mm/s (point {}, request_id {}, in_flight: {}/{})",
+                    x, y, z, w, p, r, event.motion.speed, event.point.index, request_id,
+                    status.in_flight_count, status.in_flight_capacity
                 );
 
-                // Don't mark ready_for_next yet - wait for response
-                status.ready_for_next = false;
+                // Note: command_sent() is called by orchestrator before sending event.
+                // The orchestrator manages in_flight_count.
             }
             Err(e) => {
                 error!(
@@ -233,6 +234,10 @@ pub fn fanuc_motion_handler_system(
                     event.point.index, e
                 );
                 status.error = Some(format!("Failed to send motion: {}", e));
+                // Decrement in-flight count since the command failed
+                if status.in_flight_count > 0 {
+                    status.in_flight_count -= 1;
+                }
             }
         }
     }
@@ -261,7 +266,9 @@ pub fn fanuc_sent_instruction_system(
 /// System that processes instruction responses from the robot.
 ///
 /// When the robot completes an instruction, it sends a response with
-/// the sequence ID. This system updates DeviceStatus to signal completion.
+/// the sequence ID. This system updates DeviceStatus to signal completion
+/// by calling `command_completed()` which decrements in_flight_count
+/// and increments completed_count.
 pub fn fanuc_motion_response_system(
     mut in_flight: ResMut<FanucInFlightInstructions>,
     mut device_query: Query<&mut DeviceStatus, With<FanucMotionDevice>>,
@@ -286,18 +293,19 @@ pub fn fanuc_motion_response_system(
                                 "Instruction {} failed with error {}",
                                 seq_id, error_id
                             ));
-                            status.ready_for_next = false;
+                            // Decrement in-flight but don't increment completed
+                            if status.in_flight_count > 0 {
+                                status.in_flight_count -= 1;
+                            }
                         }
                     } else {
-                        info!(
-                            "📍 Instruction completed: sequence {} (point {})",
-                            seq_id, point_index
-                        );
-
                         if let Ok(mut status) = device_query.get_mut(entity) {
-                            status.completed_count += 1;
-                            // Ready for next if no more in-flight instructions
-                            status.ready_for_next = in_flight.is_empty();
+                            // Use command_completed() to decrement in_flight and increment completed
+                            status.command_completed();
+                            info!(
+                                "📍 Instruction completed: sequence {} (point {}), in_flight: {}/{}",
+                                seq_id, point_index, status.in_flight_count, status.in_flight_capacity
+                            );
                         }
                     }
                 }
@@ -344,7 +352,7 @@ const STATE_COMPLETE: u8 = 4;
 fn buffer_state_to_category(state: &BufferState) -> u8 {
     match state {
         BufferState::Idle | BufferState::Buffering { .. } | BufferState::Ready | BufferState::Validating => STATE_IDLE,
-        BufferState::Executing { .. } | BufferState::AwaitingPoints { .. } | BufferState::WaitingForFeedback { .. } => STATE_EXECUTING,
+        BufferState::Executing { .. } | BufferState::AwaitingPoints { .. } | BufferState::WaitingForFeedback { .. } | BufferState::ValidatingForResume { .. } => STATE_EXECUTING,
         BufferState::Paused { .. } => STATE_PAUSED,
         BufferState::Stopped { .. } | BufferState::Error { .. } => STATE_STOPPED,
         BufferState::Complete { .. } => STATE_COMPLETE,

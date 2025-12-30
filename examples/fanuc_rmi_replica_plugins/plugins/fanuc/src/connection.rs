@@ -260,12 +260,9 @@ fn handle_connect_requests(
                 // These enable the new orchestrator pattern (MotionCommandEvent -> motion.rs)
                 PrimaryMotion,       // Marker: this is the primary motion device
                 FanucMotionDevice,   // Marker: enables FANUC-specific motion handling
-                DeviceStatus {       // Status for orchestrator feedback
-                    is_connected: false, // Will be set true when connection completes
-                    ready_for_next: true,
-                    completed_count: 0,
-                    error: None,
-                },
+                // DeviceStatus with capacity for FANUC continuous motion (CNT)
+                // Capacity of 8 allows smooth motion blending with lookahead
+                DeviceStatus::with_capacity(8),
             )).id();
 
             // Set the robot as a child of the System entity
@@ -424,8 +421,9 @@ fn handle_connecting_state(
                             // Update DeviceStatus for orchestrator
                             if let Some(mut device_status) = entity_mut.get_mut::<DeviceStatus>() {
                                 device_status.is_connected = true;
-                                device_status.ready_for_next = true;
                                 device_status.error = None;
+                                // Reset in-flight tracking on fresh connection
+                                device_status.reset_in_flight();
                             }
 
                             // Add marker to load default configuration
@@ -525,7 +523,8 @@ fn handle_disconnect_requests(
                             // Update DeviceStatus for orchestrator
                             if let Some(mut device_status) = entity_mut.get_mut::<DeviceStatus>() {
                                 device_status.is_connected = false;
-                                device_status.ready_for_next = false;
+                                // Reset in-flight tracking on disconnect
+                                device_status.reset_in_flight();
                             }
 
                             info!("🔌 Robot {:?} disconnected and cleaned up", entity);

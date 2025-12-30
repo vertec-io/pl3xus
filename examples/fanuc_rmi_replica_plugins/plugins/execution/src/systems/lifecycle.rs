@@ -38,9 +38,12 @@ pub fn reset_on_disconnect_system(
     // No devices connected - reset any active execution
     for (entity, mut state, mut buffer) in coordinator_query.iter_mut() {
         match &*state {
-            BufferState::Executing { .. } | BufferState::Paused { .. } => {
+            BufferState::Executing { .. }
+            | BufferState::Paused { .. }
+            | BufferState::Validating
+            | BufferState::ValidatingForResume { .. } => {
                 info!(
-                    "🔌 All devices disconnected while executing - resetting coordinator {:?}",
+                    "🔌 All devices disconnected while executing/validating - resetting coordinator {:?}",
                     entity
                 );
                 buffer.clear();

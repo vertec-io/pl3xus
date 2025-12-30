@@ -52,7 +52,7 @@ fn poll_robot_status(
         if *state != RobotConnectionState::Connected {
             continue;
         }
-        trace!("poll_robot_status: sending poll commands to connected robot");
+        debug!("📡 poll_robot_status: sending poll commands to connected robot");
 
         // Send position query using dto types
         let pos_cmd = raw_dto::Command::FrcReadCartesianPosition(
@@ -118,6 +118,60 @@ fn process_poll_responses(
                     position.0.w = pos_resp.pos.w;
                     position.0.p = pos_resp.pos.p;
                     position.0.r = pos_resp.pos.r;
+
+                    // CRITICAL: Extract active frame/tool from Configuration in this response
+                    // Per FANUC RMI documentation, FrcGetStatus.NumberUFrame/NumberUTool are the COUNT
+                    // of available frames/tools, NOT the active frame/tool numbers!
+                    // The ONLY reliable source for active frame/tool is FrcReadCartesianPosition.Configuration
+                    let config_uframe = pos_resp.config.u_frame_number as i32;
+                    let config_utool = pos_resp.config.u_tool_number as i32;
+
+                    // Only update if values are valid (positive)
+                    if config_uframe > 0 && config_utool > 0 {
+                        let prev_frame = frame_tool_state.active_frame;
+                        let prev_tool = frame_tool_state.active_tool;
+
+                        if prev_frame != config_uframe || prev_tool != config_utool {
+                            info!("🔄 FrcReadCartesianPosition: Active frame/tool changed: ({},{}) -> ({},{})",
+                                prev_frame, prev_tool, config_uframe, config_utool);
+                            frame_tool_state.active_frame = config_uframe;
+                            frame_tool_state.active_tool = config_utool;
+                        }
+
+                        // Check for mismatch between robot's actual state and what we intended to set
+                        let intended_uframe = active_config.u_frame_number;
+                        let intended_utool = active_config.u_tool_number;
+                        let has_mismatch = config_uframe != intended_uframe || config_utool != intended_utool;
+
+                        if has_mismatch {
+                            // Only update status if we're not already retrying or failed
+                            match sync_state.status {
+                                ConfigSyncStatus::Synced => {
+                                    // Detected mismatch - trigger resync
+                                    warn!(
+                                        "🔄 Config mismatch detected: robot has UFrame={}, UTool={} but intended UFrame={}, UTool={}",
+                                        config_uframe, config_utool, intended_uframe, intended_utool
+                                    );
+                                    sync_state.status = ConfigSyncStatus::Mismatch;
+                                    sync_state.retry_count = 0;
+                                    sync_state.error_message = None;
+                                }
+                                ConfigSyncStatus::Retrying => {
+                                    // Still retrying, don't change status
+                                }
+                                ConfigSyncStatus::Mismatch | ConfigSyncStatus::Failed => {
+                                    // Already aware of mismatch or failed, don't spam logs
+                                }
+                            }
+                        } else if sync_state.status != ConfigSyncStatus::Synced {
+                            // Values match - mark as synced if we were in mismatch/retrying state
+                            info!("✅ Config sync successful: robot now has UFrame={}, UTool={}", config_uframe, config_utool);
+                            sync_state.status = ConfigSyncStatus::Synced;
+                            sync_state.retry_count = 0;
+                            sync_state.sync_in_progress = false;
+                            sync_state.error_message = None;
+                        }
+                    }
                 }
                 ResponsePacket::CommandResponse(CommandResponse::FrcReadJointAngles(joint_resp)) => {
                     // Update joint angles from response (f32 values)
@@ -141,64 +195,12 @@ fn process_poll_responses(
                         status.error_message = None;
                     }
 
-                    // Update active frame/tool numbers in RobotStatus
-                    // NOTE: Check the raw byte values from response
-                    let robot_uframe = status_resp.number_uframe as i32;
-                    let robot_utool = status_resp.number_utool as i32;
-                    debug!("📊 FrcGetStatus response: number_uframe={} (raw: {:?}), number_utool={} (raw: {:?})", 
-                        robot_uframe, status_resp.number_uframe, robot_utool, status_resp.number_utool);
-                    
-                    status.active_uframe = robot_uframe as u8;
-                    status.active_utool = robot_utool as u8;
-
-                    // Update FrameToolDataState so the UI gets the actual robot values
-                    let prev_frame = frame_tool_state.active_frame;
-                    let prev_tool = frame_tool_state.active_tool;
-                    frame_tool_state.active_frame = robot_uframe;
-                    frame_tool_state.active_tool = robot_utool;
-                    
-                    // ALWAYS log on first update (when prev was 0,0) or on any change
-                    if prev_frame == 0 && prev_tool == 0 {
-                        info!("✅ First FrcGetStatus response: Setting FrameToolDataState to ({},{})", robot_uframe, robot_utool);
-                    } else if prev_frame != robot_uframe || prev_tool != robot_utool {
-                        info!("🔄 FrameToolDataState updated: ({},{}) -> ({},{})", prev_frame, prev_tool, robot_uframe, robot_utool);
-                    }
-
-                    // Check for mismatch between robot and ActiveConfigState
-                    let config_uframe = active_config.u_frame_number;
-                    let config_utool = active_config.u_tool_number;
-                    let has_mismatch = robot_uframe != config_uframe || robot_utool != config_utool;
-
-                    if has_mismatch {
-                        // Only update status if we're not already retrying or failed
-                        match sync_state.status {
-                            ConfigSyncStatus::Synced => {
-                                // Detected mismatch - trigger resync
-                                warn!(
-                                    "🔄 Config mismatch detected: robot has UFrame={}, UTool={} but config wants UFrame={}, UTool={}",
-                                    robot_uframe, robot_utool, config_uframe, config_utool
-                                );
-                                sync_state.status = ConfigSyncStatus::Mismatch;
-                                sync_state.retry_count = 0;
-                                sync_state.error_message = None;
-                            }
-                            ConfigSyncStatus::Retrying => {
-                                // Still retrying, don't change status
-                            }
-                            ConfigSyncStatus::Mismatch | ConfigSyncStatus::Failed => {
-                                // Already aware of mismatch or failed, don't spam logs
-                            }
-                        }
-                    } else {
-                        // Values match - mark as synced if we were in mismatch/retrying state
-                        if sync_state.status != ConfigSyncStatus::Synced {
-                            info!("✅ Config sync successful: robot now has UFrame={}, UTool={}", robot_uframe, robot_utool);
-                            sync_state.status = ConfigSyncStatus::Synced;
-                            sync_state.retry_count = 0;
-                            sync_state.sync_in_progress = false;
-                            sync_state.error_message = None;
-                        }
-                    }
+                    // NOTE: Per FANUC RMI documentation, FRC_GetStatus.NumberUFrame and NumberUTool
+                    // are the COUNT of available frames/tools in the controller, NOT the active selections!
+                    // Active frame/tool is only available in FrcReadCartesianPosition.Configuration.
+                    // We do NOT update FrameToolDataState from FrcGetStatus.
+                    debug!("📊 FrcGetStatus: available_frames={}, available_tools={}",
+                        status_resp.number_uframe, status_resp.number_utool);
 
                     // NOTE: We intentionally do NOT sync the driver's sequence counter here.
                     // The driver's counter is authoritative.

@@ -45,10 +45,10 @@ pub mod types;
 
 // Always available exports
 pub use components::{
-    BufferDisplayData, BufferLineDisplay, BufferState, ExecutionCoordinator, ExecutionPoint,
-    ExecutionState, ExecutionTarget, MotionCommand, MotionType, PointMetadata, PrimaryMotion,
-    SourceType, SubsystemEntry, SubsystemReadiness, Subsystems, SystemState, ToolpathBuffer,
-    UiActions, SUBSYSTEM_DUET, SUBSYSTEM_EXECUTION, SUBSYSTEM_FANUC, SUBSYSTEM_PROGRAMS,
+    BufferDisplayData, BufferLineDisplay, BufferState, ExecutionActions, ExecutionCoordinator,
+    ExecutionPoint, ExecutionState, ExecutionTarget, MotionCommand, MotionType, PointMetadata,
+    PrimaryMotion, SourceType, SubsystemEntry, SubsystemReadiness, Subsystems, SystemState,
+    ToolpathBuffer, SUBSYSTEM_DUET, SUBSYSTEM_EXECUTION, SUBSYSTEM_FANUC, SUBSYSTEM_PROGRAMS,
     VALIDATION_TIMEOUT,
 };
 pub use traits::{AuxiliaryCommand, AuxiliaryDevice, DeviceError, MotionDevice};

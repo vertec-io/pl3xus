@@ -13,7 +13,6 @@ pub fn FileMenu(
     set_show_new_program: WriteSignal<bool>,
     set_show_open_modal: WriteSignal<bool>,
     set_show_save_as_modal: WriteSignal<bool>,
-    set_show_csv_upload: WriteSignal<bool>,
     #[prop(into)] selected_program_id: Signal<Option<i64>>,
     current_program: RwSignal<Option<ProgramDetail>>,
 ) -> impl IntoView {
@@ -79,28 +78,6 @@ pub fn FileMenu(
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
                             </svg>
                             "Save As..."
-                        </button>
-                        <div class="border-t border-border/10 my-1"></div>
-                        <button
-                            class={move || format!(
-                                "w-full text-left px-3 py-1.5 text-[10px] flex items-center gap-2 {}",
-                                if selected_program_id.get().is_some() {
-                                    "text-muted-foreground hover:bg-border/10 hover:text-foreground"
-                                } else {
-                                    "text-muted-foreground cursor-not-allowed"
-                                }
-                            )}
-                            on:click=move |_| {
-                                if selected_program_id.get().is_some() {
-                                    set_show_csv_upload.set(true);
-                                    set_show_file_menu.set(false);
-                                }
-                            }
-                        >
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-                            </svg>
-                            "Upload CSV..."
                         </button>
                         <div class="border-t border-border/10 my-1"></div>
                         <button

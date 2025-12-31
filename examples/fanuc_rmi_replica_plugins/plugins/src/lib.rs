@@ -45,7 +45,7 @@ pub use fanuc_replica_execution::{
     // Execution state types for UI
     ExecutionState, SystemState, SourceType,
     BufferDisplayData, BufferLineDisplay,
-    UiActions,
+    ExecutionActions,
 };
 
 // Program load/unload types
@@ -55,6 +55,8 @@ pub use fanuc_replica_programs::{
     Instruction, SequenceType, InstructionSequence,
     ProgramInfo, ProgramDetail, ProgramWithLines, ProgramLineInfo,
     ProgramNotification, ProgramNotificationKind,
+    // UI actions (synced component)
+    ProgramActions,
     // CRUD request/response types
     ListPrograms, ListProgramsResponse,
     GetProgram, GetProgramResponse,
@@ -63,6 +65,7 @@ pub use fanuc_replica_programs::{
     UpdateProgramSettings, UpdateProgramSettingsResponse,
     UploadCsv, UploadCsvResponse,
     AddSequence, AddSequenceResponse,
+    UpdateSequenceInstructions, UpdateSequenceInstructionsResponse,
     RemoveSequence, RemoveSequenceResponse,
 };
 

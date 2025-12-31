@@ -31,9 +31,7 @@ impl Plugin for RequestHandlerPlugin {
         //
         // All requests use the new app.requests::<...>() batch registration API.
         // This is more concise and makes it easy to add targeting/authorization later.
-        //
-        // Note: StartProgram, PauseProgram, ResumeProgram, StopProgram, UnloadProgram
-        // are registered as targeted requests in sync.rs with authorization middleware.
+        //re.
         //
         // Query Invalidation: Rules are defined on request types using
         // #[derive(Invalidates)] with #[invalidates("QueryName")] attribute.
@@ -54,11 +52,6 @@ impl Plugin for RequestHandlerPlugin {
             LoadConfiguration,
             SaveCurrentConfiguration,
         ), WS>().register();
-
-        // Note: Program CRUD operations (ListPrograms, GetProgram, CreateProgram, etc.)
-        // are handled by the ProgramsPlugin in the programs crate.
-        // Only execution handlers (LoadProgram, StartProgram, etc.) remain here.
-        // LoadProgram is registered as a targeted request in sync.rs
 
         // Frame/Tool and I/O Operations are registered as targeted requests in sync.rs
         // Only non-targeted I/O config operations remain here

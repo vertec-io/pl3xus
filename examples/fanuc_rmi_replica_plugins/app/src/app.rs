@@ -34,6 +34,7 @@ fn build_registry() -> Arc<ClientTypeRegistry> {
         .register::<FrameToolDataState>()
         .register::<ControlResponse>()
         .register::<ProgramNotification>()
+        .register::<ProgramActions>()
         .register::<ConsoleLogEntry>()
         .register::<ServerNotification>();
 

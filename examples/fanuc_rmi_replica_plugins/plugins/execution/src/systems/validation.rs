@@ -119,7 +119,7 @@ pub fn coordinate_validation(
         };
         if let Some(mut exec) = exec_state {
             exec.state = SystemState::Error;
-            exec.update_available_actions();
+            exec.update_execution_actions();
         }
         commands.remove_resource::<ValidationStartTime>();
         error!(
@@ -136,7 +136,7 @@ pub fn coordinate_validation(
         };
         if let Some(mut exec) = exec_state {
             exec.state = SystemState::Error;
-            exec.update_available_actions();
+            exec.update_execution_actions();
         }
         commands.remove_resource::<ValidationStartTime>();
         error!(
@@ -156,7 +156,7 @@ pub fn coordinate_validation(
             exec.state = SystemState::Running;
             exec.current_index = start_index as usize;
             exec.points_executed = start_index as usize;
-            exec.update_available_actions();
+            exec.update_execution_actions();
         }
         commands.remove_resource::<ValidationStartTime>();
         if is_resume {

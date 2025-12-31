@@ -56,19 +56,19 @@ pub fn get_program(conn: &Connection, id: i64) -> anyhow::Result<Option<ProgramD
 
     // Get all sequences for this program
     let approach_sequences = get_sequences(conn, id, SequenceType::Approach)?;
-    let main_sequences = get_sequences(conn, id, SequenceType::Main)?;
+    let mut main_sequences = get_sequences(conn, id, SequenceType::Main)?;
     let retreat_sequences = get_sequences(conn, id, SequenceType::Retreat)?;
 
-    // Main sequence - there should be exactly one, create empty if missing
-    let main_sequence = main_sequences.into_iter().next().unwrap_or_else(|| {
-        InstructionSequence {
+    // Ensure at least one main sequence exists (create empty if missing)
+    if main_sequences.is_empty() {
+        main_sequences.push(InstructionSequence {
             id: 0,
             sequence_type: SequenceType::Main,
             name: None,
             order_index: 0,
             instructions: vec![],
-        }
-    });
+        });
+    }
 
     Ok(Some(ProgramDetail {
         id,
@@ -79,7 +79,7 @@ pub fn get_program(conn: &Connection, id: i64) -> anyhow::Result<Option<ProgramD
         default_term_value,
         move_speed,
         approach_sequences,
-        main_sequence,
+        main_sequences,
         retreat_sequences,
         created_at,
         updated_at,
@@ -302,6 +302,45 @@ pub fn insert_instructions(conn: &Connection, sequence_id: i64, instructions: &[
             rusqlite::params![
                 sequence_id,
                 instr.line_number,
+                instr.x,
+                instr.y,
+                instr.z,
+                instr.w,
+                instr.p,
+                instr.r,
+                instr.ext1,
+                instr.ext2,
+                instr.ext3,
+                instr.speed,
+                instr.term_type,
+                instr.term_value.map(|v| v as i32),
+            ],
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Append instructions to a sequence (renumbering from the last line number).
+pub fn append_instructions(conn: &Connection, sequence_id: i64, instructions: &[Instruction]) -> anyhow::Result<()> {
+    // Get the current max line number
+    let max_line: Option<i32> = conn.query_row(
+        "SELECT MAX(line_number) FROM program_instructions WHERE sequence_id = ?",
+        [sequence_id],
+        |row| row.get(0),
+    ).optional()?.flatten();
+
+    let start_line = max_line.map(|m| m + 1).unwrap_or(1);
+
+    // Insert new instructions with renumbered line numbers
+    for (idx, instr) in instructions.iter().enumerate() {
+        conn.execute(
+            "INSERT INTO program_instructions
+             (sequence_id, line_number, x, y, z, w, p, r, ext1, ext2, ext3, speed, term_type, term_value)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rusqlite::params![
+                sequence_id,
+                start_line + idx as i32,
                 instr.x,
                 instr.y,
                 instr.z,

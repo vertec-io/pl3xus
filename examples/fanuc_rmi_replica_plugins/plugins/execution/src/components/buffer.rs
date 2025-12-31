@@ -458,83 +458,69 @@ impl BufferState {
         }
     }
 
-    /// Compute available UI actions based on current state.
+    /// Compute available execution actions based on current state.
     ///
-    /// Returns flags for what actions are available in the current state.
-    /// Note: can_load is always false from BufferState because that depends on
-    /// whether a program is loaded, which BufferState doesn't track.
-    pub fn available_actions(&self) -> UiActions {
+    /// Returns flags for what execution-related actions are available.
+    /// Program load/unload actions are the responsibility of the program plugin.
+    pub fn available_actions(&self) -> ExecutionActions {
         use super::SystemState;
         match self.to_system_state() {
-            SystemState::NoSource => UiActions {
-                can_load: true,
+            SystemState::NoSource => ExecutionActions {
                 can_start: false,
                 can_pause: false,
                 can_resume: false,
                 can_stop: false,
-                can_unload: false,
             },
-            SystemState::Ready => UiActions {
-                can_load: false,
+            SystemState::Ready => ExecutionActions {
                 can_start: true,
                 can_pause: false,
                 can_resume: false,
                 can_stop: false,
-                can_unload: true,
             },
-            SystemState::Validating => UiActions {
-                can_load: false,
+            SystemState::Validating => ExecutionActions {
                 can_start: false,
                 can_pause: false,
                 can_resume: false,
                 can_stop: true, // Can cancel validation
-                can_unload: false,
             },
-            SystemState::Running | SystemState::AwaitingPoints => UiActions {
-                can_load: false,
+            SystemState::Running | SystemState::AwaitingPoints => ExecutionActions {
                 can_start: false,
                 can_pause: true,
                 can_resume: false,
                 can_stop: true,
-                can_unload: false,
             },
-            SystemState::Paused => UiActions {
-                can_load: false,
+            SystemState::Paused => ExecutionActions {
                 can_start: false,
                 can_pause: false,
                 can_resume: true,
                 can_stop: true,
-                can_unload: false,
             },
-            SystemState::Completed | SystemState::Stopped => UiActions {
-                can_load: false,
+            SystemState::Completed | SystemState::Stopped => ExecutionActions {
                 can_start: true, // Can restart
                 can_pause: false,
                 can_resume: false,
                 can_stop: false,
-                can_unload: true,
             },
-            SystemState::Error => UiActions {
-                can_load: false,
+            SystemState::Error => ExecutionActions {
                 can_start: true,
                 can_pause: false,
                 can_resume: false,
                 can_stop: false,
-                can_unload: true,
             },
         }
     }
 }
 
-/// Available UI actions based on execution state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct UiActions {
-    pub can_load: bool,
+/// Execution-related UI actions (computed from BufferState).
+///
+/// These actions relate to execution control (start, pause, resume, stop).
+/// Program load/unload is the responsibility of the program plugin, not execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ExecutionActions {
     pub can_start: bool,
     pub can_pause: bool,
     pub can_resume: bool,
     pub can_stop: bool,
-    pub can_unload: bool,
 }
 
 #[cfg(test)]

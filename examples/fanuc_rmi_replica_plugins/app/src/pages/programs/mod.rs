@@ -10,8 +10,10 @@ mod modals;
 mod browser;
 mod details;
 mod menus;
+mod program_display;
 
 pub use modals::*;
+pub use program_display::ProgramDisplay;
 
 use leptos::prelude::*;
 use pl3xus_client::{use_query, use_query_keyed};
@@ -24,7 +26,6 @@ pub fn ProgramsView() -> impl IntoView {
     let layout_ctx = use_context::<LayoutContext>().expect("LayoutContext not found");
 
     let (show_new_program, set_show_new_program) = signal(false);
-    let (show_csv_upload, set_show_csv_upload) = signal(false);
     let (show_open_modal, set_show_open_modal) = signal(false);
     let (show_save_as_modal, set_show_save_as_modal) = signal(false);
 
@@ -80,7 +81,6 @@ pub fn ProgramsView() -> impl IntoView {
                     set_show_new_program=set_show_new_program
                     set_show_open_modal=set_show_open_modal
                     set_show_save_as_modal=set_show_save_as_modal
-                    set_show_csv_upload=set_show_csv_upload
                     selected_program_id=selected_program_id
                     current_program=current_program
                 />
@@ -115,15 +115,49 @@ pub fn ProgramsView() -> impl IntoView {
                     />
                 </Show>
 
-                // Right: Program details
-                <details::ProgramDetails
-                    current_program=current_program
-                    selected_program_id=selected_program_id
-                    on_select=set_selected_program_id
-                    set_show_csv_upload=set_show_csv_upload
-                    set_show_open_modal=set_show_open_modal
-                    set_show_new_program=set_show_new_program
-                />
+                // Right: Program display with multi-sequence support
+                <Show
+                    when=move || current_program.get().is_some()
+                    fallback=move || {
+                        view! {
+                            <div class="flex-1 bg-background rounded border border-border/8 flex items-center justify-center">
+                                <div class="text-center">
+                                    <svg class="w-12 h-12 mx-auto mb-2 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                    </svg>
+                                    <p class="text-muted-foreground text-[10px] mb-3">"No program open"</p>
+                                    <div class="flex gap-2 justify-center">
+                                        <button
+                                            class="bg-[#00d9ff20] border border-[#00d9ff40] text-primary text-[9px] px-3 py-1.5 rounded hover:bg-primary/20"
+                                            on:click=move |_| set_show_open_modal.set(true)
+                                        >
+                                            "Open Program"
+                                        </button>
+                                        <button
+                                            class="bg-[#22c55e20] border border-[#22c55e40] text-success text-[9px] px-3 py-1.5 rounded hover:bg-success/20"
+                                            on:click=move |_| set_show_new_program.set(true)
+                                        >
+                                            "New Program"
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                >
+                    {move || current_program.get().map(|prog| {
+                        view! {
+                            <ProgramDisplay
+                                program=prog
+                                on_close=move || {
+                                    set_selected_program_id(None);
+                                    current_program.set(None);
+                                }
+                            />
+                        }
+                    })}
+                </Show>
+
             </div>
 
             // Modals
@@ -164,22 +198,7 @@ pub fn ProgramsView() -> impl IntoView {
                 />
             </Show>
 
-            <Show when=move || show_csv_upload.get() && selected_program_id.get().is_some()>
-                {move || selected_program_id.get().map(|prog_id| {
-                    view! {
-                        <CSVUploadModal
-                            program_id=prog_id
-                            on_close=move || set_show_csv_upload.set(false)
-                            on_uploaded=move || {
-                                set_show_csv_upload.set(false);
-                                // Server will broadcast QueryInvalidation for ListPrograms and GetProgram
-                                // program_query will auto-refetch since selected_program_id hasn't changed
-                                // but the server invalidated the query
-                            }
-                        />
-                    }
-                })}
-            </Show>
+
         </div>
     }
 }

@@ -25,12 +25,15 @@ cfg_if! {
         mod notifications;
         mod plugin;
         mod validation;
+        mod sync_plugin;
+        pub mod systems;
 
         pub use database::{ProgramsDatabaseInit, queries};
         pub use csv_parser::{parse_csv, ParseResult, ParseError, ParseWarning};
         pub use handlers::ProgramHandlerPlugin;
         pub use notifications::ProgramNotificationsPlugin;
         pub use plugin::ProgramsPlugin;
+        pub use sync_plugin::ProgramsSyncPlugin;
     }
 }
 

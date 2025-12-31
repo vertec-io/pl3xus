@@ -45,9 +45,11 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
     // === Server-Driven State ===
     //
     // Subscribe to entity-specific components for the active system.
-    // ExecutionState: state machine, progress, available actions
+    // ExecutionState: execution state machine, progress, execution actions
+    // ProgramActions: program load/unload state (from programs plugin)
     // BufferDisplayData: the actual lines to show in the table
     let (exec_state, _) = use_entity_component::<ExecutionState, _>(move || system_ctx.system_entity_id.get());
+    let (program_actions, _) = use_entity_component::<ProgramActions, _>(move || system_ctx.system_entity_id.get());
     let (buffer_display, _) = use_entity_component::<BufferDisplayData, _>(move || system_ctx.system_entity_id.get());
     let (control_state, _) = use_entity_component::<EntityControl, _>(move || system_ctx.system_entity_id.get());
 
@@ -78,25 +80,27 @@ pub fn ProgramVisualDisplay() -> impl IntoView {
 
     // === Available Actions (server-driven + control check) ===
     // The server tells us what actions are valid, but we also require control.
+    // ExecutionActions come from the execution plugin's buffer state machine.
+    // ProgramActions come from the programs plugin.
     let can_load = move || {
-        let exec = get_exec();
-        let result = has_control() && exec.can_load;
-        leptos::logging::log!("[ProgramDisplay] can_load={} (has_control={}, exec.can_load={})", result, has_control(), exec.can_load);
+        let prog_actions = program_actions.get();
+        let result = has_control() && prog_actions.can_load;
+        leptos::logging::log!("[ProgramDisplay] can_load={} (has_control={}, program_actions.can_load={})", result, has_control(), prog_actions.can_load);
         result
     };
     let can_start = move || {
         let exec = get_exec();
-        let result = has_control() && exec.can_start;
-        leptos::logging::log!("[ProgramDisplay] can_start={} (has_control={}, exec.can_start={})", result, has_control(), exec.can_start);
+        let result = has_control() && exec.execution_actions.can_start;
+        leptos::logging::log!("[ProgramDisplay] can_start={} (has_control={}, execution_actions.can_start={})", result, has_control(), exec.execution_actions.can_start);
         result
     };
-    let can_pause = move || has_control() && get_exec().can_pause;
-    let can_resume = move || has_control() && get_exec().can_resume;
-    let can_stop = move || has_control() && get_exec().can_stop;
+    let can_pause = move || has_control() && get_exec().execution_actions.can_pause;
+    let can_resume = move || has_control() && get_exec().execution_actions.can_resume;
+    let can_stop = move || has_control() && get_exec().execution_actions.can_stop;
     let can_unload = move || {
-        let exec = get_exec();
-        let result = has_control() && exec.can_unload;
-        leptos::logging::log!("[ProgramDisplay] can_unload={} (has_control={}, exec.can_unload={})", result, has_control(), exec.can_unload);
+        let prog_actions = program_actions.get();
+        let result = has_control() && prog_actions.can_unload;
+        leptos::logging::log!("[ProgramDisplay] can_unload={} (has_control={}, program_actions.can_unload={})", result, has_control(), prog_actions.can_unload);
         result
     };
 
@@ -343,6 +347,7 @@ fn ProgramTable(
                     <thead class="sticky top-0 bg-background">
                         <tr class="text-muted-foreground border-b border-border/8">
                             <th class="text-left px-1.5 py-1 w-8">"#"</th>
+                            <th class="text-left px-1.5 py-1">"Seq"</th>
                             <th class="text-right px-1.5 py-1">"X"</th>
                             <th class="text-right px-1.5 py-1">"Y"</th>
                             <th class="text-right px-1.5 py-1">"Z"</th>
@@ -360,12 +365,22 @@ fn ProgramTable(
                             children=move |line| {
                                 let line_idx = line.index;
                                 let term = line.term_type.clone();
+                                let seq_name = line.sequence_name.clone().unwrap_or_default();
+                                // Color based on sequence type
+                                let seq_class = if seq_name.contains("Approach") {
+                                    "text-blue-400"
+                                } else if seq_name.contains("Retreat") {
+                                    "text-orange-400"
+                                } else {
+                                    "text-green-400"
+                                };
                                 view! {
                                     <tr class=move || format!(
                                         "border-b border-[#ffffff05] {}",
                                         if executing.get() == line_idx as i32 { "bg-[#00d9ff20] text-primary" } else { "text-foreground" }
                                     )>
                                         <td class="px-1.5 py-0.5 text-muted-foreground font-mono">{line_idx}</td>
+                                        <td class=format!("px-1.5 py-0.5 text-[8px] {}", seq_class)>{seq_name}</td>
                                         <td class="px-1.5 py-0.5 text-right font-mono tabular-nums">{format!("{:.2}", line.x)}</td>
                                         <td class="px-1.5 py-0.5 text-right font-mono tabular-nums">{format!("{:.2}", line.y)}</td>
                                         <td class="px-1.5 py-0.5 text-right font-mono tabular-nums">{format!("{:.2}", line.z)}</td>

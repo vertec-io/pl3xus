@@ -420,21 +420,13 @@ pub fn react_to_buffer_state_changes(
         (STATE_EXECUTING | STATE_PAUSED, STATE_STOPPED) => {
             info!("🤖 BufferState changed to Stopped - sending FrcAbort + FrcInitialize");
 
-            // First send FrcAbort to stop all motion
-            let abort_command = raw_dto::Command::FrcAbort;
-            let send_packet: SendPacket = raw_dto::SendPacket::Command(abort_command).into();
-            match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
-                Ok(seq) => info!("Sent FrcAbort with sequence {}", seq),
-                Err(e) => error!("Failed to send FrcAbort: {:?}", e),
-            }
-
-            // Then send FrcInitialize to reset the controller for next execution
-            let init_command = raw_dto::Command::FrcInitialize(raw_dto::FrcInitialize { group_mask: 1 });
-            let send_packet: SendPacket = raw_dto::SendPacket::Command(init_command).into();
-            match driver.0.send_packet(send_packet, PacketPriority::Immediate) {
-                Ok(seq) => info!("Sent FrcInitialize with sequence {}", seq),
-                Err(e) => error!("Failed to send FrcInitialize: {:?}", e),
-            }
+            let driver = driver.clone();
+            tokio_runtime.spawn_background_task(move |mut ctx| async move {
+                // abort the motion
+                driver.0.abort().await;
+                // run the startup sequence again
+                driver.0.startup_sequence().await;
+            });
         }
 
         // Transition to Complete: no FRC command needed, program finished normally

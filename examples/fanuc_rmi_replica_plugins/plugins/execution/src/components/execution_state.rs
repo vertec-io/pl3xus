@@ -11,6 +11,8 @@ use bevy::prelude::*;
 #[cfg(feature = "stores")]
 use reactive_stores::Store;
 
+use super::buffer::ExecutionActions;
+
 /// Execution state synced to all clients.
 ///
 /// Contains current state, source info, progress, and available actions.
@@ -49,18 +51,9 @@ pub struct ExecutionState {
 
     // === Available Actions (server-driven) ===
     
-    /// Can load a new source (program, stream, etc.)
-    pub can_load: bool,
-    /// Can start execution
-    pub can_start: bool,
-    /// Can pause execution
-    pub can_pause: bool,
-    /// Can resume execution
-    pub can_resume: bool,
-    /// Can stop execution (or cancel validation)
-    pub can_stop: bool,
-    /// Can unload the current source
-    pub can_unload: bool,
+    /// Execution-related actions (start, pause, resume, stop)
+    /// Computed by the execution system based on buffer state
+    pub execution_actions: ExecutionActions,
 }
 
 /// What type of source is feeding the execution buffer.
@@ -103,7 +96,7 @@ pub enum SystemState {
 impl ExecutionState {
     /// Create state for "no source loaded"
     pub fn no_source() -> Self {
-        let mut s = Self {
+        Self {
             state: SystemState::NoSource,
             source_type: SourceType::None,
             source_name: None,
@@ -111,77 +104,59 @@ impl ExecutionState {
             current_index: 0,
             total_points: None,
             points_executed: 0,
-            can_load: true,
-            can_start: false,
-            can_pause: false,
-            can_resume: false,
-            can_stop: false,
-            can_unload: false,
-        };
-        s.update_available_actions();
-        s
+            execution_actions: ExecutionActions::default(),
+        }
     }
 
-    /// Update available actions based on current state.
-    pub fn update_available_actions(&mut self) {
-        match self.state {
-            SystemState::NoSource => {
-                self.can_load = true;
-                self.can_start = false;
-                self.can_pause = false;
-                self.can_resume = false;
-                self.can_stop = false;
-                self.can_unload = false;
-            }
-            SystemState::Ready => {
-                self.can_load = false;
-                self.can_start = true;
-                self.can_pause = false;
-                self.can_resume = false;
-                self.can_stop = false;
-                self.can_unload = true;
-            }
-            SystemState::Validating => {
-                self.can_load = false;
-                self.can_start = false;
-                self.can_pause = false;
-                self.can_resume = false;
-                self.can_stop = true; // Can cancel validation
-                self.can_unload = false;
-            }
-            SystemState::Running | SystemState::AwaitingPoints => {
-                self.can_load = false;
-                self.can_start = false;
-                self.can_pause = true;
-                self.can_resume = false;
-                self.can_stop = true;
-                self.can_unload = false;
-            }
-            SystemState::Paused => {
-                self.can_load = false;
-                self.can_start = false;
-                self.can_pause = false;
-                self.can_resume = true;
-                self.can_stop = true;
-                self.can_unload = false;
-            }
-            SystemState::Completed | SystemState::Stopped => {
-                self.can_load = true;
-                self.can_start = true; // Can restart
-                self.can_pause = false;
-                self.can_resume = false;
-                self.can_stop = false;
-                self.can_unload = true;
-            }
-            SystemState::Error => {
-                self.can_load = true;
-                self.can_start = false;
-                self.can_pause = false;
-                self.can_resume = false;
-                self.can_stop = false;
-                self.can_unload = true;
-            }
-        }
+    /// Update execution actions based on current state.
+    ///
+    /// This updates only the execution-related actions.
+    /// Program actions (can_load, can_unload) must be set by the program plugin.
+    pub fn update_execution_actions(&mut self) {
+        self.execution_actions = match self.state {
+            SystemState::NoSource => ExecutionActions {
+                can_start: false,
+                can_pause: false,
+                can_resume: false,
+                can_stop: false,
+            },
+            SystemState::Ready => ExecutionActions {
+                can_start: true,
+                can_pause: false,
+                can_resume: false,
+                can_stop: false,
+            },
+            SystemState::Validating => ExecutionActions {
+                can_start: false,
+                can_pause: false,
+                can_resume: false,
+                can_stop: true, // Can cancel validation
+            },
+            SystemState::Running | SystemState::AwaitingPoints => ExecutionActions {
+                can_start: false,
+                can_pause: true,
+                can_resume: false,
+                can_stop: true,
+            },
+            SystemState::Paused => ExecutionActions {
+                can_start: false,
+                can_pause: false,
+                can_resume: true,
+                can_stop: true,
+            },
+            SystemState::Completed | SystemState::Stopped => ExecutionActions {
+                can_start: true, // Can restart
+                can_pause: false,
+                can_resume: false,
+                can_stop: false,
+            },
+            SystemState::Error => ExecutionActions {
+                can_start: true,
+                can_pause: false,
+                can_resume: false,
+                can_stop: false,
+            },
+        };
     }
 }
 

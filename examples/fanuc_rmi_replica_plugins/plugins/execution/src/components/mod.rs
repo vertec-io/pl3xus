@@ -7,7 +7,7 @@ mod execution_point;
 mod execution_state;
 mod subsystems;
 
-pub use buffer::{BufferState, ToolpathBuffer, UiActions, VALIDATION_TIMEOUT};
+pub use buffer::{BufferState, ExecutionActions, ToolpathBuffer, VALIDATION_TIMEOUT};
 pub use buffer_display::{BufferDisplayData, BufferLineDisplay};
 pub use coordinator::{ExecutionCoordinator, ExecutionTarget, PrimaryMotion};
 pub use execution_point::{ExecutionPoint, MotionCommand, MotionType, PointMetadata};

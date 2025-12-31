@@ -101,20 +101,20 @@ pub struct ProgramDetail {
     pub id: i64,
     pub name: String,
     pub description: Option<String>,
-    
+
     // Default values for missing instruction fields
     pub default_speed: Option<f64>,
     pub default_term_type: Option<String>,
     pub default_term_value: Option<u8>,
-    
+
     // Approach move speed (for approach/retreat sequences)
     pub move_speed: f64,
-    
+
     // Sequences (approach, main, retreat)
     pub approach_sequences: Vec<InstructionSequence>,
-    pub main_sequence: InstructionSequence,
+    pub main_sequences: Vec<InstructionSequence>,
     pub retreat_sequences: Vec<InstructionSequence>,
-    
+
     pub created_at: String,
     pub updated_at: String,
 }
@@ -243,14 +243,16 @@ impl RequestMessage for UpdateProgramSettings {
     type ResponseMessage = UpdateProgramSettingsResponse;
 }
 
-/// Upload CSV data to a program.
+/// Upload CSV data to a program sequence.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(Invalidates))]
 #[cfg_attr(feature = "server", invalidates("GetProgram", "ListPrograms"))]
 pub struct UploadCsv {
     pub program_id: i64,
     pub csv_content: String,
-    /// Which sequence to upload to (defaults to Main)
+    /// Specific sequence ID to append to (if None, uses sequence_type to find/create)
+    pub sequence_id: Option<i64>,
+    /// Which sequence type to upload to (used only if sequence_id is None)
     pub sequence_type: Option<SequenceType>,
 }
 
@@ -275,7 +277,10 @@ pub struct AddSequence {
     pub program_id: i64,
     pub sequence_type: SequenceType,
     pub name: Option<String>,
+    /// Instructions to add (if csv_content is provided, this is ignored)
     pub instructions: Vec<Instruction>,
+    /// Optional CSV content to parse and add as instructions
+    pub csv_content: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -288,6 +293,26 @@ pub struct AddSequenceResponse {
 
 impl RequestMessage for AddSequence {
     type ResponseMessage = AddSequenceResponse;
+}
+
+/// Update instructions in a sequence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("GetProgram"))]
+pub struct UpdateSequenceInstructions {
+    pub sequence_id: i64,
+    pub instructions: Vec<Instruction>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
+pub struct UpdateSequenceInstructionsResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for UpdateSequenceInstructions {
+    type ResponseMessage = UpdateSequenceInstructionsResponse;
 }
 
 /// Remove a sequence from a program.
@@ -307,6 +332,23 @@ pub struct RemoveSequenceResponse {
 
 impl RequestMessage for RemoveSequence {
     type ResponseMessage = RemoveSequenceResponse;
+}
+
+// ============================================================================
+// UI Actions / Components
+// ============================================================================
+
+/// Program-related UI actions (synced component).
+///
+/// These actions are synced to all clients for UI availability.
+/// The program plugin computes these by observing its own state and ExecutionState:
+/// - can_load: true when no program is loaded
+/// - can_unload: true when a program is loaded AND execution is not active
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ecs", derive(bevy::prelude::Component))]
+pub struct ProgramActions {
+    pub can_load: bool,
+    pub can_unload: bool,
 }
 
 // ============================================================================

@@ -3,7 +3,7 @@
 use leptos::prelude::*;
 use leptos::either::Either;
 use pl3xus_client::use_mutation;
-use fanuc_replica_plugins::{ProgramDetail, UpdateProgramSettings};
+use fanuc_replica_plugins::{ProgramDetail, UpdateProgramSettings, SequenceType};
 use crate::components::use_toast;
 
 /// Program details panel
@@ -16,6 +16,8 @@ pub fn ProgramDetails(
     set_show_csv_upload: WriteSignal<bool>,
     set_show_open_modal: WriteSignal<bool>,
     set_show_new_program: WriteSignal<bool>,
+    set_show_add_sequence: WriteSignal<Option<SequenceType>>,
+    set_show_manage_sequences: WriteSignal<bool>,
 ) -> impl IntoView {
     // Editable position signals - X, Y, Z, W, P, R for start and end
     let (start_x, set_start_x) = signal(String::new());
@@ -57,7 +59,8 @@ pub fn ProgramDetails(
         leptos::logging::log!("[ProgramDetails] Effect running, checking current_program");
         if let Some(prog) = current_program.get() {
             let id_changed = current_prog_id.get() != Some(prog.id);
-            let inst_count = prog.main_sequence.instructions.len();
+            let inst_count: usize = prog.main_sequences.iter()
+                .map(|s| s.instructions.len()).sum();
             let inst_count_changed = current_inst_count.get() != inst_count;
             leptos::logging::log!(
                 "[ProgramDetails] Program: {} (id={}), instructions: {}, id_changed: {}, inst_count_changed: {}",
@@ -71,9 +74,10 @@ pub fn ProgramDetails(
                 set_current_prog_id.set(Some(prog.id));
                 set_current_inst_count.set(inst_count);
 
-                // Compute start/end positions from first/last instruction in main sequence
-                let instructions = &prog.main_sequence.instructions;
-                if let Some(first) = instructions.first() {
+                // Compute start/end positions from first/last instruction in first/last main sequence
+                let first_instr = prog.main_sequences.first()
+                    .and_then(|s| s.instructions.first());
+                if let Some(first) = first_instr {
                     set_start_x.set(format!("{:.2}", first.x));
                     set_start_y.set(format!("{:.2}", first.y));
                     set_start_z.set(format!("{:.2}", first.z));
@@ -88,7 +92,9 @@ pub fn ProgramDetails(
                     set_start_p.set(String::new());
                     set_start_r.set(String::new());
                 }
-                if let Some(last) = instructions.last() {
+                let last_instr = prog.main_sequences.last()
+                    .and_then(|s| s.instructions.last());
+                if let Some(last) = last_instr {
                     set_end_x.set(format!("{:.2}", last.x));
                     set_end_y.set(format!("{:.2}", last.y));
                     set_end_z.set(format!("{:.2}", last.z));
@@ -121,8 +127,13 @@ pub fn ProgramDetails(
                     let prog_id = prog.id;
                     let prog_name = prog.name.clone();
                     let prog_desc = prog.description.clone().unwrap_or_default();
-                    let line_count = prog.main_sequence.instructions.len();
-                    let instructions_for_table = prog.main_sequence.instructions.clone();
+                    let line_count: usize = prog.main_sequences.iter()
+                        .map(|s| s.instructions.len()).sum();
+                    let instructions_for_table: Vec<_> = prog.main_sequences.iter()
+                        .flat_map(|s| s.instructions.clone())
+                        .collect();
+                    let approach_count = prog.approach_sequences.len();
+                    let retreat_count = prog.retreat_sequences.len();
 
                     Either::Left(view! {
                         <div class="h-full flex flex-col">
@@ -156,12 +167,48 @@ pub fn ProgramDetails(
                                 </div>
                             </div>
 
-                            // Metadata
-                            <div class="px-3 pt-3 pb-2">
+                            // Metadata with sequence counts
+                            <div class="px-3 pt-3 pb-2 flex gap-4 flex-wrap">
                                 <div>
-                                    <div class="text-[8px] text-muted-foreground uppercase">"Instructions"</div>
+                                    <div class="text-[8px] text-muted-foreground uppercase">"Main Instructions"</div>
                                     <div class="text-[11px] text-foreground font-mono">{line_count}" lines"</div>
                                 </div>
+                                <div>
+                                    <div class="text-[8px] text-muted-foreground uppercase flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                        "Approach"
+                                    </div>
+                                    <div class="text-[11px] text-foreground font-mono">{approach_count}" seq"</div>
+                                </div>
+                                <div>
+                                    <div class="text-[8px] text-muted-foreground uppercase flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                                        "Retreat"
+                                    </div>
+                                    <div class="text-[11px] text-foreground font-mono">{retreat_count}" seq"</div>
+                                </div>
+                            </div>
+
+                            // Sequence management buttons
+                            <div class="px-3 pb-2 flex gap-1 flex-wrap">
+                                <button
+                                    class="bg-blue-500/15 border border-blue-500/25 text-blue-400 text-[8px] px-2 py-1 rounded hover:bg-blue-500/20"
+                                    on:click=move |_| set_show_add_sequence.set(Some(SequenceType::Approach))
+                                >
+                                    "+ Approach"
+                                </button>
+                                <button
+                                    class="bg-orange-500/15 border border-orange-500/25 text-orange-400 text-[8px] px-2 py-1 rounded hover:bg-orange-500/20"
+                                    on:click=move |_| set_show_add_sequence.set(Some(SequenceType::Retreat))
+                                >
+                                    "+ Retreat"
+                                </button>
+                                <button
+                                    class="bg-card border border-border/10 text-muted-foreground text-[8px] px-2 py-1 rounded hover:text-foreground hover:border-border/20"
+                                    on:click=move |_| set_show_manage_sequences.set(true)
+                                >
+                                    "Manage Sequences"
+                                </button>
                             </div>
 
                             // Start Position

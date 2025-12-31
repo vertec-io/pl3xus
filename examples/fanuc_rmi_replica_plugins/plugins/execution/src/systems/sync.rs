@@ -14,14 +14,17 @@ use fanuc_replica_core::ActiveSystem;
 ///
 /// This system bridges the internal buffer state with the synced ExecutionState.
 /// It uses BufferState's `to_system_state()` and `available_actions()` methods
-/// to derive the UI-facing state and available actions.
+/// to derive the UI-facing execution state and available execution actions.
 ///
 /// The system:
 /// 1. Reads BufferState from the System entity
 /// 2. Uses `to_system_state()` to get the SystemState enum
-/// 3. Uses `available_actions()` to get the action flags
+/// 3. Uses `available_actions()` to get the execution action flags
 /// 4. Uses `completed_count()` for progress tracking
 /// 5. Updates ExecutionState on System entity (synced to clients)
+///
+/// Note: Program actions (can_load, can_unload) are set by the program plugin
+/// and are NOT updated by this system.
 #[cfg(feature = "server")]
 pub fn sync_buffer_state_to_execution_state(
     mut system_query: Query<(&BufferState, &mut ExecutionState), With<ActiveSystem>>,
@@ -38,28 +41,19 @@ pub fn sync_buffer_state_to_execution_state(
     // Use the consolidated methods from BufferState
     let new_state = buffer_state.to_system_state();
     let completed_count = buffer_state.completed_count().unwrap_or(0) as usize;
-    let actions = buffer_state.available_actions();
+    let exec_actions = buffer_state.available_actions();
 
     // Only update if something changed
     let needs_update = exec_state.state != new_state
         || exec_state.points_executed != completed_count
-        || exec_state.can_load != actions.can_load
-        || exec_state.can_start != actions.can_start
-        || exec_state.can_pause != actions.can_pause
-        || exec_state.can_resume != actions.can_resume
-        || exec_state.can_stop != actions.can_stop
-        || exec_state.can_unload != actions.can_unload;
+        || exec_state.execution_actions != exec_actions;
 
     if needs_update {
         exec_state.state = new_state;
         exec_state.points_executed = completed_count;
         exec_state.current_index = completed_count;
-        exec_state.can_load = actions.can_load;
-        exec_state.can_start = actions.can_start;
-        exec_state.can_pause = actions.can_pause;
-        exec_state.can_resume = actions.can_resume;
-        exec_state.can_stop = actions.can_stop;
-        exec_state.can_unload = actions.can_unload;
+        exec_state.execution_actions = exec_actions;
+        exec_state.update_execution_actions();
     }
 }
 

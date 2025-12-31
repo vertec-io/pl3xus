@@ -90,7 +90,7 @@ pub fn handle_start(
         // Update ExecutionState if present
         if let Some(mut exec) = exec_state {
             exec.state = SystemState::Validating;
-            exec.update_available_actions();
+            exec.update_execution_actions();
         }
 
         let response = StartResponse {
@@ -149,7 +149,7 @@ pub fn handle_pause(
         // Update ExecutionState if present
         if let Some(mut exec) = exec_state {
             exec.state = SystemState::Paused;
-            exec.update_available_actions();
+            exec.update_execution_actions();
         }
 
         // Broadcast console entry
@@ -236,7 +236,7 @@ pub fn handle_resume(
         // Update ExecutionState if present - show Validating state
         if let Some(mut exec) = exec_state {
             exec.state = SystemState::Validating;
-            exec.update_available_actions();
+            exec.update_execution_actions();
         }
 
         // Broadcast console entry
@@ -325,7 +325,7 @@ pub fn handle_stop(
         if let Some(mut exec) = exec_state {
             exec.state = SystemState::Stopped;
             exec.points_executed = completed_before_stop as usize;
-            exec.update_available_actions();
+            exec.update_execution_actions();
         }
 
         // Broadcast console entry

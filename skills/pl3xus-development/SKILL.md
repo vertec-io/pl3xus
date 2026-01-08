@@ -15,6 +15,8 @@ allowed-tools:
 
 # pl3xus Development Skill
 
+> **⚠️ CRITICAL: Before developing, review `../SKILLS_REGISTRY.md` for mandatory patterns.**
+
 ## Purpose
 
 This skill provides a complete workflow for building production-grade industrial applications using the pl3xus framework. It covers architecture, server implementation, client implementation, and integration.
@@ -148,24 +150,64 @@ let update = use_mutation_targeted::<UpdatePosition>(|result| {
 });
 ```
 
-## Production Patterns
+## Production Patterns (CRITICAL)
 
-### Always Use
-- `use_entity_component` for multi-entity scenarios
-- Targeted requests with entity policies
-- Batch registration for related requests
-- `MessageReader`/`MessageWriter` (Bevy 0.17)
-- Server-driven UI state (can_* flags)
+> **See `../SKILLS_REGISTRY.md` for complete pattern reference.**
 
-### Never Use
-- `use_components().values().next()` - no entity guarantee
-- `input type="number"` - use text with validation
-- Client-side state logic - server is authoritative
-- `EventReader`/`EventWriter` - deprecated in Bevy 0.17
+### ✅ ALWAYS Use
+
+| Pattern | Why |
+|---------|-----|
+| `.targeted().with_default_entity_policy().register()` | Required for entity-targeted requests |
+| `app.requests::<(A, B, C), WS>()` batch registration | Consistent config, less boilerplate |
+| `use_entity_component::<T>(id)` | Guaranteed entity identity |
+| `MessageReader`/`MessageWriter` | Bevy 0.17 standard |
+| Server-driven `can_*` flags | Server is authoritative |
+| Synced components with mutation handlers | Preferred over separate request types |
+
+### ❌ NEVER Use
+
+| Pattern | Why |
+|---------|-----|
+| `use_components().values().next()` | No entity guarantee |
+| `<input type="number">` | Browser inconsistencies |
+| Client-side state logic | Server is authoritative |
+| `EventReader`/`EventWriter` | Deprecated in Bevy 0.17 |
+| Individual `.request::<T>().register()` | Use batch registration |
+
+### Synced Components with Mutation Handlers (PREFERRED)
+
+When a component value change requires side effects (sending to IO, device commands):
+
+```rust
+// Server: Sync component + register mutation
+app.sync_component::<RobotConfig>(None);
+app.request::<UpdateRobotConfig, WebSocketProvider>()
+    .targeted()
+    .with_default_entity_policy()
+    .register();
+
+// Handler: Mutate component + trigger side effects
+fn handle_update_config(
+    mut messages: MessageReader<NetworkData<TargetedRequest<UpdateRobotConfig>>>,
+    mut configs: Query<&mut RobotConfig>,
+    mut commands: MessageWriter<RobotCommand>,
+) {
+    for request in messages.read() {
+        let entity = Entity::from_bits(request.message.target_entity);
+        if let Ok(mut config) = configs.get_mut(entity) {
+            *config = request.message.request.config.clone();
+            commands.write(RobotCommand::ApplyConfig(config.clone()));
+            let _ = request.respond(UpdateConfigResponse { success: true, error: None });
+        }
+    }
+}
+```
 
 ## Related Skills
 
-- **pl3xus-project-structure**: Project organization patterns
+- **SKILLS_REGISTRY.md**: Complete skill registry with mandatory patterns (START HERE)
+- **pl3xus-project-structure**: Project organization and plugin structure patterns
 - **pl3xus-server**: Server-side patterns in depth
 - **pl3xus-client**: Client-side patterns in depth
 - **pl3xus-queries**: Request/response patterns
@@ -174,6 +216,6 @@ let update = use_mutation_targeted::<UpdatePosition>(|result| {
 
 ## Reference
 
-- [Project Structure](./references/project-structure.md) (deprecated - use pl3xus-project-structure skill)
 - [Common Patterns](./references/common-patterns.md)
+- [SKILLS_REGISTRY.md](../SKILLS_REGISTRY.md) - Agent-optimized pattern reference
 

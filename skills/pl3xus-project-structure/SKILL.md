@@ -327,47 +327,154 @@ serde = { version = "1.0", features = ["derive"] }
 pl3xus = { git = "..." }
 ```
 
-### Plugin Crate Example (plugins/fanuc)
+### Plugin Internal Structure (STANDARD)
 
-```toml
-# plugins/fanuc/Cargo.toml
-[package]
-name = "myproject_fanuc"
+Each plugin crate follows this **standard internal structure**. This is the **accepted pattern** for pl3xus device/feature plugins:
 
-[dependencies]
-bevy.workspace = true
-myproject_core = { path = "../core" }
-myproject_robotics = { path = "../robotics" }
-myproject_execution = { path = "../execution" }
-fanuc_rmi = { git = "..." }
-
-[features]
-default = ["server"]
-server = []
+```
+my_plugin/src/
+├── types/                  # ALWAYS AVAILABLE - all types
+│   ├── mod.rs              # Re-exports all types
+│   ├── config.rs           # Database/persistent config types
+│   ├── device.rs           # ECS component types (conditional derives)
+│   └── requests.rs         # Request/response message types
+├── database/               # SERVER-ONLY - persistence
+│   ├── mod.rs
+│   ├── schema.rs           # Table definitions
+│   └── queries.rs          # CRUD operations
+├── systems/                # SERVER-ONLY - handlers
+│   ├── mod.rs
+│   ├── handlers.rs         # Request handlers + handler plugin
+│   └── command.rs          # Device command events and systems
+├── connection.rs           # SERVER-ONLY - device driver/connection
+├── plugin.rs               # ECS-ONLY - Bevy plugin (registration)
+└── lib.rs                  # Main exports with feature gates
 ```
 
+### lib.rs Structure (STANDARD)
+
 ```rust
-// plugins/fanuc/src/lib.rs
-use bevy::prelude::*;
+use cfg_if::cfg_if;
 
-mod driver;
-mod motion_handler;
-mod systems;
+// ============================================================================
+// TYPES - Always available (conditionally compiled Component/macro derives)
+// ============================================================================
+pub mod types;
 
-pub use driver::*;
-pub use motion_handler::*;
+pub use types::{
+    // Config types (database storage)
+    MyConnectionConfig, MyConnectionType,
+    // Device component types (synced ECS)
+    MyControllerConfig, MyStatus, ActiveMyDevice,
+    // Request/response types
+    ListMyConnections, ListMyConnectionsResponse,
+    CreateMyConnection, CreateMyConnectionResponse,
+    UpdateMyConnection, UpdateMyConnectionResponse,
+    // ... all types exported at crate root
+};
 
-pub struct FanucPlugin;
+// ============================================================================
+// SERVER-ONLY - Systems, handlers, database, driver
+// ============================================================================
+cfg_if! {
+    if #[cfg(feature = "server")] {
+        mod connection;
+        pub mod database;
+        pub mod systems;
 
-impl Plugin for FanucPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(Update, (
-            systems::connect_system,
-            systems::fanuc_motion_handler_system,
-            systems::status_polling_system,
-        ));
+        pub use connection::MyDriver;
+        pub use database::MyDatabaseInit;
+        pub use systems::{
+            MyCommandEvent, MyControllerBundle,
+            MyHandlerPlugin,
+            // Individual systems if needed
+        };
     }
 }
+
+// ============================================================================
+// ECS-ONLY - Plugin (both server and tests)
+// ============================================================================
+cfg_if! {
+    if #[cfg(feature = "ecs")] {
+        mod plugin;
+        pub use plugin::MyPlugin;
+    }
+}
+```
+
+### Conditional Derives in types/device.rs
+
+```rust
+#[cfg(feature = "ecs")]
+use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
+
+/// Component available on both client and server.
+/// On server: derives Component for ECS.
+/// On client: plain data type for stores.
+#[cfg_attr(feature = "ecs", derive(Component))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct MyStatus {
+    pub connected: bool,
+    pub value: f32,
+    // Server-driven UI state
+    pub can_update: bool,
+    pub can_reset: bool,
+}
+```
+
+### Conditional Macro Derives in types/requests.rs
+
+```rust
+use pl3xus_common::RequestMessage;
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "server")]
+use pl3xus_macros::{HasSuccess, Invalidates};
+
+/// Request type - always available
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("ListMyConnections"))]
+pub struct CreateMyConnection {
+    pub name: String,
+}
+
+/// Response type - always available
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
+pub struct CreateMyConnectionResponse {
+    pub success: bool,
+    pub id: Option<i64>,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for CreateMyConnection {
+    type ResponseMessage = CreateMyConnectionResponse;
+}
+```
+
+### Plugin Crate Cargo.toml
+
+```toml
+# plugins/my_plugin/Cargo.toml
+[package]
+name = "myproject_myplugin"
+
+[dependencies]
+bevy = { workspace = true, optional = true }
+serde.workspace = true
+cfg-if.workspace = true
+pl3xus_common.workspace = true
+pl3xus_macros = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+
+[features]
+default = ["ecs", "server"]
+ecs = ["dep:bevy"]
+server = ["ecs", "dep:pl3xus_macros", "dep:tokio", "dep:sqlx"]
 ```
 
 ### Server Plugin Assembly
@@ -545,13 +652,15 @@ plugins/
 
 ## Reference Examples
 
-- **Shared Types Pattern**: `examples/fanuc_rmi_replica/` in pl3xus
+- **Shared Types Pattern**: `examples/robot-hmi/` in pl3xus
 - **Feature-Gated Pattern**: meteorite codebase (external)
-- **Multi-Crate Pattern**: `examples/fanuc_rmi_replica_plugins/` in pl3xus
+- **Multi-Crate Pattern**: `examples/robot-hmi-advanced/` in pl3xus
+- **Plugin Internal Structure**: `examples/meteorite/plugins/microwave/` - Standard plugin module structure
 
 ## Resources
 
 - `references/shared-types-structure.md` - Detailed shared types setup
 - `references/plugin-structure.md` - Detailed plugin architecture
 - `references/multi-crate-plugins.md` - Multi-crate plugin architecture
+- **`../SKILLS_REGISTRY.md`** - Complete skill registry with critical patterns (START HERE)
 

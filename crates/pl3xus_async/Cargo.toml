@@ -1,0 +1,17 @@
+# Async runtime integration for pl3xus (based on EkardNT's bevy-tokio-tasks)
+[package]
+name = "pl3xus_async"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Tokio runtime integration for pl3xus/Bevy applications, enabling background async task execution with main thread synchronization."
+repository = "https://github.com/vertec-io/pl3xus"
+keywords = ["bevy", "tokio", "async", "pl3xus", "realtime"]
+categories = ["asynchronous", "game-development"]
+
+[dependencies]
+bevy = { workspace = true }
+tokio = { version = "1", features = ["rt", "sync"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", features = ["rt-multi-thread"] }

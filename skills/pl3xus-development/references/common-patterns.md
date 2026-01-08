@@ -1,5 +1,131 @@
 # Common pl3xus Patterns Reference
 
+## Plugin Module Structure
+
+The standard structure for device/feature plugins:
+
+```
+my_plugin/
+├── src/
+│   ├── types/              # Always available types with conditional derives
+│   │   ├── mod.rs          # Re-exports all types
+│   │   ├── config.rs       # Configuration types (database storage)
+│   │   ├── device.rs       # ECS component types
+│   │   └── requests.rs     # Request/response message types
+│   ├── database/           # Server-only: database schema and queries
+│   │   ├── mod.rs
+│   │   ├── schema.rs
+│   │   └── queries.rs
+│   ├── systems/            # Server-only: handler systems
+│   │   ├── mod.rs
+│   │   ├── handlers.rs     # Request handlers
+│   │   └── command.rs      # Device command systems
+│   ├── connection.rs       # Server-only: device driver
+│   ├── plugin.rs           # ECS-only: Bevy plugin
+│   └── lib.rs              # Main exports with feature gates
+```
+
+### lib.rs Structure
+
+```rust
+use cfg_if::cfg_if;
+
+// ============================================================================
+// TYPES - Always available (conditionally compiled Component derives)
+// ============================================================================
+pub mod types;
+
+pub use types::{
+    // Config types
+    MyConnectionConfig, MyConnectionType,
+    // Device component types
+    MyControllerConfig, MyStatus, ActiveMyDevice,
+    // Request/response types
+    ListMyConnections, ListMyConnectionsResponse,
+    CreateMyConnection, CreateMyConnectionResponse,
+    // ... etc
+};
+
+// ============================================================================
+// SERVER-ONLY - Systems, handlers, database, driver
+// ============================================================================
+cfg_if! {
+    if #[cfg(feature = "server")] {
+        mod connection;
+        pub mod database;
+        pub mod systems;
+
+        pub use connection::MyDriver;
+        pub use database::MyDatabaseInit;
+        pub use systems::{
+            MyCommandEvent, MyControllerBundle,
+            MyHandlerPlugin,
+            my_command_handler_system, my_tcp_sender_system,
+        };
+    }
+}
+
+// ============================================================================
+// ECS-ONLY - Plugin
+// ============================================================================
+cfg_if! {
+    if #[cfg(feature = "ecs")] {
+        mod plugin;
+
+        pub use plugin::MyPlugin;
+    }
+}
+```
+
+### Conditional Component Derives in types/device.rs
+
+```rust
+#[cfg(feature = "ecs")]
+use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
+
+/// Component type - available on both client and server
+/// On server: derives Component for ECS
+/// On client: plain data type for stores
+#[cfg_attr(feature = "ecs", derive(Component))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct MyStatus {
+    pub connected: bool,
+    pub value: f32,
+}
+```
+
+### Conditional Macro Derives in types/requests.rs
+
+```rust
+use pl3xus_common::RequestMessage;
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "server")]
+use pl3xus_macros::{HasSuccess, Invalidates};
+
+/// Request type - always available
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(Invalidates))]
+#[cfg_attr(feature = "server", invalidates("ListMyConnections"))]
+pub struct CreateMyConnection {
+    pub name: String,
+}
+
+/// Response type - always available
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(HasSuccess))]
+pub struct CreateMyConnectionResponse {
+    pub success: bool,
+    pub id: Option<i64>,
+    pub error: Option<String>,
+}
+
+impl RequestMessage for CreateMyConnection {
+    type ResponseMessage = CreateMyConnectionResponse;
+}
+```
+
 ## Server Patterns
 
 ### Plugin Organization

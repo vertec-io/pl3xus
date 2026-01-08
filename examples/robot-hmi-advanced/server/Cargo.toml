@@ -1,0 +1,28 @@
+[package]
+name = "robot_hmi_server"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = ["duet"]
+
+# Enable Duet extruder support
+duet = ["dep:robot_hmi_duet"]
+
+[dependencies]
+# Import plugins with full server features
+robot_hmi_plugins = { path = "../plugins", features = ["ecs", "server"] }
+
+# Execution plugin for coordinated multi-device execution
+robot_hmi_execution = { workspace = true, features = ["ecs", "server"] }
+
+# FANUC-specific motion handling
+robot_hmi_fanuc = { workspace = true, features = ["ecs", "server"] }
+
+# Duet extruder plugin (optional)
+robot_hmi_duet = { workspace = true, features = ["ecs", "server"], optional = true }
+
+# Re-export fanuc_rmi with full features for the server binary
+fanuc_rmi = { workspace = true, features = ["driver", "logging", "DTO"] }
+

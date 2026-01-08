@@ -1,0 +1,52 @@
+[workspace]
+resolver = "2"
+members = [
+    "app",
+    "duet_simulator",
+    "plugins",
+    "plugins/core",
+    "plugins/duet",
+    "plugins/execution",
+    "plugins/fanuc",
+    "plugins/programs",
+    "plugins/robotics",
+    "server",
+]
+
+[workspace.dependencies]
+# Shared fanuc_rmi dependency - all workspace members use the same version
+# This prevents type mismatches between different versions
+# IMPORTANT: default-features = false to avoid pulling tokio into WASM builds
+fanuc_rmi = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git", default-features = false }
+
+# Pl3xus dependencies - adjust paths when copying this template
+pl3xus = { path = "../../crates/pl3xus", features = ["debug_messages"] }
+pl3xus_client = { path = "../../crates/pl3xus_client" }
+pl3xus_common = { path = "../../crates/pl3xus_common" }
+pl3xus_sync = { path = "../../crates/pl3xus_sync" }
+pl3xus_macros = { path = "../../crates/pl3xus_macros" }
+pl3xus_websockets = { path = "../../crates/pl3xus_websockets" }
+
+# Plugin crates (all under plugins/)
+# IMPORTANT: default-features = false to allow WASM builds to disable server features
+robot_hmi_core = { path = "plugins/core", default-features = false }
+robot_hmi_robotics = { path = "plugins/robotics", default-features = false }
+robot_hmi_execution = { path = "plugins/execution", default-features = false }
+robot_hmi_duet = { path = "plugins/duet", default-features = false }
+robot_hmi_fanuc = { path = "plugins/fanuc", default-features = false }
+robot_hmi_programs = { path = "plugins/programs", default-features = false }
+
+# Common dependencies
+bevy = { version = "0.17", default-features = false }
+pl3xus_async = { path = "../../crates/pl3xus_async" }
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.28", features = ["full"] }
+
+# Leptos dependencies (for WASM app)
+leptos = { version = "0.8" }
+leptos_router = { version = "0.8" }
+reactive_stores = { version = "0.2" }
+
+# Utilities
+cfg-if = "1.0"
+

@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Industrial Dark Theme (Based on original audit) */
+    --background: 0 0% 4%;      /* #0a0a0a */
+    --foreground: 0 0% 98%;     /* #fafafa */
+
+    --card: 0 0% 7%;            /* #111111 */
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 10%;        /* #1a1a1a */
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 189 100% 50%;    /* #00d9ff - Industrial Cyan */
+    --primary-foreground: 189 100% 5%;
+
+    --secondary: 0 0% 15%;      /* #262626 */
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 53%; /* #888888 */
+
+    --accent: 189 100% 20%;     /* Dark cyan */
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 100% 63%;  /* #ff4444 */
+    --destructive-foreground: 0 0% 98%;
+
+    --success: 142 71% 45%;     /* #22c55e */
+    --warning: 38 92% 50%;      /* #f59e0b */
+
+    --border: 0 0% 100% / 0.08; /* #ffffff08 */
+    --input: 0 0% 100% / 0.08;
+    --ring: 189 100% 50%;
+
+    --radius: 0.25rem;
+  }
+
+  .dark {
+    /* Since we are already dark, we could define a light theme here or just keep it */
+    /* For this project, the default IS dark, so .dark might be for an even darker mode or high contrast */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

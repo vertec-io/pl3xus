@@ -1,9 +1,16 @@
 # pl3xus Development Skills System
 
-**Version**: 1.0.0
-**Date**: 2025-12-24
+**Version**: 1.1.0
+**Date**: 2026-01-01
 
 A collection of reusable AI agent skills for production-grade industrial application development using the pl3xus framework (Bevy ECS server + Leptos WASM client).
+
+---
+
+## ⚠️ START HERE: Skills Registry
+
+> **Before developing, load the [SKILLS_REGISTRY.md](./SKILLS_REGISTRY.md)** for mandatory patterns.
+> This registry is optimized for agent consumption and contains critical patterns that must be followed.
 
 ---
 
@@ -32,6 +39,12 @@ This skill guides you through all phases: Architecture → Server → Client →
 
 ## Available Skills
 
+### Core Reference
+
+| Document | Purpose |
+|----------|---------|
+| **[SKILLS_REGISTRY.md](./SKILLS_REGISTRY.md)** | **Agent-optimized pattern reference with mandatory patterns** |
+
 ### Comprehensive Workflow
 
 | Skill | Purpose |
@@ -42,11 +55,11 @@ This skill guides you through all phases: Architecture → Server → Client →
 
 | Skill | Purpose |
 |-------|---------|
-| [pl3xus-project-structure](./pl3xus-project-structure/SKILL.md) | Project organization patterns (shared types vs plugin-based) |
+| [pl3xus-project-structure](./pl3xus-project-structure/SKILL.md) | Project organization patterns (shared types, feature-gated, multi-crate plugins) |
 | [pl3xus-server](./pl3xus-server/SKILL.md) | Server-side Bevy ECS patterns, component sync, message handlers |
 | [pl3xus-client](./pl3xus-client/SKILL.md) | Client-side Leptos hooks, reactive patterns, UI components |
 | [pl3xus-queries](./pl3xus-queries/SKILL.md) | Request/response patterns, targeted queries |
-| [pl3xus-mutations](./pl3xus-mutations/SKILL.md) | Mutations, invalidation, optimistic updates |
+| [pl3xus-mutations](./pl3xus-mutations/SKILL.md) | Mutations, invalidation, synced component mutation handlers |
 | [pl3xus-authorization](./pl3xus-authorization/SKILL.md) | Entity policies, control patterns, access control |
 
 ### Foundation Skills

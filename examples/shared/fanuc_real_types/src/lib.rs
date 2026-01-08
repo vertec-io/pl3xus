@@ -46,15 +46,15 @@ impl Default for RobotPosition {
 impl From<dto::Position> for RobotPosition {
     fn from(pos: dto::Position) -> Self {
         Self {
-            x: pos.x,
-            y: pos.y,
-            z: pos.z,
-            w: pos.w,
-            p: pos.p,
-            r: pos.r,
-            ext1: pos.ext1,
-            ext2: pos.ext2,
-            ext3: pos.ext3,
+            x: pos.x as f32,
+            y: pos.y as f32,
+            z: pos.z as f32,
+            w: pos.w as f32,
+            p: pos.p as f32,
+            r: pos.r as f32,
+            ext1: pos.ext1 as f32,
+            ext2: pos.ext2 as f32,
+            ext3: pos.ext3 as f32,
         }
     }
 }
@@ -63,15 +63,15 @@ impl From<dto::Position> for RobotPosition {
 impl From<RobotPosition> for dto::Position {
     fn from(pos: RobotPosition) -> Self {
         Self {
-            x: pos.x,
-            y: pos.y,
-            z: pos.z,
-            w: pos.w,
-            p: pos.p,
-            r: pos.r,
-            ext1: pos.ext1,
-            ext2: pos.ext2,
-            ext3: pos.ext3,
+            x: pos.x as f64,
+            y: pos.y as f64,
+            z: pos.z as f64,
+            w: pos.w as f64,
+            p: pos.p as f64,
+            r: pos.r as f64,
+            ext1: pos.ext1 as f64,
+            ext2: pos.ext2 as f64,
+            ext3: pos.ext3 as f64,
         }
     }
 }

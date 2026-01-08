@@ -1,0 +1,35 @@
+[package]
+name = "robot_hmi_client"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+devtools = ["pl3xus_client/devtools"]
+
+[dependencies]
+leptos = { version = "0.8", features = ["csr"] }
+leptos_router = { version = "0.8" }
+console_error_panic_hook = "0.1"
+console_log = "1.0"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+wasm-bindgen = "0.2"
+serde_json = "1.0"
+
+# Pl3xus client crate
+pl3xus_client = { path = "../../../crates/pl3xus_client", features = ["stores"] }
+pl3xus_common = { path = "../../../crates/pl3xus_common" }
+bincode = "1.3"
+
+# Shared types (with stores feature for fine-grained reactive access)
+robot_hmi_types = { path = "../../shared/robot_hmi_types", features = ["stores"] }
+
+# Reactive stores for fine-grained field access
+reactive_stores = "0.2"
+js-sys = "0.3.83"
+
+# Fanuc RMI types (DTO only, no driver)
+fanuc_rmi = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git", default-features = false, features = ["DTO"] }
+leptos-use = "0.16"

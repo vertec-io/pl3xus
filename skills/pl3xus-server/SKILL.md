@@ -12,6 +12,8 @@ allowed-tools:
 
 # pl3xus Server Skill
 
+> **⚠️ CRITICAL: Review `../SKILLS_REGISTRY.md` for mandatory patterns before implementing.**
+
 ## Purpose
 
 This skill covers server-side implementation patterns for pl3xus applications using Bevy ECS. The server is the authoritative source of truth for all application state.
@@ -142,11 +144,12 @@ fn handle_update_position(
 }
 ```
 
-### Batch Request Registration
+### Batch Request Registration (PREFERRED)
 
-Register multiple related requests with the same configuration:
+**Always use batch registration** for related requests with the same configuration:
 
 ```rust
+// ✅ CORRECT - Batch registration
 app.requests::<(
     SetSpeedOverride,
     ResetRobot,
@@ -156,6 +159,14 @@ app.requests::<(
     .targeted()
     .with_default_entity_policy()
     .with_error_response();
+```
+
+❌ **AVOID individual registration**:
+```rust
+// ❌ WRONG - Verbose, inconsistent config risk
+app.request::<SetSpeedOverride, WebSocketProvider>().targeted().with_default_entity_policy().register();
+app.request::<ResetRobot, WebSocketProvider>().targeted().with_default_entity_policy().register();
+// ... repeated for each request
 ```
 
 ## Entity Management

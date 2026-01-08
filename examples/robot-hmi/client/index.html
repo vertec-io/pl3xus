@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fanuc RMI Replica</title>
+
+    <!-- Critical CSS variables inlined to prevent FOUC -->
+    <style id="critical-theme">
+      :root {
+        --background: 0 0% 4%;
+        --foreground: 0 0% 98%;
+        --card: 0 0% 7%;
+        --card-foreground: 0 0% 98%;
+        --popover: 0 0% 9%;
+        --popover-foreground: 0 0% 98%;
+        --primary: 189 94% 43%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 0 0% 12%;
+        --secondary-foreground: 0 0% 98%;
+        --muted: 0 0% 12%;
+        --muted-foreground: 0 0% 55%;
+        --accent: 0 0% 12%;
+        --accent-foreground: 0 0% 98%;
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 98%;
+        --success: 142 71% 45%;
+        --warning: 38 92% 50%;
+        --border: 0 0% 18%;
+        --input: 0 0% 12%;
+        --ring: 189 94% 43%;
+        --radius: 0.5rem;
+        --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --blur: 0px;
+        --border-opacity: 1;
+        --glow: none;
+        --header-bg: 0 0% 5%;
+        --surface-1: 0 0% 8%;
+        --surface-2: 0 0% 10%;
+      }
+    </style>
+
+    <!-- Using Tailwind CDN with custom config -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use data-trunk to properly hash the CSS file for cache busting -->
+    <link data-trunk rel="css" href="assets/globals.css">
+
+    <script>
+        /**
+         * NOTE: Using Tailwind CDN for quick prototyping in this replica.
+         * In a production environment, you should use a standard PostCSS build pipeline.
+         *
+         * Theme System: Sophisticated theming with 22 themes across 4 categories:
+         * - Professional Dark: Industrial, Obsidian, Slate, Coffee, Indigo
+         * - Glass/Translucent: Arctic, Mist, Glass Dark, Deep Space
+         * - Vibrant Accent: Cyber, Rose, Amber, Teal, Neon, Crimson, Blood, Gold, Solar, Ocean, Emerald
+         * - Light: Industrial Light, Retro
+         */
+        tailwind.config = {
+            theme: {
+                extend: {
+                    borderColor: {
+                        DEFAULT: "hsl(var(--border) / var(--border-opacity))",
+                    },
+                    colors: {
+                        background: ({ opacityValue }) => opacityValue ? `hsl(var(--background) / ${opacityValue})` : "hsl(var(--background))",
+                        foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--foreground) / ${opacityValue})` : "hsl(var(--foreground))",
+                        card: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--card) / ${opacityValue})` : "hsl(var(--card))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--card-foreground) / ${opacityValue})` : "hsl(var(--card-foreground))",
+                        },
+                        popover: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--popover) / ${opacityValue})` : "hsl(var(--popover))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--popover-foreground) / ${opacityValue})` : "hsl(var(--popover-foreground))",
+                        },
+                        primary: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--primary) / ${opacityValue})` : "hsl(var(--primary))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--primary-foreground) / ${opacityValue})` : "hsl(var(--primary-foreground))",
+                        },
+                        secondary: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--secondary) / ${opacityValue})` : "hsl(var(--secondary))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--secondary-foreground) / ${opacityValue})` : "hsl(var(--secondary-foreground))",
+                        },
+                        muted: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--muted) / ${opacityValue})` : "hsl(var(--muted))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--muted-foreground) / ${opacityValue})` : "hsl(var(--muted-foreground))",
+                        },
+                        accent: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--accent) / ${opacityValue})` : "hsl(var(--accent))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--accent-foreground) / ${opacityValue})` : "hsl(var(--accent-foreground))",
+                        },
+                        destructive: {
+                            DEFAULT: ({ opacityValue }) => opacityValue ? `hsl(var(--destructive) / ${opacityValue})` : "hsl(var(--destructive))",
+                            foreground: ({ opacityValue }) => opacityValue ? `hsl(var(--destructive-foreground) / ${opacityValue})` : "hsl(var(--destructive-foreground))",
+                        },
+                        success: ({ opacityValue }) => opacityValue ? `hsl(var(--success) / ${opacityValue})` : "hsl(var(--success))",
+                        warning: ({ opacityValue }) => opacityValue ? `hsl(var(--warning) / ${opacityValue})` : "hsl(var(--warning))",
+                        border: ({ opacityValue }) => opacityValue ? `hsl(var(--border) / ${opacityValue})` : "hsl(var(--border) / var(--border-opacity))",
+                        input: ({ opacityValue }) => opacityValue ? `hsl(var(--input) / ${opacityValue})` : "hsl(var(--input))",
+                        ring: ({ opacityValue }) => opacityValue ? `hsl(var(--ring) / ${opacityValue})` : "hsl(var(--ring))",
+                        // Extended surface colors for layered UI
+                        surface: {
+                            1: ({ opacityValue }) => opacityValue ? `hsl(var(--surface-1) / ${opacityValue})` : "hsl(var(--surface-1, var(--card)))",
+                            2: ({ opacityValue }) => opacityValue ? `hsl(var(--surface-2) / ${opacityValue})` : "hsl(var(--surface-2, var(--muted)))",
+                        },
+                        header: ({ opacityValue }) => opacityValue ? `hsl(var(--header-bg) / ${opacityValue})` : "hsl(var(--header-bg, var(--card)))",
+                    },
+                    borderRadius: {
+                        theme: "var(--radius)",
+                        DEFAULT: "var(--radius)",
+                        lg: "var(--radius)",
+                        md: "calc(var(--radius) - 2px)",
+                        sm: "calc(var(--radius) - 4px)",
+                    },
+                    boxShadow: {
+                        theme: "var(--shadow)",
+                        glow: "var(--glow, none)",
+                    },
+                    backdropBlur: {
+                        theme: "var(--blur)",
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Trunk hook to build the Rust WASM -->
+    <link data-trunk rel="rust" data-wasm-opt="z" />
+    <link data-trunk rel="copy-dir" href="assets" />
+
+    <style>
+        /* Custom scrollbar - theme-aware using CSS variables */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: hsl(var(--muted));
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: hsl(var(--border) / 0.5);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: hsl(var(--border) / 0.7);
+        }
+
+        /* Selection styling */
+        ::selection {
+            background: hsl(var(--primary) / 0.3);
+            color: hsl(var(--foreground));
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Apply saved theme immediately to prevent flash -->
+    <script>
+        (function() {
+            var theme = localStorage.getItem('app-theme');
+            if (theme && theme !== 'Industrial') {
+                // Convert theme name to class: "Indigo" -> "theme-indigo", etc.
+                var themeMap = {
+                    'Indigo': 'theme-indigo',
+                    'Emerald': 'theme-emerald',
+                    'Rose': 'theme-rose',
+                    'Teal': 'theme-teal',
+                    'Cyber': 'theme-cyber',
+                    'Amber': 'theme-amber',
+                    'Slate': 'theme-slate',
+                    'Crimson': 'theme-crimson',
+                    'Gold': 'theme-gold',
+                    'DeepOcean': 'theme-ocean',
+                    'Arctic': 'theme-arctic',
+                    'Obsidian': 'theme-obsidian',
+                    'Neon': 'theme-neon',
+                    'Retro': 'theme-retro',
+                    'Mist': 'theme-mist',
+                    'Solar': 'theme-solar',
+                    'Space': 'theme-space',
+                    'Light': 'theme-light',
+                    'Blood': 'theme-blood',
+                    'Coffee': 'theme-coffee',
+                    'GlassDark': 'theme-glass-dark',
+                    // New sophisticated themes
+                    'ZincBlue': 'theme-zinc-blue',
+                    'SlateTeal': 'theme-slate-teal',
+                    'StoneOrange': 'theme-stone-orange',
+                    'NeutralGreen': 'theme-neutral-green',
+                    'PaperBlue': 'theme-paper-blue',
+                    'SnowMint': 'theme-snow-mint',
+                    'IvoryTeal': 'theme-ivory-teal',
+                    'CloudSlate': 'theme-cloud-slate'
+                };
+                var cls = themeMap[theme];
+                if (cls) {
+                    document.body.classList.add(cls);
+                }
+            }
+        })();
+    </script>
+    <!-- App injection point -->
+</body>
+
+</html>

@@ -1,0 +1,64 @@
+//! Position and joint angles display components.
+
+use leptos::prelude::*;
+
+use pl3xus_client::use_entity_component;
+use robot_hmi_plugins::fanuc::types::{RobotPosition, JointAngles};
+use crate::pages::dashboard::use_system_entity;
+
+/// Position display showing XYZ and WPR values.
+#[component]
+pub fn PositionDisplay() -> impl IntoView {
+    let ctx = use_system_entity();
+
+    // Subscribe to the active robot's position and joint angles
+    let (pos, _pos_exists) = use_entity_component::<RobotPosition, _>(move || ctx.robot_entity_id.get());
+    let (joints, _joints_exists) = use_entity_component::<JointAngles, _>(move || ctx.robot_entity_id.get());
+
+    let get_pos = move || pos.get();
+    let get_joints = move || joints.get();
+
+    view! {
+        <div class="bg-background rounded border border-border/8 p-2">
+            <h2 class="text-[10px] font-semibold text-primary mb-1.5 uppercase tracking-wide">"Position"</h2>
+
+            // Cartesian Position
+            <div class="grid grid-cols-3 gap-1 mb-2">
+                <PositionItem label="X" value=move || get_pos().x />
+                <PositionItem label="Y" value=move || get_pos().y />
+                <PositionItem label="Z" value=move || get_pos().z />
+                <PositionItem label="W" value=move || get_pos().w />
+                <PositionItem label="P" value=move || get_pos().p />
+                <PositionItem label="R" value=move || get_pos().r />
+            </div>
+
+            // Joint Angles
+            <h2 class="text-[10px] font-semibold text-primary mb-1.5 uppercase tracking-wide">"Joint Angles"</h2>
+            <div class="grid grid-cols-3 gap-1">
+                <PositionItem label="J1" value=move || get_joints().j1 />
+                <PositionItem label="J2" value=move || get_joints().j2 />
+                <PositionItem label="J3" value=move || get_joints().j3 />
+                <PositionItem label="J4" value=move || get_joints().j4 />
+                <PositionItem label="J5" value=move || get_joints().j5 />
+                <PositionItem label="J6" value=move || get_joints().j6 />
+            </div>
+        </div>
+    }
+}
+
+/// Generic display item component for numeric values
+#[component]
+fn PositionItem<F, T>(label: &'static str, value: F) -> impl IntoView
+where
+    F: Fn() -> T + Copy + Send + Sync + 'static,
+    T: std::fmt::Display + Copy + 'static,
+{
+    view! {
+        <div class="flex justify-between items-center bg-card rounded px-1.5 py-1">
+             <span class="text-muted-foreground text-[10px] font-medium">{label}</span>
+             <span class="text-[11px] font-mono text-muted-foreground tabular-nums">
+                {move || format!("{:.2}", value())}
+             </span>
+        </div>
+    }
+}

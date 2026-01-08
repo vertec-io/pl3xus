@@ -10,6 +10,8 @@ allowed-tools:
 
 # pl3xus Mutations Skill
 
+> **⚠️ CRITICAL: Review `../SKILLS_REGISTRY.md` for mandatory patterns before implementing.**
+
 ## Purpose
 
 This skill covers mutation patterns in pl3xus. Mutations are state-changing operations that modify server state and can trigger query invalidation.
@@ -21,6 +23,45 @@ Use this skill when:
 - Setting up mutation handlers
 - Configuring query invalidation
 - Handling mutation responses
+
+## Preferred Pattern: Synced Components with Mutation Handlers
+
+**When a component value change requires side effects** (sending to IO, device commands, validation), use synced components with mutation handlers instead of separate request types:
+
+```rust
+// ✅ PREFERRED: Sync component + mutation handler for side effects
+app.sync_component::<RobotConfig>(None);
+app.request::<UpdateRobotConfig, WebSocketProvider>()
+    .targeted()
+    .with_default_entity_policy()
+    .register();
+
+// Handler mutates synced component AND triggers side effects
+fn handle_update_config(
+    mut messages: MessageReader<NetworkData<TargetedRequest<UpdateRobotConfig>>>,
+    mut configs: Query<&mut RobotConfig>,
+    mut command_writer: MessageWriter<RobotCommand>,
+) {
+    for request in messages.read() {
+        let entity = Entity::from_bits(request.message.target_entity);
+        if let Ok(mut config) = configs.get_mut(entity) {
+            // Mutate component (auto-syncs to all clients)
+            *config = request.message.request.config.clone();
+
+            // Trigger side effect (send command to device)
+            command_writer.write(RobotCommand::ApplyConfig(entity, config.clone()));
+
+            let _ = request.respond(UpdateConfigResponse { success: true, error: None });
+        }
+    }
+}
+```
+
+**Benefits:**
+- Component changes auto-sync to all clients
+- Side effects are server-controlled
+- Single source of truth
+- Client UI updates reactively via `use_entity_component`
 
 ## Mutation Types
 

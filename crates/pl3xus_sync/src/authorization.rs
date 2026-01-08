@@ -51,6 +51,18 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 // ============================================================================
+// SYSTEM SETS
+// ============================================================================
+
+/// System set for targeted request authorization middleware.
+///
+/// Authorization systems run in this set during `Update`, after `PreUpdate`
+/// systems have processed incoming network data into `Request<TargetedRequest<T>>`.
+/// Handlers that read `AuthorizedRequest<T>` should run after this set.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TargetedRequestAuthorizationSet;
+
+// ============================================================================
 // AUTHORIZATION RESULT
 // ============================================================================
 
@@ -1107,10 +1119,13 @@ where
             }
 
             if needs_auth {
-                // Add authorization middleware
+                // Add authorization middleware.
+                // Run in Update with TargetedRequestAuthorizationSet to ensure it runs
+                // after PreUpdate systems that create Request<TargetedRequest<T>>.
                 self.app.add_message::<AuthorizedRequest<T>>();
                 self.app
-                    .add_systems(PreUpdate, authorize_targeted_requests::<T, NP>);
+                    .add_systems(Update, authorize_targeted_requests::<T, NP>
+                        .in_set(TargetedRequestAuthorizationSet));
             }
         } else {
             // Register as plain request
@@ -1158,10 +1173,15 @@ where
             }
 
             if needs_auth {
-                // Add authorization middleware with error response support
+                // Add authorization middleware with error response support.
+                // Run early in Update to ensure it runs after PreUpdate systems
+                // that create Request<TargetedRequest<T>> from incoming network data,
+                // but before Update systems that handle AuthorizedRequest<T>.
+                // We use RunFixedMainLoop as an early-running marker set in Update.
                 self.app.add_message::<AuthorizedRequest<T>>();
                 self.app
-                    .add_systems(PreUpdate, authorize_targeted_requests_with_error_response::<T, NP>);
+                    .add_systems(Update, authorize_targeted_requests_with_error_response::<T, NP>
+                        .in_set(TargetedRequestAuthorizationSet));
             }
         } else {
             // Register as plain request

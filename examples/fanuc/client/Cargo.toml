@@ -1,7 +1,7 @@
 [package]
 name = "fanuc_client"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Leptos FANUC robot control client using real FANUC_RMI_API types"
 license = "MIT"
 

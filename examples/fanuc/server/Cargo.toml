@@ -1,7 +1,7 @@
 [package]
 name = "fanuc_server"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "FANUC robot control server example for pl3xus_sync"
 license = "MIT"
 
@@ -11,7 +11,7 @@ pl3xus = { workspace = true }
 pl3xus_sync = { workspace = true, features = ["runtime"] }
 pl3xus_websockets = { workspace = true }
 fanuc_real_types = { workspace = true, features = ["server"] }
-bevy-tokio-tasks = { git = "https://github.com/vertec-io/async_bevy_web.git" }
+pl3xus_async = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 bincode = { workspace = true }
 fanuc_rmi = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git", features = ["driver"], default-features = true }

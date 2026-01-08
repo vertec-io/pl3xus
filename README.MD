@@ -1,393 +1,121 @@
-# bevy_eventwork
+# pl3xus
 
-> A modular, event-driven networking solution for [Bevy](https://bevyengine.org/) applications. Connect multiple Bevy instances with ease using a flexible, transport-agnostic architecture.
+A server-authoritative real-time synchronization framework for building industrial-grade applications with Bevy ECS servers and Leptos WASM clients.
 
-Forked from the excellent [`bevy_spicy_networking`](https://crates.io/crates/bevy_spicy_networking), with significant improvements for modularity, performance, and ease of use.
-
-[![Crates.io](https://img.shields.io/crates/v/bevy_eventwork)](https://crates.io/crates/bevy_eventwork)
-[![Docs.rs](https://docs.rs/bevy_eventwork/badge.svg)](https://docs.rs/bevy_eventwork)
-[![License](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/jamescarterbell/bevy_eventwork)
-
-## Contents
-
-- [Features](#features)
-- [Documentation](#documentation)
-  - [Quickstart](#quickstart)
-  - [Sending Messages Guide](./docs/guides/sending-messages.md) 📖
-- [Examples](#examples)
-- [Bevy Version Compatibility](#bevy-version-compatibility)
-- [Supported Platforms](#supported-platforms)
-- [Transport Providers](#transport-providers)
-- [Workspace Crates](#workspace-crates)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-
-## Features
-
-- **✨ Zero Boilerplate**: New automatic message registration - no trait implementation needed!
-- **🔌 Transport Agnostic**: Use TCP, WebSockets, or implement your own transport layer
-- **🌐 Cross-Platform**: Works on Linux, Windows, macOS, and WASM
-- **⚡ Event-Driven**: Integrates seamlessly with Bevy's ECS event system
-- **🔄 Request/Response**: Built-in support for request/response messaging patterns
-- **📦 Modular**: Lightweight core with optional features and transport providers
-- **🎯 Type-Safe**: Strongly typed messages with compile-time guarantees
-- **🚀 Async Runtime Agnostic**: Works with any async runtime (Bevy TaskPool, Tokio, etc.)
-- **🔧 External Crate Support**: Use types from any crate as network messages
-
-## What's New in 0.10 🎉
-
-Version 0.10 introduces **automatic message registration** - a major ergonomic improvement that eliminates boilerplate!
-
-### Before (0.9 and earlier):
-```rust
-// Had to implement NetworkMessage for every type
-impl NetworkMessage for PlayerPosition {
-    const NAME: &'static str = "app:PlayerPosition";
-}
-app.listen_for_message::<PlayerPosition, TcpProvider>();
-net.send_message(conn_id, msg)?;
-```
-
-### After (0.10+):
-```rust
-// Just derive Serialize + Deserialize - that's it!
-#[derive(Serialize, Deserialize, Clone)]
-struct PlayerPosition { x: f32, y: f32 }
-
-app.register_network_message::<PlayerPosition, TcpProvider>();
-net.send(conn_id, msg)?;
-```
-
-**Benefits:**
-- ✨ **Zero boilerplate** - no trait implementation needed
-- 🔧 **External crate support** - use types from any crate
-- 🚀 **Faster development** - less code to write and maintain
-- ✅ **Fully backward compatible** - existing code continues to work
-
-### Migration Guide
-
-The old API is deprecated but still fully functional:
-
-| Old (Deprecated) | New (Recommended) |
-|-----------------|-------------------|
-| `listen_for_message::<T, P>()` | `register_network_message::<T, P>()` |
-| `send_message(id, msg)` | `send(id, msg)` |
-| `broadcast_message(msg)` | `broadcast(msg)` |
-
-**Note:** If you need explicit message names (e.g., for versioning), continue using `listen_for_message` with `NetworkMessage` trait.
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Documentation
 
-📚 **[Online Documentation](https://docs.rs/bevy_eventwork)** - Complete API reference
+**[pl3xus Documentation](https://www.pl3xus.com/docs)** - Complete guides, API reference, and tutorials.
 
-You can also build the documentation locally:
-```bash
-cargo doc -p eventwork --open
-```
+## Why pl3xus?
 
-### Quickstart
+The Entity Component System (ECS) architecture has proven itself in game engines, but its benefits extend far beyond games. ECS provides the foundation for building high-performance, reliable, and maintainable real-time systems:
 
-#### 1. Add Dependencies
+- **Data-oriented design** enables predictable, cache-friendly performance even with thousands of entities
+- **Concurrent system execution** handles complex machinery with many independent subsystems
+- **The component model** naturally maps to industrial concepts: a robot arm is an entity, its position, velocity, and status are components, and control logic lives in systems
 
-```toml
-[dependencies]
-bevy = "0.17"
-eventwork = "1.1"  # Bevy 0.17 support with automatic message registration!
-serde = { version = "1.0", features = ["derive"] }
+pl3xus builds on this foundation to make developing industrial applications with Rust and modern web-based interfaces easier than ever.
 
-# Choose a transport provider:
-# eventwork_websockets = "1.1"  # For WebSocket support (WASM + Native)
-```
+### The Problem with Existing Solutions
 
-**Important**: Bevy 0.17 requires Rust 1.88.0 (nightly). See [Rust Nightly Requirement](#rust-nightly-requirement) for setup instructions.
+Traditional networking libraries for Bevy focus on game development patterns: client-side prediction, lag compensation, and peer-to-peer architectures. These patterns don't fit industrial and automation applications where the server must be the single source of truth.
 
-#### 2. Define Your Messages
+pl3xus takes a different approach. It's built for **server-authoritative architectures** where you need:
 
-**New in 0.10: Automatic Message Registration** 🎉
+- **Real-time HMI/SCADA interfaces**: Build web-based control panels for robots, PLCs, and industrial equipment
+- **Multi-operator systems**: Multiple users viewing and controlling shared resources with proper authorization
+- **Live monitoring dashboards**: Stream system state to browsers without polling
+- **Development tooling**: Built-in DevTools for entity browsing, component inspection, and real-time debugging
 
-Just derive `Serialize` and `Deserialize` - no trait implementation needed!
+The core idea is simple: register a Bevy component for synchronization on the server, subscribe to it on the client, and pl3xus handles change detection, serialization, transmission, and reactive UI updates automatically.
 
 ```rust
-use serde::{Serialize, Deserialize};
+// Server: one line to sync a component
+app.sync_component::<RobotPosition>(None);
 
-// That's it! No NetworkMessage trait needed
-#[derive(Serialize, Deserialize, Clone)]
-struct ChatMessage {
-    user: String,
-    message: String,
-}
+// Client: one line to subscribe and display
+let positions = use_components::<RobotPosition>();
 ```
 
-<details>
-<summary><b>📝 Traditional Approach (Still Supported)</b></summary>
+## How It Differs
 
-If you need explicit control over message names (e.g., for versioning), you can still use the traditional approach:
+| Capability | pl3xus | bevy_renet | Matchbox |
+|------------|--------|------------|----------|
+| ECS Component Sync | Yes | No | No |
+| Leptos Web Client | Yes | No | No |
+| Browser Support | Yes | No | Yes |
+| Game Prediction | No | Yes | Yes |
+| Server-Authoritative | Yes | Yes | No |
 
-```rust
-use serde::{Serialize, Deserialize};
-use eventwork::NetworkMessage;
+If you're building multiplayer games with client prediction, use bevy_renet or Matchbox. If you're building control systems, dashboards, or industrial applications, pl3xus is designed for you.
 
-#[derive(Serialize, Deserialize, Clone)]
-struct ChatMessage {
-    user: String,
-    message: String,
-}
+## Features
 
-impl NetworkMessage for ChatMessage {
-    const NAME: &'static str = "chat:v1:Message";
-}
-```
+- **Transport Agnostic**: Use TCP, WebSockets, or implement your own transport layer
+- **Cross-Platform**: Works on Linux, Windows, macOS, and WASM
+- **Event-Driven**: Integrates with Bevy's ECS event system
+- **ECS Synchronization**: Automatic server-to-client component sync with change detection
+- **Modular Architecture**: Lightweight core with optional features and transport providers
+- **Type-Safe**: Strongly typed messages with compile-time guarantees
+- **Async Runtime Agnostic**: Works with any async runtime (Bevy TaskPool, Tokio, etc.)
+- **Reactive Web Client**: Leptos-based client for building real-time web UIs
 
-</details>
+## AI-Native Development
 
-#### 3. Set Up Your App
+pl3xus is built as an AI-native framework. The [`/skills`](./skills) directory contains a collection of reusable AI agent skills following [Anthropic's skills protocol](https://github.com/anthropics/skills), giving your agents the tools they need to write expert-level industrial and automation applications.
 
-```rust
-use bevy::prelude::*;
-use bevy::tasks::TaskPoolBuilder;
-use eventwork::{AppNetworkMessage, EventworkPlugin, EventworkRuntime};
+The skills system includes:
 
-fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins)
-        // Add the networking plugin with your chosen transport
-        .add_plugins(EventworkPlugin::<YourTransportProvider, bevy::tasks::TaskPool>::default())
-        // Set up the async runtime
-        .insert_resource(EventworkRuntime(
-            TaskPoolBuilder::new().num_threads(2).build()
-        ))
-        // Register messages - now with automatic naming!
-        .register_network_message::<ChatMessage, YourTransportProvider>()
-        // Add your systems
-        .add_systems(Update, handle_chat_messages)
-        .run();
-}
-```
+- **Skills Registry**: Agent-optimized pattern reference with mandatory production patterns
+- **Framework Skills**: Server setup, client hooks, queries, mutations, and authorization
+- **Foundation Skills**: Bevy ECS fundamentals and Leptos UI patterns for industrial applications
+- **Complete Workflows**: End-to-end guidance from architecture through deployment
 
-#### 4. Handle Incoming Messages
+When you invoke a skill like `"Use the pl3xus-development skill to create a robot control application"`, your agent receives the same patterns and practices a senior engineer with deep pl3xus expertise would apply.
 
-```rust
-use eventwork::NetworkData;
+## Core Crates
 
-fn handle_chat_messages(
-    mut messages: MessageReader<NetworkData<ChatMessage>>,
-) {
-    for message in messages.read() {
-        // Access fields directly via Deref
-        println!("{}: {}", message.user, message.message);
-    }
-}
-```
-
-#### 5. Send Messages
-
-```rust
-use eventwork::Network;
-
-fn send_chat_message(
-    net: Res<Network<YourTransportProvider>>,
-) {
-    let message = ChatMessage {
-        user: "Player1".to_string(),
-        message: "Hello, world!".to_string(),
-    };
-
-    // Send to a specific connection
-    net.send(connection_id, message.clone())?;
-
-    // Or broadcast to all connections
-    net.broadcast(message);
-}
-```
-
-> 📚 **Advanced:** Eventwork also supports `OutboundMessage` with `MessageWriter` for precise control over network scheduling. See **[Sending Messages Guide](./docs/guides/sending-messages.md)** for the complete guide on both approaches.
-
-## Examples
-
-Check out the [examples directory](https://github.com/jamescarterbell/bevy_eventwork/tree/master/crates/eventwork/examples) for complete working examples:
-
-- **`server.rs`** - A chat server that broadcasts messages to all connected clients
-- **`client.rs`** - A graphical chat client with Bevy UI
-
-Run the examples:
-```bash
-# Terminal 1 - Start the server
-cargo run --example server -p eventwork
-
-# Terminal 2 - Start a client
-cargo run --example client -p eventwork
-```
-
-For WebSocket examples, see the [`eventwork_websockets` crate](./crates/eventwork_websockets).
-
-## Bevy Version Compatibility
-
-| bevy_eventwork | Bevy | Rust | Notes |
-| :------------: | :--: | :--: | :---: |
-|      1.1       | 0.17 | 1.88 (nightly) | **Current** - See [Rust Nightly Requirement](#rust-nightly-requirement) |
-|      0.9       | 0.16 | 1.85 | Maintenance mode |
-|      0.8       | 0.12 | 1.76 | Maintenance mode |
-|      0.7       | 0.8  | 1.70 | Maintenance mode |
-
-### Rust Nightly Requirement
-
-**Why Nightly?** Bevy 0.17 requires Rust 1.88.0, which hasn't been released to stable yet. This is because Bevy 0.17 uses Rust Edition 2024 and other cutting-edge features.
-
-**When can I use stable?** Once Rust 1.88.0 is released to the stable channel (expected in Q1 2026), you'll be able to switch back to stable Rust.
-
-**How to use nightly:**
-1. Create `rust-toolchain.toml` in your project root:
-   ```toml
-   [toolchain]
-   channel = "nightly"
-   ```
-2. Run `rustup update` to install/update nightly
-
-📖 **For detailed information**, see [Rust Nightly Requirement Guide](./docs/RUST_NIGHTLY_REQUIREMENT.md)
-
-**Note**: Versions not compatible with the latest Bevy are in maintenance mode and will only receive critical bug fixes.
-
-### Crate Version Compatibility
-
-All eventwork crates are versioned together for simplicity:
-
-| Crate | Version | Bevy | Status |
-| :---: | :-----: | :--: | :----: |
-| `eventwork` | 1.1.1 | 0.17 | ✅ Current |
-| `eventwork_common` | 1.1.1 | 0.17 | ✅ Current |
-| `eventwork_websockets` | 1.1.1 | 0.17 | ✅ Current |
-| `eventwork_macros` | 1.1.1 | 0.17 | ✅ Current |
-| `eventwork_memory` | 1.1.1 | 0.17 | ✅ Current |
-
-**Always use matching versions** of all eventwork crates to avoid compatibility issues.
-
-## Supported Platforms
-
-| Platform | Status | Notes |
-| :------: | :----: | :---: |
-| **Linux** | ✅ Fully Supported | Tested on Ubuntu, Debian, Arch |
-| **Windows** | ✅ Fully Supported | Tested on Windows 10/11 |
-| **macOS** | ⚠️ Should Work | Not regularly tested - community feedback welcome! |
-| **WASM** | ✅ Supported | Requires WebSocket transport provider |
-
-**WASM Support**: Use the [`eventwork_websockets`](./crates/eventwork_websockets) transport provider for full WASM compatibility.
+| Crate | Description |
+| :---- | :---------- |
+| [`pl3xus`](./crates/pl3xus) | Core networking library |
+| [`pl3xus_common`](./crates/pl3xus_common) | Shared types and utilities |
+| [`pl3xus_macros`](./crates/pl3xus_macros) | Procedural macros |
+| [`pl3xus_async`](./crates/pl3xus_async) | Async runtime integration |
 
 ## Transport Providers
 
-bevy_eventwork uses a modular transport system. Choose the provider that fits your needs:
+| Provider | Platforms | WASM | Crate |
+| :------- | :-------- | :--: | :---- |
+| TCP | Linux, Windows, macOS | No | Built-in |
+| WebSocket | Linux, Windows, macOS, WASM | Yes | [`pl3xus_websockets`](./crates/pl3xus_websockets) |
+| Memory | All | Yes | [`pl3xus_memory`](./crates/pl3xus_memory) |
 
-| Provider | Platforms | WASM | Status | Crate |
-| :------: | :-------: | :--: | :----: | :---: |
-| **TCP** | Linux, Windows, macOS | ❌ | ✅ Included | Built-in |
-| **WebSocket** | Linux, Windows, macOS, WASM | ✅ | ✅ Available | [`eventwork_websockets`](./crates/eventwork_websockets) |
-| **Memory** | All | ✅ | 🧪 Testing | [`eventwork_memory`](./crates/eventwork_memory) |
+## Sync and Client
 
-### Implementing Custom Transports
+| Crate | Description |
+| :---- | :---------- |
+| [`pl3xus_sync`](./crates/pl3xus_sync) | Server-side ECS component synchronization |
+| [`pl3xus_client`](./crates/pl3xus_client) | Leptos-based reactive web client |
 
-You can implement your own transport layer by implementing the `NetworkProvider` trait. See the [documentation](https://docs.rs/bevy_eventwork/latest/bevy_eventwork/trait.NetworkProvider.html) for details.
+## Bevy Version Compatibility
 
-## Workspace Crates
+| pl3xus | Bevy | Rust |
+| :----: | :--: | :--: |
+| 1.1 | 0.17 | 1.88 (nightly) |
 
-This repository is organized as a Cargo workspace with multiple crates:
+## Supported Platforms
 
-### Core Crates
-
-- **[`eventwork`](./crates/eventwork)** - The main networking library
-- **[`eventwork_common`](./crates/eventwork_common)** - Shared types and utilities
-- **[`eventwork_macros`](./crates/eventwork_macros)** - Procedural macros
-
-### Transport Providers
-
-- **[`eventwork_websockets`](./crates/eventwork_websockets)** - WebSocket transport (WASM + Native)
-- **[`eventwork_memory`](./crates/eventwork_memory)** - In-memory transport for testing
-
-### Sync & Client Crates
-
-- **[`eventwork_sync`](./crates/eventwork_sync)** - Server-side ECS component synchronization
-- **[`eventwork_client`](./crates/eventwork_client)** - Leptos-based reactive web client for eventwork_sync
-
-## Roadmap
-
-### Current Focus
-- ✅ Bevy 0.17 support
-- ✅ Rust 2024 edition
-- ✅ Improved documentation
-- ✅ WebSocket transport provider
-- ✅ ECS component synchronization (eventwork_sync)
-- ✅ Reactive web client (eventwork_client)
-
-### Future Plans
-- 🔄 Message type ID optimization (reduce bandwidth by using numeric IDs instead of strings)
-- 🔄 Enhanced request/response patterns
-- 🔄 Connection pooling and load balancing
-- 🔄 Built-in encryption support
-- 🔄 Metrics and monitoring tools
-- 🔄 RPC-style function calls
-
-### Community Contributions Welcome!
-- Additional transport providers (QUIC, UDP, etc.)
-- Performance optimizations
-- More examples and tutorials
-- Platform-specific testing (especially macOS)
-
-## Contributing
-
-Contributions are welcome! Here's how you can help:
-
-### Ways to Contribute
-
-- 🐛 **Report bugs** - Open an issue with reproduction steps
-- 💡 **Suggest features** - Share your ideas for improvements
-- 📝 **Improve documentation** - Help make the docs clearer
-- 🔧 **Submit PRs** - Fix bugs or implement features
-- 🧪 **Test on different platforms** - Especially macOS!
-- 📦 **Create transport providers** - Implement new network protocols
-
-### Development Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/jamescarterbell/bevy_eventwork.git
-cd bevy_eventwork
-
-# Build the workspace
-cargo build --workspace --all-features
-
-# Run tests
-cargo test --workspace
-
-# Run examples
-cargo run --example server -p eventwork
-cargo run --example client -p eventwork
-```
-
-### Guidelines
-
-- Follow Rust's standard style guidelines (`cargo fmt`)
-- Ensure all tests pass (`cargo test`)
-- Add tests for new features
-- Update documentation for API changes
-- Keep PRs focused on a single change
-
-### Getting Help
-
-- 💬 **Discord**: Find us on the [Bevy Discord](https://discord.gg/bevy) - look for `@SirCarter`
-- 📖 **Documentation**: Check the [online docs](https://docs.rs/bevy_eventwork)
-- 🐛 **Issues**: Browse [existing issues](https://github.com/jamescarterbell/bevy_eventwork/issues) or open a new one
+| Platform | Status |
+| :------- | :----- |
+| Linux | Fully Supported |
+| Windows | Fully Supported |
+| macOS | Supported |
+| WASM | Supported (WebSocket transport) |
 
 ## License
 
-Licensed under either of:
+Licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
-
----
-
-**Built with ❤️ for the Bevy community**
+Copyright 2025 Vertec

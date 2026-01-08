@@ -14,10 +14,10 @@
 //! fn main() {
 //!     App::new()
 //!         .add_plugins(
-//!             ExclusiveControlPlugin::builder()
+//!             ExclusiveControlPlugin::<WebSocketProvider>::builder()
 //!                 .timeout_seconds(30.0)           // 30 second timeout
 //!                 .propagate_to_children(true)     // Control parent = control children
-//!                 .build::<WebSocketProvider>()
+//!                 .build()
 //!         )
 //!         .run();
 //! }
@@ -33,7 +33,7 @@
 //! fn main() {
 //!     App::new()
 //!         // One-liner with defaults: 30 min timeout, propagate to children
-//!         .add_plugins(ExclusiveControlPlugin::default_with_provider::<WebSocketProvider>())
+//!         .add_plugins(ExclusiveControlPlugin::<WebSocketProvider>::default_with_provider())
 //!         .run();
 //! }
 //! ```
@@ -271,18 +271,21 @@ impl Default for ExclusiveControlConfig {
 ///
 /// ```rust,ignore
 /// use pl3xus_sync::control::ExclusiveControlPlugin;
+/// use pl3xus_websockets::WebSocketProvider;
 ///
 /// app.add_plugins(
-///     ExclusiveControlPlugin::builder()
+///     ExclusiveControlPlugin::<WebSocketProvider>::builder()
 ///         .timeout_seconds(300.0)
-///         .build::<WebSocketProvider>()
+///         .build()
 /// );
 /// ```
 ///
 /// # Example (Quick Start)
 ///
 /// ```rust,ignore
-/// app.add_plugins(ExclusiveControlPlugin::default_with_provider::<WebSocketProvider>());
+/// use pl3xus_websockets::WebSocketProvider;
+///
+/// app.add_plugins(ExclusiveControlPlugin::<WebSocketProvider>::default_with_provider());
 /// ```
 pub struct ExclusiveControlPlugin<NP: crate::NetworkProvider> {
     config: ExclusiveControlConfig,

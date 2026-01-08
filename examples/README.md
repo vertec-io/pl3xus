@@ -11,6 +11,7 @@ examples/
 │   ├── demo_types/        # Types for demo
 │   ├── fanuc_types/       # Types for FANUC demo
 │   ├── fanuc_real_types/  # Real FANUC RMI API types
+│   ├── robot_hmi_types/   # Types for robot-hmi example
 │   └── control_demo_types/# Types for control demo
 ├── basic/                 # Basic client-server example
 │   ├── server/            # Bevy ECS server
@@ -18,6 +19,14 @@ examples/
 ├── fanuc/                 # FANUC robot control example
 │   ├── server/            # Bevy ECS server with FANUC simulation
 │   └── client/            # Leptos WASM client
+├── robot-hmi/             # Industrial robot HMI (Pattern 1: Shared Types)
+│   ├── server/            # Bevy ECS server
+│   ├── client/            # Leptos WASM client
+│   └── shared/            # Shared types crate
+├── robot-hmi-advanced/    # Industrial robot HMI (Pattern 3: Multi-Crate Plugins)
+│   ├── server/            # Bevy ECS server
+│   ├── app/               # Leptos WASM client
+│   └── plugins/           # Plugin crates (core, robotics, execution, fanuc, duet)
 ├── control-demo/          # Exclusive control demonstration
 │   └── server/            # Server demonstrating ExclusiveControlPlugin
 └── devtools-demo/         # DevTools demonstration
@@ -89,6 +98,22 @@ Shows how to use `pl3xus_client` for industrial robot control:
 - Robot position and status monitoring
 - Joint angle visualization
 - Mutation support for robot commands
+
+### Robot HMI
+Full-featured industrial robot control application using **Pattern 1: Shared Types Crate**:
+- Complete FANUC robot control interface
+- Connection management, jogging, program execution
+- SQLite database for persistent storage
+- Demonstrates simpler project structure for single-domain applications
+- See [robot-hmi/README.md](robot-hmi/README.md) for details
+
+### Robot HMI Advanced
+Sophisticated industrial robot control application using **Pattern 3: Multi-Crate Plugins**:
+- Multi-device integration (FANUC robot + Duet extruder)
+- Framework/application separation with independent plugin crates
+- Advanced orchestration and execution patterns
+- Demonstrates sophisticated architecture for large-scale applications
+- See [robot-hmi-advanced/README.md](robot-hmi-advanced/README.md) for details
 
 ### Control Demo
 Demonstrates the `ExclusiveControlPlugin` for exclusive control transfer:

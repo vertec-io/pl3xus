@@ -118,6 +118,8 @@ pub use authorization::{
     BatchRegisterRequests,
     BatchRegisterRequestsWithErrorResponse,
     AppBatchRequestRegistrationExt,
+    // System sets
+    TargetedRequestAuthorizationSet,
 };
 
 // Re-export DeferredResponder for async request handling

@@ -6,6 +6,7 @@ members = [
     "crates/pl3xus_common",
     "crates/pl3xus_memory",
     "crates/pl3xus_macros",
+    "crates/pl3xus_async",
     "crates/pl3xus_sync",
     "crates/pl3xus_client",
     "examples/shared/basic_types",
@@ -19,9 +20,9 @@ members = [
     "examples/fanuc/client",
     "examples/devtools-demo/server",
     "examples/control-demo/server",
-    "examples/shared/fanuc_replica_types",
-    "examples/fanuc_rmi_replica/server",
-    "examples/fanuc_rmi_replica/client",
+    "examples/shared/robot_hmi_types",
+    "examples/robot-hmi/server",
+    "examples/robot-hmi/client",
 ]
 
 # Plugin-based structure example is a standalone workspace
@@ -48,6 +49,7 @@ pl3xus_sync = { path = "crates/pl3xus_sync", default-features = false }
 pl3xus_websockets = { path = "crates/pl3xus_websockets" }
 pl3xus_common = { path = "crates/pl3xus_common" }
 pl3xus_macros = { path = "crates/pl3xus_macros" }
+pl3xus_async = { path = "crates/pl3xus_async" }
 
 # Example shared types
 basic_types = { path = "examples/shared/basic_types" }
@@ -55,15 +57,13 @@ demo_types = { path = "examples/shared/demo_types" }
 fanuc_types = { path = "examples/shared/fanuc_types" }
 fanuc_real_types = { path = "examples/shared/fanuc_real_types" }
 control_demo_types = { path = "examples/shared/control_demo_types" }
-fanuc_replica_types = { path = "examples/shared/fanuc_replica_types" }
+robot_hmi_types = { path = "examples/shared/robot_hmi_types" }
 
 # FANUC RMI - shared across plugins with different feature flags
 fanuc_rmi = { git = "https://github.com/vertec-io/Fanuc_RMI_API.git" }
 
 # Common dependencies
 bevy = { version = "0.17", default-features = false, features = ["multi_threaded", "bevy_log"] }
-# bevy-tokio-tasks = { path = "/home/apino/dev/async_bevy_web/crates/bevy_tokio_tasks" }
-bevy-tokio-tasks = { git = "https://github.com/vertec-io/async_bevy_web.git", package = "bevy-tokio-tasks"}
 bincode = { version = "2.0.1", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.28", features = ["full"] }

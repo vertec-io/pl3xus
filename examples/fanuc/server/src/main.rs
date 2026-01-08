@@ -5,13 +5,13 @@ use std::time::Duration;
 use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
 use bevy::tasks::{TaskPool, TaskPoolBuilder};
-use bevy_tokio_tasks::{TokioTasksPlugin, TokioTasksRuntime};
+use pl3xus_async::{TokioTasksPlugin, TokioTasksRuntime};
 use pl3xus::{Pl3xusRuntime, Network};
 use pl3xus_sync::{AppPl3xusSyncExt, Pl3xusSyncPlugin};
 use pl3xus_websockets::{NetworkSettings, WebSocketProvider};
 use fanuc_real_types::{RobotPosition, RobotStatus, JointAngles, RobotInfo, MotionCommand, JogCommand, JogAxis, JogDirection};
 use fanuc_rmi::{
-    drivers::{FanucDriver, FanucDriverConfig},
+    drivers::{FanucDriver, FanucDriverConfig, LogLevel},
     dto,
     packets::PacketPriority,
     SpeedType,
@@ -110,6 +110,7 @@ fn setup_driver(runtime: ResMut<TokioTasksRuntime>) {
         addr: "127.0.0.1".to_string(),
         port: 16001,
         max_messages: 30,
+        log_level: LogLevel::Info,
     };
 
     // Spawn async task to connect to the driver
@@ -180,12 +181,12 @@ fn process_jog_commands(
         };
 
         match jog_cmd.axis {
-            JogAxis::X => position_delta.x = distance,
-            JogAxis::Y => position_delta.y = distance,
-            JogAxis::Z => position_delta.z = distance,
-            JogAxis::W => position_delta.w = distance,
-            JogAxis::P => position_delta.p = distance,
-            JogAxis::R => position_delta.r = distance,
+            JogAxis::X => position_delta.x = distance as f64,
+            JogAxis::Y => position_delta.y = distance as f64,
+            JogAxis::Z => position_delta.z = distance as f64,
+            JogAxis::W => position_delta.w = distance as f64,
+            JogAxis::P => position_delta.p = distance as f64,
+            JogAxis::R => position_delta.r = distance as f64,
         }
 
         // Create a LinearRelative instruction for incremental motion

@@ -10,7 +10,7 @@ description = "Event based networking library for Bevy"
 readme = "README.md"
 repository = "https://github.com/jamescarterbell/pl3xus"
 license = "MIT"
-categories = ["game-development", "network-programming"]
+categories = ["industrial-automation", "network-programming"]
 autoexamples = false
 resolver = "2"
 
@@ -18,7 +18,7 @@ resolver = "2"
 maintenance = { status = "actively-developed" }
 
 [features]
-default = ["tcp", "cache_messages"]
+default = ["tcp"]
 tcp = ["async-net"]
 cache_messages = []
 dynamic_linking = ["bevy/dynamic_linking"]

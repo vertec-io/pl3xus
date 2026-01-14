@@ -1,6 +1,6 @@
 [package]
 name = "pl3xus_client"
-version = "0.1.1"
+version = "0.1.2"
 edition.workspace = true
 authors = ["Arturo Pino <apino@vertec.io>"]
 description = "High-level reactive client library for pl3xus_sync with Leptos integration"
@@ -15,7 +15,8 @@ bincode = { version = "2.0.1", features = ["serde"] }
 
 # Leptos dependencies (match devtools version for compatibility)
 leptos = { version = "0.8.12", features = ["csr"] }
-leptos-use = "0.16.3"
+# Only use the websocket feature to avoid pulling in all leptos-use exports
+leptos-use = { version = "0.16.3", default-features = false, features = ["use_websocket"] }
 codee = "0.3"
 
 # Pl3xus dependencies

@@ -2710,44 +2710,56 @@ where
                         has_fetched.set(false);
                     }
 
+                    // Get the shared cache state for this query
+                    let cache_state = ctx.get_or_create_query_cache(&query_type_for_fetch, &current_key);
+                    let cached = cache_state.get_untracked();
+
                     // Check if we need to fetch
                     let should_fetch = if has_fetched.get_untracked() {
-                        // Already fetched for this request
+                        // Already fetched for this request in this hook instance
                         false
-                    } else {
-                        // Check cache for existing data
-                        let cache_state = ctx.get_or_create_query_cache(&query_type_for_fetch, &current_key);
-                        let cached = cache_state.get_untracked();
-
-                        if let Some(ref bytes) = cached.data {
-                            // Try to restore from cache
-                            if let Ok((data, _)) = bincode::serde::decode_from_slice::<R::ResponseMessage, _>(
-                                bytes,
-                                bincode::config::standard(),
-                            ) {
-                                state.update(|s| {
-                                    s.data = Some(data);
-                                    s.error = cached.error.clone();
-                                    s.is_fetching = false;
-                                    s.is_stale = cached.is_stale;
-                                });
-                                has_fetched.set(true);
-                                #[cfg(target_arch = "wasm32")]
-                                leptos::logging::log!(
-                                    "[use_query_keyed] Restored '{}' from cache (key: {})",
-                                    query_type_for_fetch,
-                                    current_key
-                                );
-                                false // Don't fetch, we have cached data
-                            } else {
-                                !cached.is_fetching // Fetch if not already fetching
-                            }
+                    } else if cached.is_fetching {
+                        // Another hook instance is already fetching this query
+                        #[cfg(target_arch = "wasm32")]
+                        leptos::logging::log!(
+                            "[use_query_keyed] '{}' already fetching, skipping (key: {})",
+                            query_type_for_fetch,
+                            current_key
+                        );
+                        false
+                    } else if let Some(ref bytes) = cached.data {
+                        // Try to restore from cache
+                        if let Ok((data, _)) = bincode::serde::decode_from_slice::<R::ResponseMessage, _>(
+                            bytes,
+                            bincode::config::standard(),
+                        ) {
+                            state.update(|s| {
+                                s.data = Some(data);
+                                s.error = cached.error.clone();
+                                s.is_fetching = false;
+                                s.is_stale = cached.is_stale;
+                            });
+                            has_fetched.set(true);
+                            #[cfg(target_arch = "wasm32")]
+                            leptos::logging::log!(
+                                "[use_query_keyed] Restored '{}' from cache (key: {})",
+                                query_type_for_fetch,
+                                current_key
+                            );
+                            false // Don't fetch, we have cached data
                         } else {
-                            !cached.is_fetching // Fetch if not already fetching
+                            true // Cache data corrupted, refetch
                         }
+                    } else {
+                        true // No cached data, need to fetch
                     };
 
                     if should_fetch {
+                        // Mark as fetching in the SHARED cache BEFORE sending request
+                        // This prevents other hook instances from also fetching
+                        cache_state.update(|s| {
+                            s.is_fetching = true;
+                        });
                         #[cfg(target_arch = "wasm32")]
                         leptos::logging::log!(
                             "[use_query_keyed] Fetching '{}' (key: {})",

@@ -1,6 +1,6 @@
 [package]
 name = "pl3xus_client"
-version = "0.1.2"
+version = "0.1.3"
 edition.workspace = true
 authors = ["Arturo Pino <apino@vertec.io>"]
 description = "High-level reactive client library for pl3xus_sync with Leptos integration"

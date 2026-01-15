@@ -2621,14 +2621,27 @@ where
     // Track the last invalidation counter we've seen
     let last_invalidation = RwSignal::new(0u64);
 
+    // Track if we've already initiated a fetch for the current request
+    let has_fetched = RwSignal::new(false);
+
+    // Track the last request key to detect parameter changes
+    let last_request_key = RwSignal::new(Option::<String>::None);
+
     // Use the underlying request hook for actual fetching
     let (send, request_state) = use_request::<R>();
 
     // Track the current request to detect changes
     let current_request = Memo::new(move |_| request_fn());
 
-    // Fetch function
-    let do_fetch = {
+    // Generate a query key from a request for cache lookup
+    fn generate_query_key<R: serde::Serialize>(req: &R) -> String {
+        bincode::serde::encode_to_vec(req, bincode::config::standard())
+            .map(|bytes| bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>())
+            .unwrap_or_else(|_| "default".to_string())
+    }
+
+    // Fetch function - force fetches without checking cache
+    let do_fetch_force = {
         let current_request = current_request;
         move || {
             if let Some(req) = current_request.get_untracked() {
@@ -2638,6 +2651,7 @@ where
                         s.is_stale = true;
                     }
                 });
+                has_fetched.set(true);
                 send(req);
             } else {
                 // No request (e.g., no robot selected) - clear state
@@ -2647,33 +2661,110 @@ where
                     s.is_fetching = false;
                     s.is_stale = false;
                 });
+                has_fetched.set(false);
             }
         }
     };
 
     // Store refetch function
-    let refetch_fn = StoredValue::new(Box::new(do_fetch.clone()) as Box<dyn Fn() + Send + Sync>);
+    let refetch_fn = StoredValue::new(Box::new(do_fetch_force.clone()) as Box<dyn Fn() + Send + Sync>);
 
-    // Watch for request parameter changes and refetch - wait for WebSocket to be open
+    // Watch for request parameter changes and fetch - wait for WebSocket to be open
+    // This uses caching to avoid duplicate fetches for the same parameters
     let ready_state = ctx.ready_state;
+    let query_type_for_fetch = query_type.clone();
     Effect::new({
-        let do_fetch = do_fetch.clone();
+        let do_fetch_force = do_fetch_force.clone();
+        let ctx = ctx.clone();
         move |_| {
             // Wait for WebSocket to be open before fetching
             if ready_state.get() != crate::ConnectionReadyState::Open {
                 return;
             }
-            // Subscribe to the request signal
-            let _req = current_request.get();
-            // Fetch with new parameters
-            do_fetch();
+
+            // Get current request (subscribes to changes)
+            let req = current_request.get();
+
+            match req {
+                None => {
+                    // No request - clear state
+                    state.update(|s| {
+                        s.data = None;
+                        s.error = None;
+                        s.is_fetching = false;
+                        s.is_stale = false;
+                    });
+                    last_request_key.set(None);
+                    has_fetched.set(false);
+                }
+                Some(ref request) => {
+                    let current_key = generate_query_key(request);
+                    let prev_key = last_request_key.get_untracked();
+
+                    // Check if request parameters changed
+                    let params_changed = prev_key.as_ref() != Some(&current_key);
+
+                    if params_changed {
+                        // New request parameters - update the key
+                        last_request_key.set(Some(current_key.clone()));
+                        has_fetched.set(false);
+                    }
+
+                    // Check if we need to fetch
+                    let should_fetch = if has_fetched.get_untracked() {
+                        // Already fetched for this request
+                        false
+                    } else {
+                        // Check cache for existing data
+                        let cache_state = ctx.get_or_create_query_cache(&query_type_for_fetch, &current_key);
+                        let cached = cache_state.get_untracked();
+
+                        if let Some(ref bytes) = cached.data {
+                            // Try to restore from cache
+                            if let Ok((data, _)) = bincode::serde::decode_from_slice::<R::ResponseMessage, _>(
+                                bytes,
+                                bincode::config::standard(),
+                            ) {
+                                state.update(|s| {
+                                    s.data = Some(data);
+                                    s.error = cached.error.clone();
+                                    s.is_fetching = false;
+                                    s.is_stale = cached.is_stale;
+                                });
+                                has_fetched.set(true);
+                                #[cfg(target_arch = "wasm32")]
+                                leptos::logging::log!(
+                                    "[use_query_keyed] Restored '{}' from cache (key: {})",
+                                    query_type_for_fetch,
+                                    current_key
+                                );
+                                false // Don't fetch, we have cached data
+                            } else {
+                                !cached.is_fetching // Fetch if not already fetching
+                            }
+                        } else {
+                            !cached.is_fetching // Fetch if not already fetching
+                        }
+                    };
+
+                    if should_fetch {
+                        #[cfg(target_arch = "wasm32")]
+                        leptos::logging::log!(
+                            "[use_query_keyed] Fetching '{}' (key: {})",
+                            query_type_for_fetch,
+                            current_key
+                        );
+                        do_fetch_force();
+                    }
+                }
+            }
         }
     });
 
-    // Watch for request completion
+    // Watch for request completion - update both cache and local state
+    let query_type_for_completion = query_type.clone();
     Effect::new({
-        #[allow(unused_variables)]
-        let query_type_for_log = query_type.clone();
+        let ctx = ctx.clone();
         move |_| {
             let req_state = request_state.get();
 
@@ -2681,13 +2772,27 @@ where
                 return;
             }
 
+            // Get current request key for cache update
+            let current_key = if let Some(ref req) = current_request.get_untracked() {
+                generate_query_key(req)
+            } else {
+                return;
+            };
+
             if let Some(ref error) = req_state.error {
                 #[cfg(target_arch = "wasm32")]
                 leptos::logging::log!(
                     "[use_query_keyed] Query '{}' error: {}",
-                    query_type_for_log,
+                    query_type_for_completion,
                     error
                 );
+                // Update cache
+                let cache_state = ctx.get_or_create_query_cache(&query_type_for_completion, &current_key);
+                cache_state.update(|s| {
+                    s.is_fetching = false;
+                    s.error = Some(error.clone());
+                });
+                // Update local state
                 state.update(|s| {
                     s.is_fetching = false;
                     s.error = Some(error.clone());
@@ -2695,9 +2800,20 @@ where
             } else if let Some(ref data) = req_state.data {
                 #[cfg(target_arch = "wasm32")]
                 leptos::logging::log!(
-                    "[use_query_keyed] Query '{}' received data, updating state",
-                    query_type_for_log
+                    "[use_query_keyed] Query '{}' received data, updating state and cache",
+                    query_type_for_completion
                 );
+                // Update cache
+                if let Ok(bytes) = bincode::serde::encode_to_vec(data, bincode::config::standard()) {
+                    let cache_state = ctx.get_or_create_query_cache(&query_type_for_completion, &current_key);
+                    cache_state.update(|s| {
+                        s.data = Some(bytes);
+                        s.error = None;
+                        s.is_fetching = false;
+                        s.is_stale = false;
+                    });
+                }
+                // Update local state
                 state.update(|s| {
                     s.data = Some(data.clone());
                     s.error = None;
@@ -2711,34 +2827,21 @@ where
     // Watch for server-side invalidation
     Effect::new({
         let query_type = query_type.clone();
-        let do_fetch = do_fetch.clone();
+        let do_fetch_force = do_fetch_force.clone();
         move |_| {
             let invalidations = ctx.query_invalidations.get();
-            #[cfg(target_arch = "wasm32")]
-            leptos::logging::log!(
-                "[use_query_keyed] Checking invalidations for '{}', map has {} entries: {:?}",
-                query_type,
-                invalidations.len(),
-                invalidations.keys().collect::<Vec<_>>()
-            );
             if let Some(&counter) = invalidations.get(&query_type) {
                 let last = last_invalidation.get_untracked();
-                #[cfg(target_arch = "wasm32")]
-                leptos::logging::log!(
-                    "[use_query_keyed] Query '{}' counter={}, last={}",
-                    query_type,
-                    counter,
-                    last
-                );
                 if counter > last {
                     last_invalidation.set(counter);
+                    has_fetched.set(false); // Reset so we refetch
                     // Server invalidated this query, refetch
                     #[cfg(target_arch = "wasm32")]
                     leptos::logging::log!(
                         "[use_query_keyed] Query '{}' invalidated, refetching...",
                         query_type
                     );
-                    do_fetch();
+                    do_fetch_force();
                 }
             }
         }

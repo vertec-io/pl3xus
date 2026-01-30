@@ -1178,6 +1178,10 @@ where
                 // that create Request<TargetedRequest<T>> from incoming network data,
                 // but before Update systems that handle AuthorizedRequest<T>.
                 // We use RunFixedMainLoop as an early-running marker set in Update.
+                debug!(
+                    "[pl3xus_sync::authorization] Registering AuthorizedRequest<{}> message type",
+                    std::any::type_name::<T>()
+                );
                 self.app.add_message::<AuthorizedRequest<T>>();
                 self.app
                     .add_systems(Update, authorize_targeted_requests_with_error_response::<T, NP>

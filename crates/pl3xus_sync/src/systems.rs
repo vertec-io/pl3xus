@@ -73,6 +73,10 @@ pub(crate) fn install<NP: NetworkProvider>(app: &mut App) {
         world.contains_resource::<ConflationQueue>()
     );
 
+    // Register sync messages with pl3xus BEFORE adding systems that use them.
+    // In Bevy 0.17, MessageReader<T> requires T to be registered before the system is added.
+    register_network_messages::<NP>(app);
+
     app.configure_sets(
             Update,
             (
@@ -120,9 +124,6 @@ pub(crate) fn install<NP: NetworkProvider>(app: &mut App) {
             Update,
             flush_conflation_queue::<NP>.in_set(Pl3xusSyncSystems::Outbound),
         );
-
-    // Register sync messages with pl3xus so they can be transported
-    register_network_messages::<NP>(app);
 }
 
 fn register_network_messages<NP: NetworkProvider>(app: &mut App) {

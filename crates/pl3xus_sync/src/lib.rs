@@ -317,7 +317,16 @@ where
     {
         self.config.has_mutation_handler = true;
 
-        // Add the handler system in the appropriate set
+        // IMPORTANT: Register BOTH message types BEFORE adding the system.
+        // In Bevy 0.17+, MessageReader<T> parameters require the message to be
+        // registered before the system is added. Since we don't know if targeted()
+        // will be called (which determines whether AuthorizedComponentMutation<T>
+        // or ComponentMutation<T> is used), we register both. The overhead is
+        // minimal and this ensures the handler system can be validated properly.
+        self.app.add_message::<AuthorizedComponentMutation<T>>();
+        self.app.add_message::<ComponentMutation<T>>();
+
+        // Add the handler system (now safe because messages are registered)
         self.app.add_systems(
             Update,
             handler,

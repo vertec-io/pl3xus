@@ -2780,6 +2780,16 @@ where
         move |_| {
             let req_state = request_state.get();
 
+            #[cfg(target_arch = "wasm32")]
+            leptos::logging::log!(
+                "[use_query_keyed] Completion effect for '{}': is_idle={}, is_loading={}, has_data={}, has_error={}",
+                query_type_for_completion,
+                req_state.is_idle(),
+                req_state.is_loading(),
+                req_state.data.is_some(),
+                req_state.error.is_some()
+            );
+
             if req_state.is_idle() || req_state.is_loading() {
                 return;
             }
@@ -2832,6 +2842,48 @@ where
                     s.is_fetching = false;
                     s.is_stale = false;
                 });
+            }
+        }
+    });
+
+    // Watch for cache changes from other instances and propagate to local state
+    // This handles the case where another component using the same query updates the cache
+    Effect::new({
+        let ctx = ctx.clone();
+        let query_type = query_type.clone();
+        move |_| {
+            // Get the current request key
+            let current_key = if let Some(ref req) = current_request.get_untracked() {
+                generate_query_key(req)
+            } else {
+                return;
+            };
+
+            // Get cache state WITH tracking - this creates a reactive dependency
+            let cache_state = ctx.get_or_create_query_cache(&query_type, &current_key);
+            let cached = cache_state.get();
+
+            // If cache has data and local state doesn't, sync from cache
+            if cached.data.is_some() && state.get_untracked().data.is_none() {
+                if let Some(ref bytes) = cached.data {
+                    if let Ok((data, _)) = bincode::serde::decode_from_slice::<R::ResponseMessage, _>(
+                        bytes,
+                        bincode::config::standard(),
+                    ) {
+                        #[cfg(target_arch = "wasm32")]
+                        leptos::logging::log!(
+                            "[use_query_keyed] Cache sync for '{}': restoring {} bytes to local state",
+                            query_type,
+                            bytes.len()
+                        );
+                        state.update(|s| {
+                            s.data = Some(data);
+                            s.error = cached.error.clone();
+                            s.is_fetching = false;
+                            s.is_stale = cached.is_stale;
+                        });
+                    }
+                }
             }
         }
     });

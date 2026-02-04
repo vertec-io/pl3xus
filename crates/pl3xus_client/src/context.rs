@@ -1604,11 +1604,21 @@ impl SyncContext {
         let bytes = state.response_bytes.as_ref()?;
 
         match bincode::serde::decode_from_slice::<R::ResponseMessage, _>(bytes, bincode::config::standard()) {
-            Ok((response, _)) => Some(response),
+            Ok((response, _)) => {
+                #[cfg(target_arch = "wasm32")]
+                leptos::logging::log!(
+                    "[SyncContext::get_response] SUCCESS - deserialized {} bytes for request {}",
+                    bytes.len(),
+                    request_id
+                );
+                Some(response)
+            }
             Err(_e) => {
                 #[cfg(target_arch = "wasm32")]
-                leptos::logging::error!(
-                    "[SyncContext::get_response] Failed to deserialize response: {:?}",
+                leptos::logging::log!(
+                    "[SyncContext::get_response] FAILED to deserialize {} bytes for request {}: {:?}",
+                    bytes.len(),
+                    request_id,
                     _e
                 );
                 None

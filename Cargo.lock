@@ -5108,7 +5108,7 @@ dependencies = [
 
 [[package]]
 name = "pl3xus_sync"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bevy",
  "bincode 2.0.1",

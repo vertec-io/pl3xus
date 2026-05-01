@@ -28,7 +28,7 @@ use crate::registry::{
     ConflationQueue,
     short_type_name,
 };
-use crate::subscription::{broadcast_component_changes, handle_client_messages};
+use crate::subscription::{broadcast_component_changes, handle_client_messages, track_sync_client_activity};
 
 /// System set for sync-related systems so downstream apps can schedule around
 /// them if needed.
@@ -90,6 +90,12 @@ pub(crate) fn install<NP: NetworkProvider>(app: &mut App) {
         .add_systems(
             Update,
             handle_client_messages::<NP>.in_set(Pl3xusSyncSystems::Inbound),
+        )
+        // Refresh ExclusiveControl lease activity from any client traffic.
+        // No-op when ClientActivity isn't installed (i.e. no ExclusiveControlPlugin).
+        .add_systems(
+            Update,
+            track_sync_client_activity::<NP>.in_set(Pl3xusSyncSystems::Inbound),
         )
         // Send Welcome message to newly connected clients (must run before cleanup_disconnected
         // since both read NetworkEvent and events can only be read once)

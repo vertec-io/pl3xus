@@ -1,6 +1,6 @@
 [package]
 name = "pl3xus_sync"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["Arturo Pino <apino@vertec.io>"]
 description = "Reflection-driven synchronization middleware for Bevy ECS servers over pl3xus."

@@ -62,8 +62,10 @@
 //! ```
 
 use bevy::prelude::*;
+use bevy::time::common_conditions::on_timer;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use crate::authorization::{DefaultEntityAccessPolicy, EntityAccessPolicy};
 
@@ -133,6 +135,46 @@ impl SubConnections {
                 self.parent_of.remove(&sub_id);
             }
         }
+    }
+}
+
+// ============================================================================
+// CLIENT ACTIVITY TRACKING
+// ============================================================================
+
+/// Resource that tracks the most recent inbound message timestamp per connection.
+///
+/// Updated by lightweight tracker systems whenever any client→server message
+/// is observed (control requests, sub-connection associations, sync messages).
+/// Consulted by [`timeout_inactive_control`] so that *any* client activity
+/// — not just `ControlRequest::Take` keepalives — refreshes a held lease.
+///
+/// Stored as a per-connection map (not per-entity) so the tracker is O(1) per
+/// inbound message and avoids triggering Bevy change detection on
+/// `EntityControl` for every mutation/subscription/query the client sends.
+#[derive(Resource, Default, Debug)]
+pub struct ClientActivity {
+    last_seen: HashMap<ConnectionId, f32>,
+}
+
+impl ClientActivity {
+    /// Record activity from a connection at the given timestamp (seconds).
+    pub fn touch(&mut self, id: ConnectionId, now: f32) {
+        // Server-originated messages (id == 0) aren't subject to the timeout.
+        if id.id == 0 {
+            return;
+        }
+        self.last_seen.insert(id, now);
+    }
+
+    /// Last known activity timestamp for a connection, if any.
+    pub fn last_seen(&self, id: ConnectionId) -> Option<f32> {
+        self.last_seen.get(&id).copied()
+    }
+
+    /// Drop a connection's entry — call on disconnect.
+    pub fn forget(&mut self, id: ConnectionId) {
+        self.last_seen.remove(&id);
     }
 }
 
@@ -332,6 +374,11 @@ impl<NP: crate::NetworkProvider> Plugin for ExclusiveControlPlugin<NP> {
         // Initialize sub-connections tracking
         app.init_resource::<SubConnections>();
 
+        // Initialize per-connection activity tracker. This is the source of
+        // truth for "is the controlling client still alive" — see
+        // `timeout_inactive_control` for the read path.
+        app.init_resource::<ClientActivity>();
+
         // Register messages as Bevy messages
         app.add_message::<ControlRequest>();
         app.add_message::<ControlResponse>();
@@ -355,19 +402,28 @@ impl<NP: crate::NetworkProvider> Plugin for ExclusiveControlPlugin<NP> {
             },
         )));
 
-        // Add the control handling systems
+        // Add the control handling systems.
+        // `timeout_inactive_control` runs on a 1Hz cadence (see below) — with
+        // a 30-minute default timeout, sub-second precision is unnecessary and
+        // pulling it out of the per-frame Update path eliminates ~60×/s sweeps
+        // over every controlled entity.
         app.add_systems(
             Update,
             (
+                track_control_activity::<NP>,
                 handle_sub_connection_requests::<NP>,
                 handle_control_requests::<NP>,
                 update_entity_control_sub_connections,
                 cleanup_disconnected_control::<NP>,
-                timeout_inactive_control,
                 propagate_control_to_new_children,
                 notify_control_changes,
             )
                 .chain(),
+        );
+
+        app.add_systems(
+            Update,
+            timeout_inactive_control.run_if(on_timer(Duration::from_secs(1))),
         );
     }
 }
@@ -549,6 +605,7 @@ impl AppExclusiveControlExt for App {
 
         // Initialize sub-connections tracking
         self.init_resource::<SubConnections>();
+        self.init_resource::<ClientActivity>();
 
         // Register messages with the network provider
         self.register_network_message::<ControlRequest, NP>();
@@ -560,14 +617,19 @@ impl AppExclusiveControlExt for App {
         self.add_systems(
             Update,
             (
+                track_control_activity::<NP>,
                 handle_sub_connection_requests::<NP>,
                 handle_control_requests::<NP>,
                 update_entity_control_sub_connections,
                 cleanup_disconnected_control::<NP>,
-                timeout_inactive_control,
                 notify_control_changes,
             )
                 .chain(),
+        );
+
+        self.add_systems(
+            Update,
+            timeout_inactive_control.run_if(on_timer(Duration::from_secs(1))),
         );
 
         self
@@ -576,6 +638,32 @@ impl AppExclusiveControlExt for App {
 
 use bevy::ecs::message::MessageReader;
 use pl3xus::{Network, NetworkData};
+
+/// System that records inbound `ControlRequest` and `AssociateSubConnection`
+/// activity into [`ClientActivity`].
+///
+/// This runs alongside the regular request handlers. Bevy's `MessageReader`
+/// cursor is per-system, so reading here doesn't consume messages from the
+/// perspective of the handlers.
+///
+/// `SyncClientMessage` activity (mutations, subscriptions, queries) is tracked
+/// separately by `track_sync_client_activity` in `subscription.rs` so
+/// `ExclusiveControlPlugin` doesn't need to depend on `Pl3xusSyncPlugin` having
+/// registered that message type.
+fn track_control_activity<NP: crate::NetworkProvider>(
+    mut control_msgs: MessageReader<NetworkData<ControlRequest>>,
+    mut subconn_msgs: MessageReader<NetworkData<AssociateSubConnection>>,
+    mut activity: ResMut<ClientActivity>,
+    time: Res<Time>,
+) {
+    let now = time.elapsed_secs();
+    for m in control_msgs.read() {
+        activity.touch(*m.source(), now);
+    }
+    for m in subconn_msgs.read() {
+        activity.touch(*m.source(), now);
+    }
+}
 
 /// System that handles control take/release requests from clients.
 ///
@@ -786,12 +874,24 @@ fn update_entity_control_sub_connections(
 
 /// System that automatically releases control from inactive clients.
 ///
-/// This system checks all entities with `EntityControl` and resets control
-/// to default if the client has been inactive for longer than the configured timeout.
-/// Skips entities that are already in default state (no active controller).
+/// The "last activity" for a held lease is the most recent of:
+///   - the moment control was granted (`EntityControl.last_activity`)
+///   - the controlling client's most recent inbound message
+///   - any associated sub-connection's most recent inbound message
+///
+/// This means *any* traffic from the controlling client (mutations,
+/// subscriptions, queries, control requests, sub-connection associations)
+/// refreshes the lease — not just `ControlRequest::Take` keepalives.
+///
+/// Activity tracking lives in the [`ClientActivity`] resource (per-connection,
+/// not per-entity) so the inbound hot path is O(1) per message and doesn't
+/// trigger Bevy change detection on `EntityControl`. This system runs on a
+/// 1Hz cadence (see plugin wiring) — sub-second precision is not required for
+/// a feature whose default timeout is 30 minutes.
 fn timeout_inactive_control(
     mut entities: Query<(Entity, &mut EntityControl, Option<&Children>)>,
     config: Res<ExclusiveControlConfig>,
+    activity: Res<ClientActivity>,
     mut commands: Commands,
     time: Res<Time>,
 ) {
@@ -807,7 +907,23 @@ fn timeout_inactive_control(
             continue;
         }
 
-        let inactive_duration = current_time - control.last_activity;
+        // Effective last-activity: max of the grant timestamp, the controller's
+        // most recent inbound message, and any sub-connection's recent activity.
+        let mut effective = control.last_activity;
+        if let Some(t) = activity.last_seen(control.client_id) {
+            if t > effective {
+                effective = t;
+            }
+        }
+        for sub in &control.sub_connection_ids {
+            if let Some(t) = activity.last_seen(*sub) {
+                if t > effective {
+                    effective = t;
+                }
+            }
+        }
+
+        let inactive_duration = current_time - effective;
 
         if inactive_duration > timeout_seconds {
             info!(
@@ -843,6 +959,7 @@ fn cleanup_disconnected_control<NP: crate::NetworkProvider>(
     mut entities: Query<(Entity, &mut EntityControl, Option<&Children>)>,
     config: Res<ExclusiveControlConfig>,
     mut sub_connections: ResMut<SubConnections>,
+    mut activity: ResMut<ClientActivity>,
     mut commands: Commands,
 ) {
     for event in events.read() {
@@ -851,6 +968,10 @@ fn cleanup_disconnected_control<NP: crate::NetworkProvider>(
                 "[ExclusiveControl] Client {:?} disconnected, releasing any controlled entities",
                 disconnected_id
             );
+
+            // Drop activity entry so the per-connection map doesn't accumulate
+            // stale entries over the life of the server.
+            activity.forget(*disconnected_id);
 
             // Clean up sub-connections tracking
             // If this was a parent, remove all its sub-connections
@@ -936,5 +1057,171 @@ fn propagate_control_to_new_children(
             );
             commands.entity(child_entity).insert(parent_control.clone());
         }
+    }
+}
+
+// ============================================================================
+// TESTS
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn cid(n: u32) -> ConnectionId {
+        ConnectionId { id: n }
+    }
+
+    /// Build a minimal app wired with the timeout sweep but no network /
+    /// MinimalPlugins, so we can deterministically advance `Time` ourselves.
+    fn make_app(timeout_seconds: f32) -> App {
+        let mut app = App::new();
+        app.insert_resource(ExclusiveControlConfig {
+            timeout_seconds: Some(timeout_seconds),
+            propagate_to_children: false,
+        });
+        app.init_resource::<ClientActivity>();
+        app.insert_resource(Time::<()>::default());
+        app.add_systems(Update, timeout_inactive_control);
+        app
+    }
+
+    fn advance(app: &mut App, secs: f32) {
+        let mut time = app.world_mut().resource_mut::<Time>();
+        time.advance_by(Duration::from_secs_f32(secs));
+    }
+
+    fn spawn_controlled(
+        app: &mut App,
+        client: ConnectionId,
+        sub_connection_ids: Vec<ConnectionId>,
+    ) -> Entity {
+        app.world_mut()
+            .spawn(EntityControl {
+                client_id: client,
+                sub_connection_ids,
+                last_activity: 0.0,
+            })
+            .id()
+    }
+
+    fn current_controller(app: &App, entity: Entity) -> ConnectionId {
+        app.world().entity(entity).get::<EntityControl>().unwrap().client_id
+    }
+
+    /// Idempotent `Take` should refresh the lease via the activity tracker
+    /// — this is the original bug from `pl3xus-exclusive-control-refresh.md`.
+    #[test]
+    fn idempotent_take_refreshes_lease_via_activity() {
+        let mut app = make_app(2.0);
+        let entity = spawn_controlled(&mut app, cid(1), vec![]);
+
+        advance(&mut app, 1.5);
+        app.world_mut().resource_mut::<ClientActivity>().touch(cid(1), 1.5);
+
+        advance(&mut app, 1.0); // t = 2.5; only 1.0s since refresh
+        app.update();
+
+        assert_eq!(
+            current_controller(&app, entity),
+            cid(1),
+            "lease should still be held — Take observed at t=1.5, sweep at t=2.5"
+        );
+    }
+
+    /// Any client message (Mutate/Subscription/Query) — not just Take —
+    /// should refresh the lease. The tracker collapses all of these into a
+    /// single `activity.touch()`, so we exercise the same code path.
+    #[test]
+    fn mutate_refreshes_lease_via_activity() {
+        let mut app = make_app(2.0);
+        let entity = spawn_controlled(&mut app, cid(1), vec![]);
+
+        advance(&mut app, 1.5);
+        app.world_mut().resource_mut::<ClientActivity>().touch(cid(1), 1.5);
+
+        advance(&mut app, 1.0);
+        app.update();
+
+        assert_eq!(current_controller(&app, entity), cid(1));
+    }
+
+    /// Sub-connection traffic (e.g. a separate browser tab attached to the
+    /// primary connection) should also refresh the parent's lease.
+    #[test]
+    fn sub_connection_activity_refreshes_lease() {
+        let mut app = make_app(2.0);
+        let entity = spawn_controlled(&mut app, cid(1), vec![cid(2)]);
+
+        // Primary client is silent; only the sub-connection sends traffic.
+        advance(&mut app, 1.8);
+        app.world_mut().resource_mut::<ClientActivity>().touch(cid(2), 1.8);
+
+        advance(&mut app, 0.7); // t = 2.5
+        app.update();
+
+        assert_eq!(
+            current_controller(&app, entity),
+            cid(1),
+            "sub-connection activity should keep the parent's lease alive"
+        );
+    }
+
+    /// A client that genuinely goes silent past the timeout should lose
+    /// control — this guards against accidentally never-revoking.
+    #[test]
+    fn true_inactivity_revokes_after_timeout() {
+        let mut app = make_app(2.0);
+        let entity = spawn_controlled(&mut app, cid(1), vec![]);
+
+        advance(&mut app, 2.5);
+        app.update();
+
+        assert_eq!(
+            current_controller(&app, entity).id,
+            0,
+            "with no activity, lease should be revoked after timeout"
+        );
+    }
+
+    /// Activity from one client must not refresh another client's lease.
+    #[test]
+    fn unrelated_client_activity_does_not_refresh_lease() {
+        let mut app = make_app(2.0);
+        let entity = spawn_controlled(&mut app, cid(1), vec![]);
+
+        // Some other client (3) is busy; client 1 (the controller) is silent.
+        advance(&mut app, 1.5);
+        app.world_mut().resource_mut::<ClientActivity>().touch(cid(3), 1.5);
+
+        advance(&mut app, 1.0); // t = 2.5
+        app.update();
+
+        assert_eq!(
+            current_controller(&app, entity).id,
+            0,
+            "activity from a non-controlling client must not extend the lease"
+        );
+    }
+
+    /// `forget` drops the entry so the activity map doesn't leak across
+    /// long-running sessions.
+    #[test]
+    fn disconnect_forgets_activity_entry() {
+        let mut activity = ClientActivity::default();
+        activity.touch(cid(7), 10.0);
+        assert_eq!(activity.last_seen(cid(7)), Some(10.0));
+        activity.forget(cid(7));
+        assert_eq!(activity.last_seen(cid(7)), None);
+    }
+
+    /// `client_id == 0` is the "no controller" sentinel (and the server's
+    /// pseudo-id). It must never be inserted into the activity map.
+    #[test]
+    fn server_id_is_not_tracked() {
+        let mut activity = ClientActivity::default();
+        activity.touch(cid(0), 5.0);
+        assert_eq!(activity.last_seen(cid(0)), None);
     }
 }

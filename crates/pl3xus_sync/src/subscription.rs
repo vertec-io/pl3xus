@@ -1,8 +1,27 @@
 use bevy::prelude::*;
 use pl3xus::{managers::NetworkProvider, managers::Network, NetworkData, NetworkEvent};
 
+use crate::control::ClientActivity;
 use crate::messages::{SyncClientMessage, SyncServerMessage, SyncBatch, SyncItem};
 use crate::registry::{ComponentChangeEvent, ComponentRemovedEvent, EntityDespawnEvent, MutationQueue, QueuedMutation, SnapshotQueue, SnapshotRequest, SubscriptionEntry, SubscriptionManager, SyncSettings, ConflationQueue};
+
+/// Records inbound `SyncClientMessage` traffic into [`ClientActivity`] so that
+/// any client message — Mutate, Subscription, Query, etc. — refreshes the
+/// exclusive-control lease for the controlling client.
+///
+/// No-op when [`ClientActivity`] is not present in the world (i.e. when the
+/// `ExclusiveControlPlugin` has not been added).
+pub fn track_sync_client_activity<NP: NetworkProvider>(
+    mut reader: MessageReader<NetworkData<SyncClientMessage>>,
+    activity: Option<ResMut<ClientActivity>>,
+    time: Res<Time>,
+) {
+    let Some(mut activity) = activity else { return };
+    let now = time.elapsed_secs();
+    for msg in reader.read() {
+        activity.touch(*msg.source(), now);
+    }
+}
 
 /// System that reads incoming SyncClientMessage messages and updates the
 /// SubscriptionManager / dispatches actions accordingly.

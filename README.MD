@@ -103,6 +103,7 @@ When you invoke a skill like `"Use the pl3xus-development skill to create a robo
 
 | pl3xus | Bevy | Rust |
 | :----: | :--: | :--: |
+| 1.2 | 0.19 | 1.96 (nightly) |
 | 1.1 | 0.17 | 1.88 (nightly) |
 
 ## Supported Platforms

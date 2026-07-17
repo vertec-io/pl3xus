@@ -29,7 +29,7 @@ pl3xus_sync is a server-side Bevy plugin that automatically synchronizes ECS com
 
 ```toml
 [dependencies]
-bevy = "0.17"
+bevy = "0.19"
 pl3xus = "1.1"
 pl3xus_sync = "0.1"
 pl3xus_websockets = "1.1"
@@ -47,7 +47,7 @@ server = ["dep:bevy"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-bevy = { version = "0.17", optional = true }
+bevy = { version = "0.19", optional = true }
 ```
 
 **`shared_types/src/lib.rs`**:

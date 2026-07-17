@@ -9,7 +9,7 @@ pl3xus_client = { path = "../../../crates/pl3xus_client" }
 reactive_stores = { version = "0.2", optional = true }
 
 # Bevy dependencies (only for server)
-bevy = { version = "0.17", default-features = false, features = ["multi_threaded", "bevy_log"], optional = true }
+bevy = { version = "0.19", default-features = false, features = ["multi_threaded", "bevy_log"], optional = true }
 
 [features]
 server = ["dep:bevy"]

@@ -6,11 +6,12 @@ Memory leak detection and prevention tools for the pl3xus networking library.
 
 | pl3xus_memory | pl3xus | Bevy | Rust |
 | :--------------: | :-------: | :--: | :--: |
+| 1.2.0 | 1.2.0 | 0.19 | 1.96 (nightly) |
 | 1.1.1 | 1.1.1 | 0.17 | 1.88 (nightly) |
 | 1.1.0 | 1.1.0 | 0.17 | 1.88 (nightly) |
 | 1.0.0 | 1.0.0 | 0.16 | 1.85 |
 
-**Note**: Bevy 0.17 requires Rust 1.88.0 (nightly). Create `rust-toolchain.toml`:
+**Note**: Bevy 0.19 requires a recent nightly toolchain (builds on 1.96.0-nightly). Create `rust-toolchain.toml`:
 ```toml
 [toolchain]
 channel = "nightly"

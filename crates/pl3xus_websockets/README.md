@@ -26,13 +26,13 @@ Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-bevy = "0.17"
+bevy = "0.19"
 pl3xus = "1.1"
 pl3xus_websockets = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
-**Important**: Bevy 0.17 requires Rust 1.88.0 (nightly). Create `rust-toolchain.toml`:
+**Important**: Bevy 0.19 requires a recent nightly toolchain (builds on 1.96.0-nightly). Create `rust-toolchain.toml`:
 ```toml
 [toolchain]
 channel = "nightly"
@@ -42,6 +42,7 @@ channel = "nightly"
 
 | pl3xus_websockets | pl3xus | Bevy | Rust |
 | :------------------: | :-------: | :--: | :--: |
+| 1.2.0 | 1.2.0 | 0.19 | 1.96 (nightly) |
 | 1.1.1 | 1.1.1 | 0.17 | 1.88 (nightly) |
 | 1.1.0 | 1.1.0 | 0.17 | 1.88 (nightly) |
 | 0.2.0 | 0.9.0 | 0.16 | 1.85 |

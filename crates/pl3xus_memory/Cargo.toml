@@ -1,6 +1,6 @@
 [package]
 name = "pl3xus_memory"
-version = "1.1.2"
+version = "1.2.0"
 edition.workspace = true
 rust-version.workspace = true
 description = "Memory leak detection and prevention tools for pl3xus"

@@ -1,7 +1,7 @@
 # Async runtime integration for pl3xus (based on EkardNT's bevy-tokio-tasks)
 [package]
 name = "pl3xus_async"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 description = "Tokio runtime integration for pl3xus/Bevy applications, enabling background async task execution with main thread synchronization."

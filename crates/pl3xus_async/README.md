@@ -82,4 +82,5 @@ runtime.spawn_background_task(|mut ctx| async move {
 
 | pl3xus_async | bevy | tokio |
 |--------------|------|-------|
+| 0.2.0        | 0.19 | 1.x   |
 | 0.1.0        | 0.17 | 1.x   |

@@ -1,6 +1,6 @@
 [package]
 name = "pl3xus"
-version = "1.1.3"
+version = "1.2.0"
 authors = [
     "Arturo Pino <apino@vertec.io>",
 ]
@@ -58,11 +58,11 @@ futures-lite = "2.0.0"
 # Used for logging
 tracing = "0.1"
 
-pl3xus_common = { path = "../pl3xus_common", version = "1.1.3" }
+pl3xus_common = { path = "../pl3xus_common", version = "1.2.0" }
 
 [dev-dependencies]
 # Examples need UI features, but these don't affect library users
 # We can't use workspace = true here because we need to override default-features
-bevy = { version = "0.17", default-features = true }
+bevy = { version = "0.19", default-features = true }
 async-net = "2.0.0"
 examples_common = { path = "examples_common" }
